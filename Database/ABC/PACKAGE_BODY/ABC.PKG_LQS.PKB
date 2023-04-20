@@ -1,0 +1,59 @@
+CREATE OR REPLACE PACKAGE BODY ABC.PKG_LQS AS
+  PROCEDURE GetLicense(p_jobid udt_Id) IS
+    ctx DBMS_XMLGEN.ctxHandle;
+    xml CLOB;
+    qry VARCHAR2(200) := 'SELECT JOBID, EXTERNALFILENUM FROM mart.license l WHERE l.JOBID =' ||p_jobid;
+
+  BEGIN
+  
+    CTX := DBMS_XMLGEN.NEWCONTEXT(qry);
+    DBMS_XMLGEN.SETROWSETTAG(CTX, NULL);
+    DBMS_XMLGEN.SETROWTAG(CTX, 'LICENSE_INFO');
+    XML := DBMS_XMLGEN.GETXML(CTX);
+    DBMS_OUTPUT.PUT_LINE(SUBSTR(XML,1,655));
+
+  END;
+
+  PROCEDURE GetLicensees IS
+  ctx DBMS_XMLGEN.ctxHandle;
+  xml CLOB;
+  qry VARCHAR2(200) := 'SELECT JOBID, EXTERNALFILENUM FROM mart.license l WHERE l.JOBID = 19301300';
+  
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetLicenseTypes IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetConditions IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetTransferData IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetOperatingRestrictions IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetDisciplinaryAction IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetDisciplianryHist IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetHolds IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  PROCEDURE GetEscrow IS
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE('Hello');
+  END;
+  
+END PKG_LQS;
+/
