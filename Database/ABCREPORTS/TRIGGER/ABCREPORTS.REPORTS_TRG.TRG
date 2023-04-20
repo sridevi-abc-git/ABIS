@@ -1,0 +1,13 @@
+CREATE OR REPLACE TRIGGER ABCREPORTS.REPORTS_TRG
+AFTER INSERT
+ON ABCREPORTS.REPORTS
+REFERENCING NEW AS New OLD AS Old
+FOR EACH ROW
+BEGIN
+        -- update status table
+        UPDATE REPORT_QUEUE_STATUS
+           SET web_status = 'C'
+         WHERE seq = :new.seq;
+           
+END REPORTS_TRG;
+/
