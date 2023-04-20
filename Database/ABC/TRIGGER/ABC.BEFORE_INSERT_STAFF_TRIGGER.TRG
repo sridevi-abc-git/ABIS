@@ -1,0 +1,22 @@
+CREATE OR REPLACE TRIGGER ABC.BEFORE_INSERT_STAFF_TRIGGER
+BEFORE INSERT
+ON ABC.STAFFS 
+REFERENCING NEW AS New OLD AS Old
+FOR EACH ROW
+DECLARE
+tmpVar NUMBER;
+
+BEGIN
+   tmpVar := 0;
+
+   SELECT HST_SEQUENCE.NEXTVAL INTO tmpVar FROM dual;
+   :NEW.staff_id := tmpVar;
+   
+   EXCEPTION
+     WHEN OTHERS THEN
+       null;
+END before_insert_staff_trigger;
+
+
+--create trigger
+/
