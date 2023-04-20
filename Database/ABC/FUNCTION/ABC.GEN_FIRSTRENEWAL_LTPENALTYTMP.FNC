@@ -1,0 +1,86 @@
+CREATE OR REPLACE FUNCTION ABC.gen_firstrenewal_ltpenaltytmp(
+    a_feeschedid   IN api.pkg_definition.udt_id,
+    a_ismaster     IN VARCHAR2)
+    RETURN NUMBER
+IS
+    -- **************************************************************************
+    -- File:        GEN_FIRSTRENEWAL_LTPENALTYTMP.FNC
+    -- Author:      CX
+    --
+    -- $Rev$
+    -- $Date$
+    -- Last Changed By:  $Author$
+    --
+    -- Description:
+    --
+    --
+    -- History:
+    -----------------------------------------------------------------------------
+    --    Date                  Comment
+    -- 08/21/2018 TJL         Initial Check-in
+    -- **************************************************************************
+    v_penalty   NUMBER := 0;
+BEGIN
+    BEGIN
+        SELECT DECODE(a_ismaster,
+                      'Y', lfs.primaryamount - f.primaryamount,
+                      lfs.secondaryamount - f.secondaryamount)
+                   penaltyamt
+          INTO v_penalty
+          FROM sitespecific.feeschedule_t f, sitespecific.feeschedule_t lfs
+         WHERE f.objectid = a_feeschedid
+           AND lfs.feeactivity = f.feeactivity || '50'
+           AND (lfs.licensetypecode = f.licensetypecode
+             OR lfs.licensetypecode IS NULL
+            AND f.licensetypecode IS NULL)
+           AND (lfs.effectivedate =
+                (SELECT MAX(fs.effectivedate) effectivedate
+                   FROM sitespecific.feeschedule_t fs
+                  WHERE fs.feeactivity = f.feeactivity || '50'
+                    AND (fs.licensetypecode = f.licensetypecode
+                      OR (fs.licensetypecode IS NULL
+                      AND f.licensetypecode IS NULL))
+                    AND effectivedate <= f.effectivedate
+                    AND (fs.gallonagerange = f.gallonagerange
+                      OR (fs.gallonagerange IS NULL
+                      AND f.gallonagerange IS NULL))
+                    AND (api.pkg_columnquery.VALUE(
+                             fs.objectid,
+                             'NumberOfMonthsLicensedFeeCode') =
+                         f.numberofmonthslicensed
+                      OR (api.pkg_columnquery.VALUE(
+                              fs.objectid,
+                              'NumberOfMonthsLicensedFeeCode')
+                              IS NULL
+                      AND f.numberofmonthslicensed IS NULL))
+                    AND (fs.populationrange = f.populationrange
+                      OR (fs.populationrange IS NULL
+                      AND f.populationrange IS NULL))
+                    AND (fs.otherfeecode = f.otherfeecode
+                      OR (fs.otherfeecode IS NULL
+                      AND f.otherfeecode IS NULL)))
+             OR lfs.effectivedate IS NULL) --NOTE: The lfs.EffectiveDate will never be null.  Not sure you need to worry that a_effectivedate may be null..?
+           AND (lfs.gallonagerange = f.gallonagerange
+             OR (lfs.gallonagerange IS NULL
+             AND f.gallonagerange IS NULL))
+           AND (api.pkg_columnquery.VALUE(lfs.objectid,
+                                          'NumberOfMonthsLicensedFeeCode') =
+                f.numberofmonthslicensed
+             OR (api.pkg_columnquery.VALUE(lfs.objectid,
+                                           'NumberOfMonthsLicensedFeeCode')
+                     IS NULL
+             AND f.numberofmonthslicensed IS NULL))
+           AND (lfs.populationrange = f.populationrange
+             OR (lfs.populationrange IS NULL
+             AND f.populationrange IS NULL))
+           AND (lfs.otherfeecode = f.otherfeecode
+             OR (lfs.otherfeecode IS NULL
+             AND f.otherfeecode IS NULL));
+    END;
+
+    RETURN v_penalty;
+END gen_firstrenewal_ltpenaltytmp;
+/
+
+
+GRANT EXECUTE ON ABC.GEN_FIRSTRENEWAL_LTPENALTYTMP TO POSSEEXTENSIONS;
