@@ -1,0 +1,112 @@
+DROP TABLE ABCREPORTS.REPORTS CASCADE CONSTRAINTS;
+
+CREATE TABLE ABCREPORTS.REPORTS
+(
+  SEQ          NUMBER                           NOT NULL,
+  DATA_FORMAT  VARCHAR2(16 BYTE)                NOT NULL,
+  REPORT_DATA  BLOB                             NOT NULL,
+  CREATED_BY   VARCHAR2(32 BYTE)                DEFAULT USER                  NOT NULL,
+  CREATE_DATE  DATE                             DEFAULT SYSDATE               NOT NULL
+)
+LOB (REPORT_DATA) STORE AS BASICFILE LOBSEGMENT (
+  TABLESPACE  LOB_ENC
+  ENABLE      STORAGE IN ROW
+  CHUNK       8192
+  RETENTION
+  NOCACHE
+  LOGGING
+  STORAGE    (
+              INITIAL          64K
+              NEXT             1M
+              MINEXTENTS       1
+              MAXEXTENTS       UNLIMITED
+              PCTINCREASE      0
+              BUFFER_POOL      DEFAULT
+             ))
+TABLESPACE LARGE_ENC_DATA
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE;
+
+
+CREATE UNIQUE INDEX ABCREPORTS.REPORTS_PK ON ABCREPORTS.REPORTS
+(SEQ)
+LOGGING
+TABLESPACE SMALL_ENC_INDEX
+PCTFREE    10
+INITRANS   2
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           );
+
+ALTER TABLE ABCREPORTS.REPORTS ADD (
+  CONSTRAINT REPORTS_PK
+  PRIMARY KEY
+  (SEQ)
+  USING INDEX ABCREPORTS.REPORTS_PK
+  ENABLE VALIDATE);
+
+
+CREATE OR REPLACE TRIGGER ABCREPORTS.REPORTS_BEF_TRG
+BEFORE INSERT
+ON ABCREPORTS.REPORTS
+REFERENCING NEW AS New OLD AS Old
+FOR EACH ROW
+BEGIN
+    DECLARE
+    ln_cnt      NUMBER;
+    
+    BEGIN
+        -- remove old record if one exists
+        SELECT NVL(COUNT(seq), 0)
+          INTO ln_cnt
+          FROM reports
+         WHERE seq = :new.seq;  
+         
+        IF (ln_cnt = 1) THEN
+            DELETE reports WHERE seq = :new.seq;
+        END IF;
+    END;
+               
+END REPORTS_BEF_TRG;
+/
+
+
+CREATE OR REPLACE TRIGGER ABCREPORTS.REPORTS_TRG
+AFTER INSERT
+ON ABCREPORTS.REPORTS
+REFERENCING NEW AS New OLD AS Old
+FOR EACH ROW
+BEGIN
+        -- update status table
+        UPDATE REPORT_QUEUE_STATUS
+           SET web_status = 'C'
+         WHERE seq = :new.seq;
+           
+END REPORTS_TRG;
+/
+
+
+ALTER TABLE ABCREPORTS.REPORTS ADD (
+  CONSTRAINT REPORTS_SEQ_FK 
+  FOREIGN KEY (SEQ) 
+  REFERENCES ABCREPORTS.REPORT_XREF (SEQ)
+  ON DELETE CASCADE
+  ENABLE VALIDATE);
