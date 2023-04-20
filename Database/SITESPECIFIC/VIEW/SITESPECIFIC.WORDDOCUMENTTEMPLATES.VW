@@ -1,0 +1,12 @@
+CREATE OR REPLACE FORCE VIEW SITESPECIFIC.WORDDOCUMENTTEMPLATES
+(LOCALPROCESSTYPEID, WORDPROCESSTYPEID)
+BEQUEATH DEFINER
+AS 
+select pt.ProcessTypeId LocalProcessTypeId,
+       WordPT.ProcessTypeId WordProcessTypeId
+  from api.processtypes pt
+  join query.o_ProcessType WordPT
+       on pt.ProcessTypeId = WordPT.ProcessTypeId;
+
+
+GRANT SELECT ON SITESPECIFIC.WORDDOCUMENTTEMPLATES TO POSSEEXTENSIONS;
