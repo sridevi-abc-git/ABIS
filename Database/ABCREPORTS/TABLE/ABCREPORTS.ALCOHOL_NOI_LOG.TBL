@@ -1,0 +1,29 @@
+DROP TABLE ABCREPORTS.ALCOHOL_NOI_LOG CASCADE CONSTRAINTS;
+
+CREATE TABLE ABCREPORTS.ALCOHOL_NOI_LOG
+(
+  OBJECTID                  NUMBER(9),
+  JOBID                     NUMBER(9),
+  LICENSENUMBER             VARCHAR2(40 BYTE),
+  ALCOHOLTOGO_NOI           VARCHAR2(1 BYTE),
+  ALCOHOLTOGO_NOI_RECEIVED  DATE,
+  NAME                      VARCHAR2(80 BYTE),
+  EMAIL                     VARCHAR2(200 BYTE),
+  LOGGED                    DATE,
+  PROCESSED                 DATE
+)
+TABLESPACE LARGE_ENC_DATA
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE;
