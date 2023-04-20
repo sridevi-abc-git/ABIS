@@ -1,0 +1,67 @@
+DROP TABLE SITESPECIFIC.LICENSEBATCHLOGGING_T CASCADE CONSTRAINTS;
+
+CREATE TABLE SITESPECIFIC.LICENSEBATCHLOGGING_T
+(
+  LOGROWID            NUMBER(9)                 NOT NULL,
+  JOBID               NUMBER(9)                 NOT NULL,
+  PROCESSID           NUMBER(9),
+  CURTIME             VARCHAR2(50 BYTE),
+  MESSAGE             VARCHAR2(100 BYTE),
+  TOTALEXPECTEDCOUNT  NUMBER(9)
+)
+TABLESPACE LARGE_ENC_DATA
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE;
+
+
+ALTER TABLE SITESPECIFIC.LICENSEBATCHLOGGING_T ADD (
+  PRIMARY KEY
+  (LOGROWID)
+  USING INDEX
+    TABLESPACE LARGE_ENC_DATA
+    PCTFREE    10
+    INITRANS   2
+    MAXTRANS   255
+    STORAGE    (
+                INITIAL          64K
+                NEXT             1M
+                MINEXTENTS       1
+                MAXEXTENTS       UNLIMITED
+                PCTINCREASE      0
+                BUFFER_POOL      DEFAULT
+               )
+  ENABLE VALIDATE);
+
+
+CREATE INDEX SITESPECIFIC.JOBID_IX2 ON SITESPECIFIC.LICENSEBATCHLOGGING_T
+(JOBID)
+LOGGING
+TABLESPACE LARGE_ENC_DATA
+PCTFREE    10
+INITRANS   2
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           );
+
+--  There is no statement for index SITESPECIFIC.SYS_C0025779.
+--  The object is created when the parent object is created.
+
+GRANT SELECT ON SITESPECIFIC.LICENSEBATCHLOGGING_T TO POSSEEXTENSIONS;
