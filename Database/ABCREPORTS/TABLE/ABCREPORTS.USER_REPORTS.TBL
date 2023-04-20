@@ -1,0 +1,24 @@
+DROP TABLE ABCREPORTS.USER_REPORTS CASCADE CONSTRAINTS;
+
+CREATE TABLE ABCREPORTS.USER_REPORTS
+(
+  USEROBJECTID   NUMBER                         NOT NULL,
+  REPORT_NUMBER  NUMBER                         NOT NULL,
+  CREATED_BY     VARCHAR2(32 BYTE)              DEFAULT USER                  NOT NULL,
+  CREATE_DATE    DATE                           DEFAULT SYSDATE               NOT NULL
+)
+TABLESPACE LARGE_ENC_DATA
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE;
