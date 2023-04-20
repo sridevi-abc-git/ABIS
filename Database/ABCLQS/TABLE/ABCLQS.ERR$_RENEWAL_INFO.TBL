@@ -1,0 +1,107 @@
+DROP TABLE ABCLQS.ERR$_RENEWAL_INFO CASCADE CONSTRAINTS;
+
+CREATE TABLE ABCLQS.ERR$_RENEWAL_INFO
+(
+  ORA_ERR_NUMBER$         NUMBER,
+  ORA_ERR_MESG$           VARCHAR2(2000 BYTE),
+  ORA_ERR_ROWID$          UROWID(4000),
+  ORA_ERR_OPTYP$          VARCHAR2(2 BYTE),
+  ORA_ERR_TAG$            VARCHAR2(2000 BYTE),
+  SEQ                     VARCHAR2(4000 BYTE),
+  LICENSENUMBER           VARCHAR2(4000 BYTE),
+  JOBID                   VARCHAR2(4000 BYTE),
+  EXPIRATIONDATE          VARCHAR2(4000 BYTE),
+  PRIMARYSECONDARY        VARCHAR2(4000 BYTE),
+  LICENSETYPECODE         VARCHAR2(4000 BYTE),
+  LICENSETYPEDESCRIPTION  VARCHAR2(4000 BYTE),
+  RANGETYPE               VARCHAR2(4000 BYTE),
+  RANGEVALUE              VARCHAR2(4000 BYTE),
+  FEEOBJID                VARCHAR2(4000 BYTE),
+  SECONDARYCOUNT          VARCHAR2(4000 BYTE),
+  FEEAMOUNT               VARCHAR2(4000 BYTE),
+  TOTALOWING              VARCHAR2(4000 BYTE),
+  STATUS                  VARCHAR2(4000 BYTE),
+  STATUSDATE              VARCHAR2(4000 BYTE),
+  ELIGIBLE                VARCHAR2(4000 BYTE),
+  PAID                    VARCHAR2(4000 BYTE),
+  PAYMENTBATCH            VARCHAR2(4000 BYTE),
+  ISSUED                  VARCHAR2(4000 BYTE),
+  CREATEDDATE             VARCHAR2(4000 BYTE)   DEFAULT SYSDATE,
+  BACKTRACE               VARCHAR2(4000 BYTE)
+)
+TABLESPACE LARGE_ENC_DATA
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE;
+
+COMMENT ON TABLE ABCLQS.ERR$_RENEWAL_INFO IS 'DML Error Logging table for "ABCLQS"."RENEWAL_INFO"';
+
+
+CREATE OR REPLACE TRIGGER ABCLQS.err$_renewal_info_trg
+    AFTER INSERT
+    ON ABCLQS.ERR$_RENEWAL_INFO 
+    FOR EACH ROW
+DECLARE
+    t_to     VARCHAR2(4000);
+    t_from   VARCHAR2(512);
+    t_cc     VARCHAR2(4000);
+    t_bcc    VARCHAR2(4000);
+BEGIN
+    FOR rec IN (SELECT ep.parametername, ep.parametervalue
+                  FROM abc.email_parameters ep
+                 WHERE ep.app = 'SELFCERT')
+    LOOP
+        CASE rec.parametername
+            WHEN 'TO' THEN
+                t_to   := rec.parametervalue;
+            WHEN 'FROM' THEN
+                t_from   := rec.parametervalue;
+            WHEN 'CC' THEN
+                t_cc   := rec.parametervalue;
+            WHEN 'BCC' THEN
+                t_bcc   := rec.parametervalue;
+            ELSE
+                NULL;
+        END CASE;
+    END LOOP;
+
+    sitespecific.pkg_tlemail.sendemail(p_fromaddress => t_from,
+                                       p_toaddress => t_to,
+                                       p_cc        => t_cc,
+                                       p_bcc       => t_bcc,
+                                       p_subject   => 'Error: Updating RENEWAL_INFO table',
+                                       p_body      =>   'License Number '
+                                                     || CHR(9)
+                                                     || :new.licensenumber
+                                                     || CHR(13)
+                                                     || CHR(10)
+                                                     || 'License type'
+                                                     || CHR(9)
+                                                     || CHR(9)
+                                                     || :new.licensetypecode
+                                                     || CHR(13)
+                                                     || CHR(10)
+                                                     || 'ERROR'
+                                                     || CHR(9)
+                                                     || CHR(9)
+                                                     || CHR(9)
+                                                     || :new.ora_err_mesg$);
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
+END;
+/
+
+
+GRANT ALTER, DELETE, INSERT, SELECT, UPDATE ON ABCLQS.ERR$_RENEWAL_INFO TO ABC;
