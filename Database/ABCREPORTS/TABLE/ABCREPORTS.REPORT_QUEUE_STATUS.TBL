@@ -1,0 +1,107 @@
+DROP TABLE ABCREPORTS.REPORT_QUEUE_STATUS CASCADE CONSTRAINTS;
+
+CREATE TABLE ABCREPORTS.REPORT_QUEUE_STATUS
+(
+  SEQ          NUMBER                           NOT NULL,
+  STEP_IND     VARCHAR2(1 BYTE)                 DEFAULT 'Q'                   NOT NULL,
+  ORA_STATUS   VARCHAR2(1 BYTE),
+  WEB_STATUS   VARCHAR2(1 BYTE),
+  RETRY_CNT    NUMBER                           DEFAULT 0                     NOT NULL,
+  CANCEL_FLG   VARCHAR2(1 BYTE),
+  UPDATE_DATE  DATE                             DEFAULT SYSDATE               NOT NULL
+)
+TABLESPACE LARGE_ENC_DATA
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE;
+
+
+CREATE UNIQUE INDEX ABCREPORTS.REPORT_QUEUE_STATUS_PK ON ABCREPORTS.REPORT_QUEUE_STATUS
+(SEQ)
+LOGGING
+TABLESPACE SMALL_ENC_INDEX
+PCTFREE    10
+INITRANS   2
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           );
+
+ALTER TABLE ABCREPORTS.REPORT_QUEUE_STATUS ADD (
+  CONSTRAINT REPORT_QUEUE_STATUS_PK
+  PRIMARY KEY
+  (SEQ)
+  USING INDEX ABCREPORTS.REPORT_QUEUE_STATUS_PK
+  ENABLE VALIDATE);
+
+
+CREATE OR REPLACE TRIGGER ABCREPORTS.REPORT_QUEUE_STATUS_AFTER_TRG
+AFTER UPDATE
+ON ABCREPORTS.REPORT_QUEUE_STATUS
+REFERENCING NEW AS New OLD AS Old
+FOR EACH ROW
+BEGIN
+    IF (:new.step_ind IN ('E', 'C')) OR
+       (:old.step_ind = 'Q' AND :new.CANCEL_FLG = 'Y') THEN
+        INSERT INTO report_queue_history
+                (seq, report_parameters, created_by, create_date)
+           SELECT seq, report_parameters, created_by, NVL(start_time, SYSDATE)
+             FROM report_queue
+            WHERE seq = :old.seq;
+
+        -- delete queue record on report completion        
+        DELETE report_queue WHERE seq = :old.seq;
+    END IF; 
+    
+    IF (:new.ora_status = 'P') THEN
+        UPDATE report_queue 
+           SET start_time = SYSDATE
+         WHERE seq = :old.seq;    
+    END IF;
+
+END REPORT_QUEUE_STATUS_AFTER_TRG;
+/
+
+
+CREATE OR REPLACE TRIGGER ABCREPORTS.REPORT_QUEUE_STATUS_BEFORE_TRG
+BEFORE UPDATE
+ON ABCREPORTS.REPORT_QUEUE_STATUS
+REFERENCING NEW AS New OLD AS Old
+FOR EACH ROW
+BEGIN
+    :new.update_date := sysdate;
+    
+    IF (:new.step_ind = 'R') THEN
+        -- incrument retry count
+        :new.retry_cnt := :old.retry_cnt + 1;
+        IF (:new.retry_cnt > 2) THEN 
+            :new.step_ind := 'E';
+        END IF;
+    END IF;          
+           
+END REPORT_QUEUE_STATUS_BEFORE_TRG;
+/
+
+
+ALTER TABLE ABCREPORTS.REPORT_QUEUE_STATUS ADD (
+  CONSTRAINT REPORT_QUEUE_STATUS_SEQ_FK 
+  FOREIGN KEY (SEQ) 
+  REFERENCES ABCREPORTS.REPORT_XREF (SEQ)
+  ON DELETE CASCADE
+  ENABLE VALIDATE);
