@@ -1,0 +1,113 @@
+DROP TABLE BIZMOD_API.ERR$_E_PAYMENTS_T CASCADE CONSTRAINTS;
+
+CREATE TABLE BIZMOD_API.ERR$_E_PAYMENTS_T
+(
+  ORA_ERR_NUMBER$       NUMBER,
+  ORA_ERR_MESG$         VARCHAR2(2000 BYTE),
+  ORA_ERR_ROWID$        UROWID(4000),
+  ORA_ERR_OPTYP$        VARCHAR2(2 BYTE),
+  ORA_ERR_TAG$          VARCHAR2(2000 BYTE),
+  SEQ                   VARCHAR2(4000 BYTE),
+  PAYMENTMETHOD         VARCHAR2(4000 BYTE),
+  LICENSENUMBER         VARCHAR2(4000 BYTE),
+  LICENSETYPECODE       VARCHAR2(4000 BYTE),
+  FEEOBJID              VARCHAR2(4000 BYTE),
+  DESCRIPTION           VARCHAR2(4000 BYTE),
+  PAYEENAME             VARCHAR2(4000 BYTE),
+  CONFIRMATIONID        VARCHAR2(4000 BYTE),
+  DATEPAID              DATE                    DEFAULT SYSDATE,
+  AMOUNTPAID            VARCHAR2(4000 BYTE),
+  PROCESSID             VARCHAR2(4000 BYTE),
+  PROCESSDATE           VARCHAR2(4000 BYTE),
+  PAYMENTOBJECTID       VARCHAR2(4000 BYTE),
+  TRANSMITTALBATCHDATE  VARCHAR2(4000 BYTE),
+  TRANSMITTALBATCH      VARCHAR2(4000 BYTE),
+  DEPOSITBATCHDATE      VARCHAR2(4000 BYTE),
+  DEPOSITBATCHID        VARCHAR2(4000 BYTE),
+  DEPOSITSTATUS         VARCHAR2(4000 BYTE),
+  ISSUED                VARCHAR2(4000 BYTE),
+  BACKTRACE             VARCHAR2(4000 BYTE),
+  CREATEDDATE           DATE                    DEFAULT SYSDATE
+)
+TABLESPACE API_ENC_DATA
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          64K
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE;
+
+COMMENT ON TABLE BIZMOD_API.ERR$_E_PAYMENTS_T IS 'DML Error Logging table for "BIZMOD_API"."E_PAYMENTS_T"';
+
+
+CREATE OR REPLACE TRIGGER BIZMOD_API.err$_e_payments_t_trg
+    AFTER INSERT
+    ON BIZMOD_API.ERR$_E_PAYMENTS_T 
+    FOR EACH ROW
+DECLARE
+    t_to     VARCHAR2(4000);
+    t_from   VARCHAR2(512);
+    t_cc     VARCHAR2(4000);
+    t_bcc    VARCHAR2(4000);
+BEGIN
+    FOR rec IN (SELECT ep.parametername, ep.parametervalue
+                  FROM abc.email_parameters ep
+                 WHERE ep.app = 'EPAYMENT')
+    LOOP
+        CASE rec.parametername
+            WHEN 'TO' THEN
+                t_to   := rec.parametervalue;
+            WHEN 'FROM' THEN
+                t_from   := rec.parametervalue;
+            WHEN 'CC' THEN
+                t_cc   := rec.parametervalue;
+            WHEN 'BCC' THEN
+                t_bcc   := rec.parametervalue;
+            ELSE
+                NULL;
+        END CASE;
+    END LOOP;
+
+    IF (t_from IS NOT NULL) THEN
+        sitespecific.pkg_tlemail.sendemail(p_fromaddress => t_from,
+                                           p_toaddress => t_to,
+                                           p_cc        => t_cc,
+                                           p_bcc       => t_bcc,
+                                           p_subject   => 'Error: Updating E-Payment table',
+                                           p_body      =>   'License Number '
+                                                         || CHR(9)
+                                                         || :new.licensenumber
+                                                         || CHR(13)
+                                                         || CHR(10)
+                                                         || 'License type'
+                                                         || CHR(9)
+                                                         || CHR(9)
+                                                         || :new.licensetypecode
+                                                         || CHR(13)
+                                                         || CHR(10)
+                                                         || 'ERROR'
+                                                         || CHR(9)
+                                                         || CHR(9)
+                                                         || CHR(9)
+                                                         || :new.ora_err_mesg$);
+        END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
+END;
+/
+
+
+GRANT ALTER, DELETE, INSERT, REFERENCES, SELECT, UPDATE, DEBUG ON BIZMOD_API.ERR$_E_PAYMENTS_T TO ABC;
+
+GRANT SELECT ON BIZMOD_API.ERR$_E_PAYMENTS_T TO BIZMOD_USER;
+
+GRANT SELECT ON BIZMOD_API.ERR$_E_PAYMENTS_T TO KAURP;
