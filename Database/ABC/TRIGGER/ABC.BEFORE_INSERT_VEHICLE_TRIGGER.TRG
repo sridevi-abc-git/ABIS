@@ -1,0 +1,19 @@
+CREATE OR REPLACE TRIGGER ABC.BEFORE_INSERT_VEHICLE_TRIGGER
+BEFORE INSERT
+ON ABC.vehicles 
+REFERENCING NEW AS New OLD AS Old
+FOR EACH ROW
+DECLARE
+tmpVar NUMBER;
+
+BEGIN
+   tmpVar := 0;
+
+   SELECT HST_SEQUENCE.NEXTVAL INTO tmpVar FROM dual;
+   :NEW.vehicles_id := tmpVar;
+   
+   EXCEPTION
+     WHEN OTHERS THEN
+       null;
+END before_insert_vehicle_trigger;
+/
