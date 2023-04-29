@@ -37,6 +37,7 @@ IS
   -- 10/29/2019 SSu    2.1 Fee increase change impacts and fixes
   -- 12/10/2019 TJL  20023  Added printing of Section Code at end of Conditions
   -- 10/02/2020 TJL  22891 Added check to pervent divide by 0 error in allocationreport2
+  -- 04/28/2023 PK     WO31613 - Additional Condition Code Request Condition E - COND E (Section 24072.3 - type 75 exchange to 47)
   -- **************************************************************************
   /**************************************************************************
   * Global variables declared
@@ -2731,6 +2732,8 @@ IS
       || CHR (13)
       || DECODE (lt.condd, 'Y', 'D'
       || CHR (13), NULL)
+      || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
+      || CHR (13), NULL)
       || DECODE (lt.condg, 'Y', 'G'
       || CHR (13), NULL) --  WO16291 Update License to print New condition G Pawan
       || DECODE (lt.condi, 'Y', 'I'
@@ -2894,6 +2897,8 @@ IS
     FROM DECODE (lt.conda, 'Y', 'A', NULL)
       || CHR (13)
       || DECODE (lt.condd, 'Y', 'D'
+      || CHR (13), NULL)
+      || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
       || CHR (13), NULL)
       || DECODE (lt.condg, 'Y', 'G'
       || CHR (13), NULL) --  WO16291 Update License to print New condition G Pawan
@@ -3154,6 +3159,8 @@ end if;
       || CHR(13)
       || DECODE(lt.condd, 'Y', 'D'
       || CHR(13), NULL)
+      || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
+      || CHR (13), NULL)
       || DECODE(lt.condg, 'Y', 'G'
       || CHR(13), NULL) --  WO16291 Update License to print New condition G Pawan
       || DECODE(lt.condi, 'Y', 'I'
@@ -3233,6 +3240,8 @@ end if;
       || CHR(13)
       || DECODE(lt.condd, 'Y', 'D'
       || CHR(13), NULL)
+      || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
+      || CHR (13), NULL)
       || DECODE(lt.condg, 'Y', 'G'
       || CHR(13), NULL) --  WO16291 Update License to print New condition G Pawan
       || DECODE(lt.condi, 'Y', 'I'
