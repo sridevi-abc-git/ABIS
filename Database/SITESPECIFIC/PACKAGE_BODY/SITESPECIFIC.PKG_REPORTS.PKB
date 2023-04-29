@@ -15,28 +15,27 @@ IS
   -----------------------------------------------------------------------------
   --    Date                  Comment
   -- 04/01/2018 AP          Package Created
-  -- 08/20/2018 TJL         Initial Check-in
-  -- 09/11/2018 SSu         v.1 As per Randy, uncommenting below line that was commented in 2014
-  -- 09/11/2018 SSu         v.2 As per Randy, Changing signs in BPUAmount calculation from + to -
-  -- 10/29/2018 SSu     Updating Allocation logic to clear previous run's data on the same session
-  -- 11/01/2018 SSu         WO#16948 Update DMV charge $10 or $5 based on the Fee description C and adding few missing license types into DMV buckets
-  -- 01/03/2019 PK          WO16291 Type 21 issued pursuant to Section 23433 BandP Update License to print New condition G
-  -- 01/03/2019 SSu     WO#16948 Adding LT 88 into Allocation report DMV calculation
-  -- 01/10/2019 TJL         WO 16435 removed the = from test in how seasonal expiration date is caculated in procedure printlicensebatch
-  -- 01/14/2019 SSu         WO#17107 License to print new condition M
-  -- 01/24/2019 SSu     WO#17178 Issue Type is NULL in the printed license for the secondary licenses
-  -- 02/14/2019 TJL         WO 16435 Corrected the efective date that is printed on licenses
-  --                          for seasonal secondary license types.
-  -- 02/28/2019 SSu     WO#16948 Include dups into badmaster or multimaster count
-  -- 06/23/2019 SSu         Added a new proecedure Allocation Report version 2
-  -- 07/30/2019 SSu     Fixing AB and DMV calculations in AllocationReport2
-  -- 08/17/2019 PK          WO17111 Valid From Date in Pink license Batch
-  -- 07/30/2019 SSu     Fixing AB and DMV calculations in AllocationReport2
+  -- 08/20/2018 TJL    Initial Check-in
+  -- 09/11/2018 SSu    v.1 As per Randy, uncommenting below line that was commented in 2014
+  -- 09/11/2018 SSu    v.2 As per Randy, Changing signs in BPUAmount calculation from + to -
+  -- 10/29/2018 SSu    Updating Allocation logic to clear previous run's data on the same session
+  -- 11/01/2018 SSu    WO#16948 Update DMV charge $10 or $5 based on the Fee description C and adding few missing license types into DMV buckets
+  -- 01/03/2019 PK     WO16291 Type 21 issued pursuant to Section 23433 BandP Update License to print New condition G
+  -- 01/03/2019 SSu    WO#16948 Adding LT 88 into Allocation report DMV calculation
+  -- 01/10/2019 TJL    WO 16435 removed the = from test in how seasonal expiration date is caculated in procedure printlicensebatch
+  -- 01/14/2019 SSu    WO#17107 License to print new condition M
+  -- 01/24/2019 SSu    WO#17178 Issue Type is NULL in the printed license for the secondary licenses
+  -- 02/14/2019 TJL    WO 16435 Corrected the efective date that is printed on licenses for seasonal secondary license types.
+  -- 02/28/2019 SSu    WO#16948 Include dups into badmaster or multimaster count
+  -- 06/23/2019 SSu    Added a new proecedure Allocation Report version 2
+  -- 07/30/2019 SSu    Fixing AB and DMV calculations in AllocationReport2
+  -- 08/17/2019 PK     WO17111 Valid From Date in Pink license Batch
+  -- 07/30/2019 SSu    Fixing AB and DMV calculations in AllocationReport2
   -- 08/22/2019 SSu    Fixing AB rounding to 5 issue
   -- 09/28/2019 SSu    2.1 Grouping multiple payments to avoid wrong AB Calculations
   -- 10/29/2019 SSu    2.1 Fee increase change impacts and fixes
-  -- 12/10/2019 TJL  20023  Added printing of Section Code at end of Conditions
-  -- 10/02/2020 TJL  22891 Added check to pervent divide by 0 error in allocationreport2
+  -- 12/10/2019 TJL    20023  Added printing of Section Code at end of Conditions
+  -- 10/02/2020 TJL    22891 Added check to pervent divide by 0 error in allocationreport2
   -- 04/28/2023 PK     WO31613 - Additional Condition Code Request Condition E - COND E (Section 24072.3 - type 75 exchange to 47)
   -- **************************************************************************
   /**************************************************************************
