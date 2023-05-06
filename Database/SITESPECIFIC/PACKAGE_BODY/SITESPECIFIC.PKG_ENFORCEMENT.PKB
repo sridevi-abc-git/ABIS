@@ -15,13 +15,21 @@ IS
     -----------------------------------------------------------------------------
     --    Date                  Comment
     -- 08/16/2018 TJL         Initial Check-in
+    -- 01/31/2023 PK          Changed assignconductinv to resolve problem after Objectid have been moved to new gap
+    -- 05/05/2023 PK          Changed Prioraccusations to resolve problem after Objectid have been moved to new gap
+    -- 05/05/2023 PK          Changed activatesuspendedlicense Changed Select MAX(j.jobid) to j.jobid and added orderby and fetch first row only to resolve problem after Objectid have been moved to new gap
+    -- 05/05/2023 PK          Changed searchforexpiredsuspensions to resolve problem after Objectid have been moved to new gap
+    -- 05/05/2023 PK          Changed createinvfrompostsusprev to resolve problem after Objectid have been moved to new gap
+    -- 05/05/2023 PK          Updated Sitespecific.pkg_Enforcement.activatesuspendedlicense joined with Api statuses and added s.tag in wehere clause to improve performance
+    -- 03/29/2023 PK          WO 31538 'HoldType', 'H '||chr(38)||' L PROTEST'); --'||chr(38)||' An ampersand 
+    
+    
     -- **************************************************************************
 
     ----------------------------------------------------------------------------------------------------
     --  CreateAccusation() -- PUBLIC
     --  Used by Raise Accusation outcome of the Close Investigation process on the Investigation job.
-    -- 01/31/2023 PK          Changed assignconductinv to resolve problem after Objectid have been moved to new gap
-    -- 03/29/2023 PK          WO 31538 'HoldType', 'H '||chr(38)||' L PROTEST'); --'||chr(38)||' An ampersand 
+   
     ----------------------------------------------------------------------------------------------------
     PROCEDURE createaccusation(a_objectid udt_id, a_asofdate DATE)
     IS
@@ -353,7 +361,7 @@ IS
                         api.pkg_objectdefquery.idforname (
                             'p_ConductLicenseInvestigation'))) x
                     JOIN api.processes p2 ON p2.CREATEDDATE = x.Maxcreateddate
-                        WHERE p2.jobid = a_jobid;
+                        WHERE p2.jobid = a_jobid;  ---- 01/27/2023 PK          Changed assignconductinv to resolve problem after Objectid have been moved to new gap
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
                 api.pkg_errors.raiseerror(
@@ -502,7 +510,7 @@ IS
         a_relatedobjectids   := api.udt_objectlist();
 
         FOR c
-            IN (SELECT il.licensejobid
+            IN (SELECT il.licensejobid,  api.pkg_columnquery.DATEVALUE(ci.accusationjobid, 'CreatedDate') createddate  -- 02/08/2023 added by pawan
                   FROM query.r_createdbyinvestaccusation  ci
                        JOIN query.r_licenseinvestigation il
                            ON il.investigationjobid = ci.investigationjobid
@@ -514,8 +522,10 @@ IS
                            JOIN query.r_createdbyinvestaccusation oa
                                ON oa.investigationjobid =
                                   oi.investigationjobid
+                                JOIN query.j_accusation a on a.jobid = oa.accusationjobid -- 05/05/2023 added by pawan
                      WHERE oi.licensejobid = c.licensejobid
-                       AND oa.accusationjobid < a_objectid)
+                        AND a.createddate < c.createddate)-- 05/05/2023 added by pawan
+                       --AND oa.accusationjobid < a_objectid) -- 05/05/2023 commented by pawan
             LOOP
                 a_relatedobjectids.EXTEND(1);
                 a_relatedobjectids(a_relatedobjectids.COUNT)   :=
@@ -730,10 +740,12 @@ IS
                        JOIN query.r_licenselicensetype lt
                            ON lt.licensejobid = l.licensejobid
                        JOIN api.jobs j ON j.jobid = lt.licensetypejobid
+                       JOIN api.statuses s ON s.StatusId = j.StatusId -- PK 05/05/2023 joined with Api statuses and added s.tag in wehere clause to improve performance.
                  WHERE i.accusationjobid = a_jobid
-                   AND j.statusid IN (SELECT s.statusid
-                                        FROM api.statuses s
-                                       WHERE s.tag = 'SUSPEN'))
+                 AND s.tag = 'SUSPEN')
+                 --  AND j.statusid IN (SELECT s.statusid
+                                 --       FROM api.statuses s
+                                --       WHERE s.tag = 'SUSPEN')) 
         LOOP
             t_fromstat        := NULL;
             t_setbackstat     := NULL;
@@ -848,12 +860,14 @@ IS
                      WHERE r.licensetypejobid = x.jobid
                        AND lb.completeddate IS NOT NULL
                        AND lb.jobid =
-                           (SELECT MAX(j.jobid)
+                           (SELECT j.jobid -- Changed Select MAX(j.jobid) to j.jobid and added orderby and fetch first row only to resolve gap issue --Pawanjit Kaur 05/05/2023
                               FROM sitespecific.licbatchlictype_xref_t  r1
                                    JOIN query.j_licensebatch j
                                        ON j.jobid = r1.licensebatchjobid
                              WHERE r1.licensetypejobid = x.jobid
-                               AND j.completeddate IS NOT NULL);
+                               AND j.completeddate IS NOT NULL
+                               order by j.completeddate desc
+                               fetch first 1 row only);
                 EXCEPTION
                     WHEN NO_DATA_FOUND THEN
                         t_producelic   := 'Y';
@@ -960,13 +974,14 @@ IS
                  WHERE p.datecompleted IS NOT NULL)
         LOOP
             BEGIN
-                SELECT MAX(p2.processid)
+                 SELECT p3.processid  --MAX(p2.processid)  -- 05/05/2023 PK Changed searchforexpiredsuspensions to resolve problem after Objectid have been moved to new gap
                   INTO t_copprocessid
+                  FROM ( SELECT   MAX(p2.createddate) Maxcreateddate
                   FROM api.processes  p2
                        JOIN api.processtypes pt
                            ON pt.processtypeid = p2.processtypeid
-                 WHERE p2.jobid = c.jobid
-                   AND pt.name = 'p_CloseOutPenalty';
+                                WHERE p2.jobid = c.jobid
+                                     AND pt.name = 'p_CloseOutPenalty')x join api.processes p3 on p3.CREATEDDATE = x.Maxcreateddate where p3.jobid = c.jobid; -- Added x and joined with api.processes p3 Pawanjit Kaur
             EXCEPTION
                 WHEN NO_DATA_FOUND THEN
                     t_copprocessid   := NULL;
@@ -1257,9 +1272,11 @@ IS
               INTO t_suspdays, t_indefsusp
               FROM query.p_executetermsofdecision p
              WHERE p.jobid = a_jobid
-               AND p.processid = (SELECT MAX(x.processid)
+               AND p.processid = (SELECT x.processid --MAX(x.processid) -- 05/05/2023 PK          Changed createinvfrompostsusprev to resolve problem after Objectid have been moved to new gap
                                     FROM query.p_executetermsofdecision x
-                                   WHERE x.jobid = a_jobid);
+                                   WHERE x.jobid = a_jobid
+                                      order by  x.datecompleted desc -- Added orderby and fetch 1st only Pawanjit Kaur
+                                        fetch first 1 row only);
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
                 NULL;
