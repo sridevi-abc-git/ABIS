@@ -28,6 +28,7 @@ IS
     --                            licenses to be reinstated.
     -- 08/05/2021 TJL  WO 25899  truncated ready to issue date when testing if licenses should be
     --                            included in produce license batch for renewals (relatependingltstobatch)
+    -- 05/05/2023 PK              Changed log type of issuance to address objectid gap fixes in prod
     -- **************************************************************************
 
     t_newprocid        udt_id;
@@ -3765,13 +3766,15 @@ IS
       t_color               VARCHAR2(10);
       t_currentprintorder   NUMBER(9);
       t_maxprintorder       NUMBER(9);
+      t_createddate         DATE;
     BEGIN
       t_jobid   := api.pkg_columnquery.VALUE(a_processid, 'JobId');
+      t_createddate   := api.pkg_columnquery.datevalue(a_processid, 'CreatedDate'); -- 05/05/2023 PK              Changed log type of issuance to address objectid gap fixes in prod
 
       SELECT (COUNT(p.processid)) INTO t_currentprintorder
         FROM api.processes p
        WHERE p.jobid = t_jobid
-         AND p.processid <= a_processid
+         AND p.createddate <= t_createddate  -- 05/05/2023 PK              Changed log type of issuance to address objectid gap fixes in prod
          AND p.processtypeid = api.pkg_columnquery.VALUE(a_processid, 'ObjectDefId');
 
       SELECT MAX(t.printorder) INTO t_maxprintorder
