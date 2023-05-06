@@ -15,7 +15,8 @@ AS
     -- 05/11/2021 TJL   WO18874 Add new procdeure 'VerifyBatchPayments'   
     -- 09/21/2021 PK          WO-25903 - Added EChecks as transmittal type BizMod eCheck: Transmittal Type  
     -- 09/21/2021 PK          WO-25904 -Added eCheck to the Deposit Type  
-    -- 10/26/2022 PK          Changed DB name to ABISP1 after upgrade on libne   IF (UPPER(sys_context('USERENV', 'instance_name')) != 'ABCPROD') THEN         
+    -- 10/26/2022 PK          Changed DB name to ABISP1 after upgrade on libne   IF (UPPER(sys_context('USERENV', 'instance_name')) != 'ABCPROD') THEN   
+    -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes       
     -- **************************************************************************
 
 
@@ -3197,7 +3198,8 @@ AS
 
         --Find the Max object id of the payment stati on the payment transactions of the voided payment,
         --used to create the new stati on the the new payment transactions
-        SELECT MAX(pspt.paymentstatusobjectid)      --APatterson: PIP Task 8.5
+   -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes  
+        SELECT pspt.paymentstatusobjectid     --APatterson: PIP Task 8.5
           INTO t_maxpaymentstatusobjid
           FROM api.paymenttransactions  pt
                JOIN api.registeredexternalobjects reo   --TAyers: PIP Task 8.5
@@ -3205,7 +3207,13 @@ AS
                   AND reo.objectdefid = t_paytransobjectdefid
                JOIN query.r_paymentstatuspaymenttrans pspt
                    ON pspt.paymenttransactionobjectid = reo.objectid
-         WHERE pt.paymentid = t_voidpaymentid;
+                   join query.o_Paymentstatus ps
+                 on ps.ObjectId = pspt.PaymentStatusObjectId
+         WHERE pt.paymentid =  t_voidpaymentid
+          order by ps.StatusDate desc
+           fetch first 1 row only ;
+--              END of changes 05/05/2023 PK         
+
 
         -- Set income code to 'V' on payment transactions
         --and unearn the transaction if the transaction has already been earned
