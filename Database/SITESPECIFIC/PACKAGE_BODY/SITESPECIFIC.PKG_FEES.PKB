@@ -106,7 +106,7 @@ IS
         --Get Config id's
         IF a_fromobjectid IS NULL THEN
             -- *************************************************************************
-            -- 08/05/2021 TJL WO 25899 
+            -- 08/05/2021 TJL WO 25899
             -- The following code block to prevent exceptions being thrown when
             -- creating propose payment object. Object id is not passed to this procedure.
             -- *************************************************************************
@@ -2376,32 +2376,48 @@ IS
         t_relid         NUMBER;
     BEGIN
         --Get POIC feeschedule id
-        SELECT MAX(t.objectid)
-          INTO t_poicschedid
-          FROM sitespecific.feeschedule_t t
-         WHERE t.feeactivity = 'POIC'
-           AND (t.licensetypecode = a_ltcode
-             OR (t.licensetypecode IS NULL
-             AND a_ltcode IS NULL))
-           AND t.effectivedate = (SELECT MAX(q.effectivedate)
-                                    FROM sitespecific.feeschedule_t q
-                                   WHERE (q.licensetypecode = a_ltcode
-                                       OR (q.licensetypecode IS NULL
-                                       AND a_ltcode IS NULL))
-                                     AND q.feeactivity = 'POIC');
+        SELECT max(objectid)
+        INTO t_poicschedid
+        FROM (
+          -- Determine the latest fee schedule by ordering by Logical Transaction
+          SELECT o.logicaltransactionid, o.objectid
+            FROM sitespecific.feeschedule_t t
+            JOIN api.objects o
+              ON t.objectid = o.objectid
+           WHERE t.feeactivity = 'POIC'
+             AND (t.licensetypecode = a_ltcode
+                  OR (t.licensetypecode IS NULL
+                  AND a_ltcode IS NULL))
+             -- Get the latest Fee Schedule Date for the provided license code and/or where Fee Activity is POIC
+             AND t.effectivedate =
+                 (SELECT MAX(q.effectivedate)
+                    FROM sitespecific.feeschedule_t q
+                   WHERE (q.licensetypecode = a_ltcode
+                          OR (q.licensetypecode IS NULL
+                          AND a_ltcode IS NULL))
+                     AND q.feeactivity = 'POIC')
+           GROUP BY o.logicaltransactionid, o.objectid
+           HAVING o.logicaltransactionid = max(o.logicaltransactionid)
+         );
 
         --raise error when there is no POIC feeschedule record.
         IF t_poicschedid IS NULL THEN
             BEGIN
-                SELECT MAX(t.objectid)
-                  INTO t_poicschedid
-                  FROM sitespecific.feeschedule_t t
-                 WHERE t.feeactivity = 'POIC'
-                   AND t.licensetypecode IS NULL
-                   AND t.effectivedate = (SELECT MAX(q.effectivedate)
+                SELECT max(objectid)
+                INTO t_poicschedid
+                FROM (
+                    SELECT o.logicaltransactionid, o.objectid
+                      FROM sitespecific.feeschedule_t t
+                      JOIN api.objects o
+                        ON t.objectid = o.objectid
+                     WHERE t.feeactivity = 'POIC'
+                       AND t.licensetypecode IS NULL
+                       AND t.effectivedate = (SELECT MAX(q.effectivedate)
                                             FROM sitespecific.feeschedule_t q
                                            WHERE q.licensetypecode IS NULL
-                                             AND q.feeactivity = 'POIC');
+                                             AND q.feeactivity = 'POIC')
+                 GROUP BY o.logicaltransactionid, o.objectid
+                 HAVING o.logicaltransactionid = max(o.logicaltransactionid));
             EXCEPTION
                 WHEN NO_DATA_FOUND THEN
                     api.pkg_errors.raiseerror(
@@ -6136,6 +6152,7 @@ IS
         t_paymenttransfercheck       NUMBER;
         t_paytransobjectdefid        udt_id := api.pkg_configquery.objectdefidforname('o_PaymentTransactions');
         t_seasonal                   VARCHAR2(1);  -- WO 8517 TJL 05/25/2018
+        t_StatusObjectId             udt_id;
     BEGIN
         t_jobid                := api.pkg_columnquery.VALUE(a_objectid, 'JobId');
         t_paymentstatusdefid   := api.pkg_objectdefquery.idforname('o_PaymentStatus');
@@ -6144,6 +6161,7 @@ IS
         t_paymenttransferep    :=
             api.pkg_configquery.endpointidforname('p_PaymentTransfer', 'PaymentTransaction');
 
+        pkg_debug.putline('Sitespecific.pkg_Fees - Create LT Payment Status - Start');
         --Loop thru the payment transaction on the license type and earn records that have no payment status and that relate to the license types in the batch
         FOR ltc_1
             IN (SELECT lt.licensetypecode ltcode,
@@ -6174,6 +6192,7 @@ IS
                          ltls.includeinchangeappbatch  -- Added per CX recomendations - Issue # 2528 - by Gurpreet
                                                      )
         LOOP
+          pkg_debug.putline(' Create LT Payment Status, License Type Job ID: ' || t_jobid);
             -- RyanL: Changed the select and where clause to be a subselect for performance (PIP Task 8.5)
             FOR c IN (SELECT  /*+ CARDINALTY(x 1) */
                              reo.objectid,
@@ -6422,11 +6441,15 @@ IS
                                                                    || (TO_CHAR(ltc_1.expirationdate, 'YYYY') - 1),
                                                                    'MM/DD/YYYY'))))
                         OR d.feeactivity NOT IN ('REN', 'REN50', 'REN100') THEN
-                            SELECT api.pkg_columnquery.VALUE(MAX(r.toobjectid), 'Status')
-                              INTO t_paymentstatusstatus
+                            SELECT r.toobjectid
+                              INTO t_StatusObjectId
                               FROM api.relationships r
                              WHERE r.fromobjectid = d.objectid
-                               AND r.endpointid = t_paytranspaystatendpoint;
+                               AND r.endpointid = t_paytranspaystatendpoint
+                               ORDER BY r.logicaltransactionid
+                               FETCH FIRST 1 ROWS ONLY;
+
+                            t_paymentstatusstatus := api.pkg_columnquery.VALUE(t_StatusObjectId, 'Status');
 
                             IF t_paymentstatusstatus IS NULL
                             OR t_paymentstatusstatus = 'UNEARNED' THEN
@@ -6461,6 +6484,8 @@ IS
                                  ON al.licensejobid = l.objectid
                            WHERE llt.licensetypejobid = ltc_1.jobid)
             LOOP
+                  pkg_debug.putline('    Application Job ID: ' || ltc_3.JobId);
+                  pkg_debug.putline('    License Type Job ID: ' ||ltc_1.jobid);
                 -- RyanL: Changed the select and where clause to be a subselect for performance (PIP Task 8.5)
                 FOR e
                     IN (SELECT  /*+ CARDINALITY(x 1) */
@@ -6510,6 +6535,8 @@ IS
                               OR ltc_1.includeinchangeappbatch = 'Y'
                              AND fs.feeactivity NOT IN ('REN', 'REN50', 'REN100'))))
                 LOOP
+                    pkg_debug.putline('   Loop E, Fee Id: ' || e.feeid);
+                    pkg_debug.putline('   Loop E, Fee Ammount: ' || e.FeeAmount);
                     -- Get the summed earned amounts for this transaction
                     SELECT  /*+ CARDINALITY (pt 1) */
                            NVL(ABS(SUM(api.pkg_columnquery.numericvalue(r.paymentstatusobjectid, 'EarnedAmount'))),
@@ -6533,6 +6560,7 @@ IS
                                                    IS NOT NULL
                                            AND r.amount < 0;*/
 
+                    pkg_debug.putline('   Loop E, Earned Ammount: ' || t_earnedamount);
                     -- SG: Equivalent SQL Statement that uses correct index
                     SELECT COUNT(*)
                       INTO t_paymenttransfercheck
@@ -6544,6 +6572,8 @@ IS
                        AND api.pkg_columnquery.VALUE(r.relationshipid, 'Amount') < 0
                        AND pt.outcome IS NOT NULL;
 
+                   pkg_debug.putline('   Loop E, paymenttransfercheck: ' || t_paymenttransfercheck);
+
                     IF t_paymenttransfercheck = 0
                    AND t_earnedamount < e.feeamount THEN
                         -- Get the correct amount to earn
@@ -6552,12 +6582,24 @@ IS
                         ELSE
                             t_earnedamount   := e.amount;
                         END IF;
+                             pkg_debug.putline('   Loop E,  e.objectid: ' || e.ObjectId);
 
-                        SELECT api.pkg_columnquery.VALUE(MAX(r.toobjectid), 'Status')
-                          INTO t_paymentstatusstatus
-                          FROM api.relationships r
-                         WHERE r.fromobjectid = e.objectid
-                           AND r.endpointid = t_paytranspaystatendpoint;
+                          begin
+                            SELECT r.toobjectid
+                              INTO t_StatusObjectId
+                              FROM api.relationships r
+                             WHERE r.fromobjectid = e.objectid
+                               AND r.endpointid = t_paytranspaystatendpoint
+                               ORDER BY r.logicaltransactionid
+                               FETCH FIRST 1 ROWS ONLY;
+
+                            t_paymentstatusstatus := api.pkg_columnquery.VALUE(t_StatusObjectId, 'Status');
+
+                          exception when no_data_found then
+                            pkg_debug.putline('    Payment Status not found, setting to Null');
+                            t_StatusObjectId := null;
+                            t_paymentstatusstatus := null;
+                          end;
 
                         IF t_paymentstatusstatus IS NULL
                         OR t_paymentstatusstatus = 'UNEARNED' THEN
@@ -8868,15 +8910,15 @@ IS
                       INTO t_totalowing
                       FROM query.j_licensetype lt
                            JOIN api.fees f
-                           ON f.jobid = z.jobid  
+                           ON f.jobid = z.jobid
                            JOIN api.registeredexternalobjects reo  -- RyanL: PIP Task 8.5
                            ON reo.linkvalue = TO_CHAR(f.feeid)
-                          AND reo.objectdefid = t_feeobjectdefid  
+                          AND reo.objectdefid = t_feeobjectdefid
                            JOIN query.r_feelicensefeeschedule flfs
                            ON flfs.feeobjectid = reo.objectid
                            JOIN sitespecific.feeschedule_t fs
                            ON fs.objectid = flfs.licensefeescheduleid
-                     WHERE lt.jobid = z.jobid  
+                     WHERE lt.jobid = z.jobid
                        AND fs.feeactivity IN ('REN', 'REN50', 'REN100')
                        --  02/20/2020 TJL WO 3838 added limit to how far back to look for balances
                        AND f.transactiondate > ADD_MONTHS(SYSDATE, -12);
