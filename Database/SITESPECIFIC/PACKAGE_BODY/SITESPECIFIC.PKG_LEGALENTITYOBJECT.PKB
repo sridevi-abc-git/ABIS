@@ -55,6 +55,9 @@ IS
 
     g_processingqueue                   udt_idbyid;
     g_verifymanagementobject            udt_id;
+    g_verifymanagementobjecttrans       udt_id;
+    g_verifymanagementcounter           pls_integer := 0;
+
 
     g_sortcolumnbyid                    udt_stringbyid;
 
@@ -62,52 +65,40 @@ IS
         a_basesortkey   PLS_INTEGER,
         a_objectid      udt_id)
     IS
-        SELECT NULL
-                   endpointid,
-               a_objectid
-                   fromobjectid,
-               NULL
-                   toobjectid,
-               1
-                   hierarchylevel,
-               api.pkg_columnquery.VALUE(a_objectid, 'P12AStatus')
-                   p12astatus,
-               (SELECT rootobjectid
-                  FROM query.r_p12alegalentityroot
-                 WHERE nodeobjectid = a_objectid)
-                   relatedp12aparent,
-               (SELECT rootobjectid
-                  FROM query.r_legalentityroot
-                 WHERE nodeobjectid = a_objectid)
-                   relatedrootle,
-               '/' || TO_CHAR(a_basesortkey, '099') || a_objectid
-                   sortkey
+        SELECT
+            NULL endpointid,
+            a_objectid fromobjectid,
+            NULL toobjectid,
+            1 hierarchylevel,
+            api.pkg_columnquery.VALUE(a_objectid, 'P12AStatus') p12astatus,
+            (SELECT rootobjectid
+              FROM query.r_p12alegalentityroot
+             WHERE nodeobjectid = a_objectid) relatedp12aparent,
+            (SELECT rootobjectid
+               FROM query.r_legalentityroot
+              WHERE nodeobjectid = a_objectid) relatedrootle,
+           '/' || TO_CHAR(a_basesortkey, '099') || a_objectid sortkey
           FROM DUAL
         UNION ALL
-            SELECT r.endpointid,
-                   r.fromobjectid,
-                   r.toobjectid,
-                   LEVEL + 1
-                       hierarchylevel,
-                   api.pkg_columnquery.VALUE(r.fromobjectid, 'P12AStatus')
-                       p12astatus,
-                   (SELECT rootobjectid
-                      FROM query.r_p12alegalentityroot
-                     WHERE nodeobjectid = r.fromobjectid)
-                       relatedp12aparent,
-                   (SELECT rootobjectid
-                      FROM query.r_legalentityroot
-                     WHERE nodeobjectid = r.fromobjectid)
-                       relatedrootle,
-                      '/'
-                   || TO_CHAR(a_basesortkey, '099')
-                   || a_objectid
-                   || SYS_CONNECT_BY_PATH(
-                             REPLACE(le.letreeviewtitle, '/', '')
-                        --  || REPLACE(le.dup_formattedname, '/', ''),
-                            || REPLACE(le.dup_formattedname || lpad(le.ObjectId, 9), '/', ''),--by PK WO-21594 Adding Spouse reflecting under the wrong entity
-                          '/')
-                       sortkey
+            SELECT
+                r.endpointid,
+                r.fromobjectid,
+                r.toobjectid,
+                LEVEL + 1 hierarchylevel,
+               api.pkg_columnquery.VALUE(r.fromobjectid, 'P12AStatus') p12astatus,
+               (SELECT rootobjectid
+                  FROM query.r_p12alegalentityroot
+                 WHERE nodeobjectid = r.fromobjectid) relatedp12aparent,
+               (SELECT rootobjectid
+                  FROM query.r_legalentityroot
+                 WHERE nodeobjectid = r.fromobjectid) relatedrootle,
+                  '/' || TO_CHAR(a_basesortkey, '099') || a_objectid
+                      || SYS_CONNECT_BY_PATH(
+                          REPLACE(le.letreeviewtitle, '/', '')
+                          --  || REPLACE(le.dup_formattedname, '/', ''),
+                          || REPLACE(le.dup_formattedname || lpad(le.ObjectId, 9), '/', ''), '/') sortkey
+                          --by PK WO-21594 Adding Spouse reflecting under the wrong entity
+
               FROM api.relationships r
                    JOIN api.objects f ON f.objectid = r.fromobjectid
                    JOIN query.o_legalentity le -- joining in the object allows for a single security hit,
@@ -132,16 +123,20 @@ IS
     CURSOR c_quickhierarchy(
         a_objectid      udt_id)
     IS
-        SELECT NULL              endpointid,
-               a_objectid        fromobjectid,
-               NULL              toobjectid,
-               1                 hierarchylevel,
+        SELECT NULL endpointid,
+               a_objectid fromobjectid,
+               (select LogicalTransactionId from api.Objects where objectid = a_ObjectId) FromObjLT,
+               NULL toobjectid,
+               Null ToObjLT,
+               1 hierarchylevel,
                '/' || a_objectid sortkey
           FROM DUAL
         UNION ALL
             SELECT r.endpointid,
                    r.fromobjectid,
+                   f.LogicalTransactionId FromObjLT,
                    r.toobjectid,
+                   (select LogicalTransactionId from api.Objects where objectid = r.toobjectid) ToObjLT,
                    LEVEL + 1
                        hierarchylevel,
                    '/' || a_objectid || SYS_CONNECT_BY_PATH(r.fromobjectid, '/')
@@ -171,8 +166,8 @@ IS
     PROCEDURE dbg(msg VARCHAR2)
     IS
     BEGIN
-        NULL;
-    --pkg_Debug.PutSingleLine('pkg_LegalEntityObject: '||msg);
+        --NULL;
+      pkg_Debug.PutSingleLine('pkg_LegalEntityObject: '||msg);
 
     END;
 
@@ -188,6 +183,8 @@ IS
         RETURN udt_id
     IS
     BEGIN
+       dbg('rootlegalentity, START, for: ' || a_objectid);
+
         IF NOT gc_rootlegalentity.EXISTS(a_objectid) THEN
             dbg('Get Root for: ' || a_objectid || ' CACHE MISS');
             cacherootlegalentity(
@@ -201,6 +198,7 @@ IS
                 || gc_rootlegalentity(a_objectid));
         END IF;
 
+       dbg('rootlegalentity, END, for: ' || a_objectid);
         RETURN gc_rootlegalentity(a_objectid);
     END;
 
@@ -212,7 +210,7 @@ IS
         t_personobjectid          udt_id;
         t_percentageofownership   NUMBER;
     BEGIN
-        dbg('Post Verify Procedures called for: ' || a_objectid);
+        dbg('Post Verify Procedures called for obj: ' || a_objectid);
 
         SELECT UPPER(lestructurerel),
                ownertype,
@@ -262,9 +260,11 @@ IS
             api.pkg_columnquery.VALUE(a_objectid, 'OmitPrefix'));
 
         --Maintain duplicate details (named 'dup_...')
+        dbg('Post Verify Procedure, Maintain Duplicate Details called for: ' || a_objectid);
         toolbox.pkg_copy.maintainduplicatedetails(a_objectid, a_asofdate);
 
         --Run procedures - verify
+        dbg('Post Verify Procedure, RunMaintain (Maintain P12A): ' || a_objectid);
         toolbox.pkg_procedure.runproceduresverify(
             a_objectid,
             a_asofdate,
@@ -272,6 +272,7 @@ IS
 
         --Legal Entity Post Verify
         sitespecific.pkg_legalentity.lepostverify(a_objectid, a_asofdate);
+        dbg('Post Verify Procedures END, for obj: ' || a_objectid);
     END;
 
     /*
@@ -312,6 +313,19 @@ IS
         ELSE
             -- Create A Verify Management ObjectId if not alread created for this Session
             IF g_verifymanagementobject IS NULL THEN
+                -- ISSUE030043 - new counter to allow a few loops, raise error after a number of loops
+                if g_verifymanagementobjecttrans != t_currentlogicaltransactionid then
+                    g_verifymanagementcounter := 0;
+                    g_verifymanagementobjecttrans := t_currentlogicaltransactionid;
+                elsif g_verifymanagementcounter > 100 then
+                    raise_application_error(-20000, 'postverify on object '
+                        || a_objectid || ' - one hundred verifymanagementobjects '
+                        || 'already created in the same transaction, probable '
+                        || ' infinite loop.');
+                end if;
+                g_verifymanagementcounter := g_verifymanagementcounter + 1;
+                dbg(' Verify Management Object count: ' || g_verifymanagementcounter);
+
                 g_verifymanagementobject   :=
                     api.pkg_objectupdate.new(gc_verifymangementdef);
             END IF;
@@ -320,6 +334,7 @@ IS
             g_processingqueue(g_processingqueue.COUNT + 1)   := a_objectid;
             RETURN;
         END IF;
+        dbg('Post Verify, END, for ObjectId: ' || a_objectid);
     END;
 
     FUNCTION calculatesortcolumn(a_objectid udt_id)
@@ -547,6 +562,7 @@ IS
                                           i.sortkey);
         --SortColumnForId(i.FromObjectId, i.ToObjectId));
         END LOOP;
+        dbg('Maintain Hierarchy, END, for Obj: ' || a_objectid);
     END;
 
     /* Shortcut to prevent Post-Verify from running on a given LegalEntity*/
@@ -600,8 +616,9 @@ IS
         t_rootlegalentity               udt_idbyid;
         t_currentle                     udt_id;
         t_currentlogicaltransactionid   udt_id;
+        t_objectid                      udt_id;
     BEGIN
-        dbg('Executing LE Verify Management ObjectId: ' || a_objectid);
+        dbg('Executing LE Verify Management, START, ObjectId: ' || a_objectid);
 
         IF a_objectid != g_verifymanagementobject THEN
             dbg(
@@ -612,8 +629,7 @@ IS
                 || ' is in cache');
             raise_application_error(
                 -20000,
-                   'Unexpected call to LE Verify '
-                || 'Management from ObjectId: '
+                   'Unexpected call to LE Verify Management from ObjectId: '
                 || a_objectid
                 || ' when ObjectId: '
                 || g_verifymanagementobject
@@ -623,6 +639,7 @@ IS
         t_currentlogicaltransactionid   :=
             api.pkg_logicaltransactionupdate.currenttransaction;
 
+        dbg(' current logicaltransation: ' || t_currentlogicaltransactionid);
         IF g_processingqueue.COUNT = 0 THEN
             RETURN;
         END IF;
@@ -636,23 +653,38 @@ IS
                 || i);
             -- if more than one root are in the queue... we handle it this way
             -- an array with the key/value = Root Id
-            --dbg('Add Root: '||RootLegalEntity(g_ProcessingQueue(i))||' to Root LE List');
+            dbg('Add Root: '||RootLegalEntity(g_ProcessingQueue(i))||' to Root LE List');
             t_rootlegalentity(rootlegalentity(g_processingqueue(i)))   :=
                 rootlegalentity(g_processingqueue(i));
+
+            dbg('Run post verify procedures on g_processingqueue obj: '|| g_processingqueue(i));
             postverifyprocedures(g_processingqueue(i), a_asofdate);
         END LOOP;
 
-        dbg(t_rootlegalentity.COUNT || ' to be processed');
-        t_currentle                := t_rootlegalentity.FIRST;
+        dbg(' Root LEs to be processed (count): '|| t_rootlegalentity.COUNT);
+        t_currentle := t_rootlegalentity.FIRST;
 
         WHILE t_currentle IS NOT NULL
         LOOP
+            dbg(' current LE '|| t_currentle);
             FOR j IN c_quickhierarchy(t_currentle)
             LOOP
-                -- Mark all members of hierarchy as processed now so we can touch their sort data
-                IF j.fromobjectid < a_objectid THEN
-                    gc_processed(j.fromobjectid)   :=
-                        t_currentlogicaltransactionid;
+                dbg(' Quick Heirarchy, FromObjectId: '|| j.fromobjectid);
+                dbg(' a_ObjectId: '|| a_objectid);
+                -- Mark all members of hierarchy as processed now so we can touch their sort data.
+                -- To-objects are included to ensure that leaf nodes are also done.
+                -- Doing both from- and to- objects is a lot of duplication but the
+                -- extra overhead is small and doing it this way keeps the code simple.
+                --IF j.fromobjectid < a_objectid THEN
+				-- Compare LTs
+				if (j.FromObjLT < t_currentlogicaltransactionid) or
+				    (j.FromObjLT = t_currentlogicaltransactionid and j.FromObjectId < a_ObjectId) then
+				-- Earlier transactions would have been processed already
+				-- current transaction, only process objects with a larger objectid than the Verify Management Object
+                    dbg(' FromObjectId is less than a_objectid');
+                    dbg(' Update gc_processed, FromObjectId, to currentlogicaltransactionid');
+
+                    gc_processed(j.fromobjectid) :=  t_currentlogicaltransactionid;
                     cacherootlegalentity(j.fromobjectid, t_currentle);
                 END IF;
             END LOOP;
@@ -661,9 +693,18 @@ IS
             t_currentle   := t_rootlegalentity.NEXT(t_currentle);
         END LOOP;
 
+        for i in 1..g_processingqueue.count
+        loop
+           t_objectid := g_processingqueue(i);
+           if not gc_processed.exists(t_objectid) or gc_processed(t_objectid) != t_currentlogicaltransactionid then
+              dbg('Unprocessed legal entity ' || t_objectid || ' found. Possibly because it has been created and not yet added to a Legal Entity Structure.');
+           end if;
+        end loop;
+
         g_processingqueue.delete;
-        -- This item never needs to be set to null.  It will start at null on every new logical transaction.
-        --g_verifymanagementobject   := NULL;
+        g_verifymanagementobject := NULL;
+
+        dbg('Executing LE Verify Management, END, for ObjectId: ' || a_objectid);
     END;
 
     PROCEDURE updatehierarchyonly(a_objectid udt_id)
@@ -678,8 +719,10 @@ IS
         FOR j IN c_quickhierarchy(t_rootlegalentity)
         LOOP
             -- Mark all members of hierarchy as processed now so we can touch their sort data
-            IF j.fromobjectid < a_objectid THEN
-                gc_processed(j.fromobjectid)   :=
+            --IF j.fromobjectid < a_objectid THEN
+            if (j.FromObjLT < t_currentlogicaltransactionid) or
+				    (j.FromObjLT = t_currentlogicaltransactionid and j.FromObjectId < a_ObjectId) then
+			  gc_processed(j.fromobjectid)   :=
                     t_currentlogicaltransactionid;
                 cacherootlegalentity(j.fromobjectid, t_rootlegalentity);
             END IF;
@@ -706,7 +749,6 @@ IS
         cacherootlegalentity(a_nodeobjectid, a_rootobjectid);
     END;
 END pkg_legalentityobject;
-
 /
 
 
