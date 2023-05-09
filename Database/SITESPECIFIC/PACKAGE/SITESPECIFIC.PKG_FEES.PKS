@@ -1,9 +1,9 @@
 CREATE OR REPLACE PACKAGE SITESPECIFIC."PKG_FEES" is
 -- ****************************************************************************
--- File:        PKG_FEES.PKS  
+-- File:        PKG_FEES.PKS
 -- Author:      TREVOR.HAMM
 --
--- $Rev: 322 $  
+-- $Rev: 322 $
 -- $Date: 2019-05-21 14:53:58 -0700 (Tue, 21 May 2019) $
 -- Last Changed By:  $Author: PKaur $
 --
@@ -13,9 +13,9 @@ CREATE OR REPLACE PACKAGE SITESPECIFIC."PKG_FEES" is
 -------------------------------------------------------------------------------
 --    Date         Ticket     Comment
 --  01/21/2007 TH           Initial Package Created
---  07/03/2018 TJL          Header updated for checkin to SVN                                                          
---  03/29/2019 TJL  17566   Adding Tiers for Catering and Event Authorization    
--- 05/21/2019  PK  WO 18109 IPTR Fee Change                                                      
+--  07/03/2018 TJL          Header updated for checkin to SVN
+--  03/29/2019 TJL  17566   Adding Tiers for Catering and Event Authorization
+-- 05/21/2019  PK  WO 18109 IPTR Fee Change
 -------------------------------------------------------------------------------
 
   -- Purpose : Online fee payment
@@ -221,7 +221,7 @@ CREATE OR REPLACE PACKAGE SITESPECIFIC."PKG_FEES" is
                               a_Inactive               char default 'N',
                               a_FeeTier                VARCHAR2, -- 03/29/2019 TJL WO 17566
                               a_OriginalFee            NUMBER,
-                              a_OriginalSecondaryFee   NUMBER);  -- 04/17/2019 TJL WO 17566 
+                              a_OriginalSecondaryFee   NUMBER);  -- 04/17/2019 TJL WO 17566
 
   /*-------------------------------------------------------------------------------
   * Procedure ModifyFeeSchedule() Used on creation of o_FeeSchedule.
@@ -243,7 +243,7 @@ CREATE OR REPLACE PACKAGE SITESPECIFIC."PKG_FEES" is
                               a_Inactive               char default 'N',
                               a_FeeTier                VARCHAR2, -- 03/29/2019 TJL WO 17566
                               a_OriginalFee            NUMBER,
-                              a_OriginalSecondaryFee   NUMBER);  -- 04/17/2019 TJL WO 17566 
+                              a_OriginalSecondaryFee   NUMBER);  -- 04/17/2019 TJL WO 17566
 
   ----------------------------------------------------------------------------------------------------
   -- CreateSimpleFee() -- PUBLIC
@@ -394,7 +394,7 @@ CREATE OR REPLACE PACKAGE SITESPECIFIC."PKG_FEES" is
                              a_asofdate         DATE,
                              a_feeamount    OUT NUMBER,
                              a_licensefeescheduleid OUT udt_id);
-                             
+
   function GetLTFeeAmount(a_EffectiveDate            date,
                           a_FeeActivityType          varchar2,
                           a_LTCode                   varchar2,
@@ -648,6 +648,7 @@ CREATE OR REPLACE PACKAGE SITESPECIFIC."PKG_FEES" is
                                           a_AsOfDate date,
                                           a_JobId    number);
 end PKG_FEES;
+
 /
 
 
