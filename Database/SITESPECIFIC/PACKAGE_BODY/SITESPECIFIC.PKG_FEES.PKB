@@ -6441,6 +6441,7 @@ IS
                                                                    || (TO_CHAR(ltc_1.expirationdate, 'YYYY') - 1),
                                                                    'MM/DD/YYYY'))))
                         OR d.feeactivity NOT IN ('REN', 'REN50', 'REN100') THEN
+                         begin 
                             SELECT r.toobjectid
                               INTO t_StatusObjectId
                               FROM api.relationships r
@@ -6450,6 +6451,13 @@ IS
                                FETCH FIRST 1 ROWS ONLY;
 
                             t_paymentstatusstatus := api.pkg_columnquery.VALUE(t_StatusObjectId, 'Status');
+                            
+                          exception when no_data_found then
+                            pkg_debug.putline('    Payment Status not found, setting to Null');
+                            t_StatusObjectId := null;
+                            t_paymentstatusstatus := null;
+                          end; -- Added as per Dalainya to resolve no data found on produce license5/9/2023
+                          
 
                             IF t_paymentstatusstatus IS NULL
                             OR t_paymentstatusstatus = 'UNEARNED' THEN
