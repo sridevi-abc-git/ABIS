@@ -3213,11 +3213,10 @@ AS
          WHERE pt.paymentid =  t_voidpaymentid
           order by ps.StatusDate desc
            fetch first 1 row only ;
-             exception when no_data_found then
+    exception when no_data_found then
                             pkg_debug.putline('    Payment Status not found, setting to Null');
                             t_maxpaymentstatusobjid := null;
                           end;
-
 --              END of changes 05/05/2023 PK         
 
 
