@@ -1,27 +1,20 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.requestlicenselist(a_packet       IN CLOB,
+CREATE OR REPLACE FUNCTION requestlicenselist(a_packet       IN CLOB,
                                               a_seq          IN NUMBER)
     RETURN CLOB
+-- ****************************************************************************
+-- File:        REQUESTLICENSELIST.FNC
+-- Author:      Timothy J. Lord
+--
+-- Purpose :
+--
+-- History:
+-------------------------------------------------------------------------------
+--    Date                       Comment
+--  04/13/2022 TJL   Initial Package Created for 19C Database
+--  12/09/2022 TJL   Implemented for eservices after 19C upgrad
+-- ****************************************************************************
 IS
-    -- ****************************************************************************
-    -- File:        REQUESTLICENSELIST.SQL
-    -- Author:      Timothy J. Lord
-    --
-    -- Purpose :    This function is called thru the eservices API to return a
-    --              list of licenses. A JSON packet with an array of License
-    --              Object ids is passed into this function to select which
-    --              licenses will be returned in a JSON packet.
-    --
-    -- History:
-    -------------------------------------------------------------------------------
-    --    Date           Ticket     Comment
-    --  04/13/2022 TJL  BIZ-5919  Initial Function Created
-    --  04/21/2022 TJL            Fixed bug single-row subquery return more than
-    --                              one row
-    --  05/09/2022 TJL            Fixed bug in wrong secondary License Type being
-    --                              returned. Change from calling function
-    --                              statusmatrix to the function in utl_licenseinfo
-    --                              package statusmatrix.
-    -- ****************************************************************************
+    t_json_obj     json_object_t;
     t_results      CLOB;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
@@ -35,108 +28,122 @@ BEGIN
                         a_packet,
                         '$[*]'
                         COLUMNS(
-                            NESTED PATH '$.OBJECTIDS[*]'
+                            NESTED PATH '$.DATA.OBJECTIDS[*]'
                                 COLUMNS(objectid PATH '$'))))
-    SELECT TO_CLOB(
-               '{"PACKET_TYPE":"LICENSELISTINFO","DATA":['
-               || x.license
-               || ']}')    info
+    SELECT json_object(
+               'PACKET_TYPE' VALUE 'LICENSELISTINFO',
+               'DATA' VALUE
+                   json_arrayagg(
+                       json_object(
+                           'LICENSEOBJECTID' VALUE l.objectid,
+                           'LICENSENUMBER' VALUE
+                               api.pkg_columnquery.VALUE(l.objectid,
+                                                         'licensenumber'),
+                           'PRIMARYLICENSEE' VALUE
+                               api.pkg_columnquery.VALUE(l.objectid,
+                                                         'PrimaryLicensee'), -- Primary Owner
+                           'PREMISEADDRESS' VALUE
+                               api.pkg_columnquery.VALUE(l.objectid,
+                                                         'PremAddressLine1'), -- Business Address
+                           'PREMISECITY' VALUE
+                               api.pkg_columnquery.VALUE(l.objectid,
+                                                         'PremAddressUSCity'), -- Business City
+                           'BUSINESSNAME' VALUE
+                               api.pkg_columnquery.VALUE(l.objectid,
+                                                         'PrimaryDBA'), -- DBA
+                           'LICENSE_TYPES' VALUE
+                               (SELECT json_arrayagg(
+                                           json_object(
+                                               'LICENSETYPECODE' VALUE
+                                                   ltc.licensetypecode,
+                                               'EXPIRATIONDATE' VALUE
+                                                   ltc.expirationdate,
+                                               'STATUS' VALUE ltc.status,
+                                               'AWFREQUIRED' VALUE
+                                                   CASE
+                                                       WHEN ltc.licensetypecode IN
+                                                                ('02', '22')
+                                                       THEN
+                                                           utl_licenseinfo.awfrequired(
+                                                               ltc.licensetypeobjectid)
+                                                       ELSE
+                                                           'NA'
+                                                   END,
+                                               'SECONDARY' VALUE
+                                                   (SELECT json_arrayagg(
+                                                               json_object(
+                                                                   'LICENSETYPECODE' VALUE
+                                                                       lts.licensetypecode,
+                                                                   'EXPIRATIONDATE' VALUE
+                                                                       lts.expirationdate,
+                                                                   'STATUS' VALUE
+                                                                       lts.status))
+                                                      FROM (SELECT api.pkg_columnquery.VALUE(
+                                                                       slt.toobjectid,
+                                                                       'LicenseTypeCode')
+                                                                       licensetypecode,
+                                                                   api.pkg_columnquery.datevalue(
+                                                                       r.toobjectid,
+                                                                       'ExpirationDate')
+                                                                       expirationdate,
+                                                                   bizmod_api.utl_licenseinfo.statusmatrix(
+                                                                       api.pkg_columnquery.VALUE(
+                                                                           slt.relationshipid,
+                                                                           'Status'))
+                                                                       status
+                                                              FROM api.relationships
+                                                                   r
+                                                                   JOIN
+                                                                   api.relationships
+                                                                   slt
+                                                                       ON (r.toobjectid =
+                                                                           slt.fromobjectid
+                                                                       AND slt.endpointid =
+                                                                           api.pkg_configquery.endpointidforname(
+                                                                               'j_LicenseType',
+                                                                               'LicTypeCatSecondary'))
+                                                             WHERE r.endpointid =
+                                                                   api.pkg_configquery.endpointidforname(
+                                                                       'j_License',
+                                                                       'LicenseType')
+                                                               AND r.fromobjectid =
+                                                                   ltc.objectid
+                                                               AND slt.toobjectid
+                                                                       IS NOT NULL)
+                                                           lts)
+                                               ABSENT ON NULL))
+                                  FROM (SELECT DISTINCT
+                                               r.fromobjectid
+                                                   objectid,
+                                               api.pkg_columnquery.VALUE(
+                                                   r.toobjectid,
+                                                   'LicenseTypeCode')
+                                                   licensetypecode,
+                                               api.pkg_columnquery.datevalue(
+                                                   r.toobjectid,
+                                                   'ExpirationDate')
+                                                   expirationdate,
+                                               bizmod_api.utl_licenseinfo.statusmatrix(
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'StatusDescription'))
+                                                   status,
+                                               r.toobjectid
+                                                   licensetypeobjectid
+                                          FROM api.relationships r
+                                         WHERE r.endpointid =
+                                               api.pkg_configquery.endpointidforname(
+                                                   'j_License',
+                                                   'LicenseType')
+                                           AND r.fromobjectid = l.objectid)
+                                       ltc)))
+               RETURNING CLOB)
       INTO t_results
-      FROM (SELECT LISTAGG(
-                       TO_CLOB(
-                           '{"LICENSEOBJECTID":'
-                           || l.objectid
-                           || ',"LICENSENUMBER":"'
-                           || api.pkg_columnquery.VALUE(l.objectid,
-                                                        'licensenumber')
-                           || '","PRIMARYLICENSEE":"'
-                           || api.pkg_columnquery.VALUE(l.objectid,
-                                                        'PrimaryLicensee')
-                           ||                                 -- Primary Owner
-                              '","PREMISEADDRESS":"'
-                           || api.pkg_columnquery.VALUE(l.objectid,
-                                                        'PremAddressLine1')
-                           ||                              -- Business Address
-                              '","PREMISECITY":"'
-                           || api.pkg_columnquery.VALUE(l.objectid,
-                                                        'PremAddressUSCity')
-                           ||                                 -- Business City
-                              '","BUSINESSNAME":"'
-                           || api.pkg_columnquery.VALUE(l.objectid,
-                                                        'PrimaryDBA')
-                           ||                                           -- DBA
-                              '",'
-                           || (SELECT TO_CLOB(
-                                          '"LICENSE_TYPES":['
-                                          || LISTAGG(
-                                                 '{"LICENSETYPECODE":"'
-                                                 || api.pkg_columnquery.VALUE(
-                                                        r.toobjectid,
-                                                        'LicenseTypeCode')
-                                                 || '","EXPIRATIONDATE":"'
-                                                 || TO_CHAR(
-                                                        api.pkg_columnquery.datevalue(
-                                                            r.toobjectid,
-                                                            'ExpirationDate'),
-                                                        'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-                                                 || '","STATUS":"'
-                                                 || utl_licenseinfo.statusmatrix(
-                                                        api.pkg_columnquery.VALUE(
-                                                            r.toobjectid,
-                                                            'StatusDescription'))
-                                                 || '"'
-                                                 || (  SELECT NVL2(
-                                                                  slt.fromobjectid,
-                                                                  ',"SECONDARY":['
-                                                                  || LISTAGG(
-                                                                         '{"LICENSETYPECODE":"'
-                                                                         || api.pkg_columnquery.VALUE(
-                                                                                slt.toobjectid,
-                                                                                'LicenseTypeCode')
-                                                                         || '","EXPIRATIONDATE":"'
-                                                                         || TO_CHAR(
-                                                                                api.pkg_columnquery.datevalue(
-                                                                                    r.toobjectid,
-                                                                                    'ExpiratiONDate'),
-                                                                                'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-                                                                         || '","STATUS":"'
-                                                                         || utl_licenseinfo.statusmatrix(
-                                                                                api.pkg_columnquery.VALUE(
-                                                                                    slt.relationshipid,
-                                                                                    'Status'))
-                                                                         || '"}',
-                                                                         ',')
-                                                                     WITHIN GROUP (ORDER BY
-                                                                                       1)
-                                                                  || ']',
-                                                                  NULL)    secondarylicensetype
-                                                         FROM api.relationships
-                                                              slt
-                                                        WHERE (r.toobjectid =
-                                                               slt.fromobjectid
-                                                           AND slt.endpointid =
-                                                               api.pkg_configquery.endpointidforname(
-                                                                   'j_LicenseType',
-                                                                   'LicTypeCatSecONdary')
-                                                           AND slt.relationshipid
-                                                                   IS NOT NULL)
-                                                     GROUP BY slt.fromobjectid)
-                                                 || '}',
-                                                 ',')
-                                             WITHIN GROUP (ORDER BY 1)
-                                          || ']')    licensetype
-                                 FROM api.relationships r
-                                WHERE r.endpointid =
-                                      api.pkg_configquery.endpointidforname(
-                                          'j_License',
-                                          'LicenseType')
-                                  AND r.fromobjectid = l.objectid)
-                           || '}'),
-                       ',')
-                   WITHIN GROUP (ORDER BY 1)    license
-              FROM licenses l) x;
+      FROM licenses l;
 
-    RETURN REGEXP_REPLACE(t_results, '[^[:print:]]', '');
+    t_json_obj := NEW json_object_t(t_results);
+    utl_licenseinfo.clean(a_json => t_json_obj);
+    RETURN t_json_obj.TO_CLOB;
 EXCEPTION
     WHEN OTHERS
     THEN
@@ -150,10 +157,16 @@ EXCEPTION
 
         COMMIT;
 
-        t_results :=
-            '{"PACKET_TYPE":"MESSAGE","DATA":{"MSGNO":"5","MSG":"Oracle Exception","EXCEPTION":"'
-            || REGEXP_REPLACE(t_sqlerrm, '[^[:print:]]', '')
-            || '"}}';
+        SELECT json_object(
+                   'PACKET_TYPE' VALUE 'MESSAGE',
+                   'DATA' VALUE
+                       json_object(
+                           'MSGNO' VALUE 5,
+                           'MSG' VALUE 'Oracle Exception',
+                           'EXCEPTION' VALUE
+                               REGEXP_REPLACE(t_sqlerrm, '[^[:print:]]', ' ')))
+          INTO t_results
+          FROM DUAL;
 
         RETURN t_results;
 END;
