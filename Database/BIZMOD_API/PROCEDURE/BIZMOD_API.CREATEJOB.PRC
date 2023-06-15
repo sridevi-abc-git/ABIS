@@ -1,6 +1,6 @@
 CREATE OR REPLACE PROCEDURE BIZMOD_API.createjob(a_procedure    VARCHAR2,
                                       a_description  VARCHAR2,
-                                      a_argument1    VARCHAR2)
+                                      a_argument1    VARCHAR2 DEFAULT '0')
 IS
     -- ****************************************************************************
     -- File:        CREATEJOB.PRC
@@ -23,7 +23,7 @@ BEGIN
                                         'BIZMOD_API.' || a_procedure);
     scheduler.pkg_scheduler.addargument(t_arguments, 'EffectiveUser', 'ABC');
 
-    scheduler.pkg_scheduler.addargument(t_arguments, 'arg1', a_argument1);
+    scheduler.pkg_scheduler.addargument(t_arguments, 'arg1', NVL(a_argument1, '0'));
     scheduler.pkg_scheduler.addargument(t_arguments, 'arg2', SYSDATE);
 
     --schedule item to be handled by the process server
