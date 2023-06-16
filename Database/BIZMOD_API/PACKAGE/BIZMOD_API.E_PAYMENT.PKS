@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE bizmod_api.e_payment
+CREATE OR REPLACE PACKAGE BIZMOD_API.e_payment
 AS
     -- **************************************************************************
     -- File:        E_PAYMENT V4.PKS
@@ -42,3 +42,8 @@ AS
                           a_error        OUT VARCHAR2);
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.E_PAYMENT TO ABC;
+
+GRANT EXECUTE ON BIZMOD_API.E_PAYMENT TO POSSEEXTENSIONS;

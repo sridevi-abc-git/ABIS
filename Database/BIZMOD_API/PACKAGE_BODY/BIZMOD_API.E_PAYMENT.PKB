@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY bizmod_api.e_payment
+CREATE OR REPLACE PACKAGE BODY BIZMOD_API.e_payment
 AS
     -- **************************************************************************
     -- File:        E_PAYMENT V4.PKB
@@ -740,7 +740,8 @@ AS
                                                  'StatusName') =
                        'PREPAR'
                    AND api.pkg_columnquery.VALUE(pr.processid, 'Outcome')
-                           IS NULL;
+                           IS NULL
+                   AND trunc(pr.createddate) = trunc(SYSDATE);
 
                 IF (t_transmittalobjectid IS NULL)
                 THEN
@@ -1282,6 +1283,7 @@ dbms_output.put_line('Updating tables');
 END;
 /
 
-GRANT EXECUTE ON bizmod_api.e_payment TO abc;
-GRANT EXECUTE ON bizmod_api.e_payment TO posseextensions;
-/
+
+GRANT EXECUTE ON BIZMOD_API.E_PAYMENT TO ABC;
+
+GRANT EXECUTE ON BIZMOD_API.E_PAYMENT TO POSSEEXTENSIONS;
