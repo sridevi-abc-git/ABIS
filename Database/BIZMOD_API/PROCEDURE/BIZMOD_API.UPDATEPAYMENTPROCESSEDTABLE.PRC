@@ -74,7 +74,7 @@ BEGIN
 
     bizmod_api.createjob(
         a_procedure => 'PROCESSPAYMENTS',
-        a_description => 'E-Service Process Payments',
+        a_description => 'Process Payments',
         a_argument1 => NULL);
 
 EXCEPTION

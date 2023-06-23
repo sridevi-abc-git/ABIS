@@ -741,7 +741,7 @@ AS
                        'PREPAR'
                    AND api.pkg_columnquery.VALUE(pr.processid, 'Outcome')
                            IS NULL
-                   AND trunc(pr.createddate) = trunc(SYSDATE);
+                   AND TRUNC(pr.createddate) = TRUNC(SYSDATE);
 
                 IF (t_transmittalobjectid IS NULL)
                 THEN
@@ -898,42 +898,22 @@ AS
 
         WHILE (t_loop > 0)
         LOOP
-            --            SELECT COUNT(1)
-            --              INTO t_cnt
-            --              FROM bizmod_api.awf_t  a
-            --                   LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
-            --                       ON (a.licensenumber = pp.licensenumber)
-            --             WHERE a.completed IS NULL
-            --               AND ((t_loop = 2 and a.awffeeamount <= 0) -- AWF batch for no change and refund
-            --                  or
-            --                    (t_loop = 1 and a.awffeeamount > 0)) -- AWF batch for payments
-            --               AND NOT EXISTS
-            --                       (SELECT 1
-            --                          FROM bizmod_api.e_payments_t p
-            --                         WHERE pp.licensenumber = p.licensenumber
-            --                           AND pp.confirmationnumber = p.confirmationid
-            --                           AND pp.paymenttype = 'Primary'
-            --                           AND p.paymentobjectid IS NOT NULL);
-
             SELECT (SELECT seq
-                              FROM bizmod_api.e_payments_t p
-                             WHERE pp.licensenumber = p.licensenumber
-                               AND pp.confirmationnumber = p.confirmationid
-                               AND pp.paymenttype = 'Primary')
-                       seq,
+                      FROM bizmod_api.e_payments_t p
+                     WHERE pp.licensenumber = p.licensenumber
+                       AND pp.confirmationnumber = p.confirmationid
+                       AND pp.paymenttype = 'Primary')    seq,
                    a.licensenumber,
                    a.licensetypecode,
-                   NVL(pp.paymentamount, 0)
-                       paymentamount,
-                   a.gallonage261
-                       gallonage,
-                   a.ROWID
-                       rowkey
+                   NVL(pp.paymentamount, 0)               paymentamount,
+                   a.gallonage261                         gallonage,
+                   a.ROWID                                rowkey
               BULK COLLECT INTO t_awf
               FROM bizmod_api.awf_t  a
                    LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
                        ON (a.licensenumber = pp.licensenumber)
              WHERE a.completed IS NULL
+               AND a.paymentbatch IS NULL
                AND ((t_loop = 2
                  AND a.awffeeamount <= 0) -- AWF batch for no change and refund
                  OR (t_loop = 1
@@ -946,8 +926,8 @@ AS
                            AND pp.paymenttype = 'Primary'
                            AND p.paymentobjectid IS NOT NULL);
 
-dbms_output.put_line(t_loop || '  to process ' || t_awf.count);
-            --            IF (t_cnt > 0)
+            DBMS_OUTPUT.put_line(t_loop || '  to process ' || t_awf.COUNT);
+
             IF (t_awf.COUNT > 0)
             THEN
                 -- *****************************************************************
@@ -993,40 +973,8 @@ dbms_output.put_line(t_loop || '  to process ' || t_awf.count);
                 COMMIT;
 
                 -- *********************************************************************
-                -- process all licenses with fees created
+                -- process all licenses
                 -- *********************************************************************
-                --                FOR payment
-                --                    IN (SELECT (SELECT seq
-                --                                  FROM bizmod_api.e_payments_t p
-                --                                 WHERE pp.licensenumber =
-                --                                       p.licensenumber
-                --                                   AND pp.confirmationnumber =
-                --                                       p.confirmationid
-                --                                   AND pp.paymenttype = 'Primary')
-                --                                   seq,
-                --                               a.licensenumber,
-                --                               a.licensetypecode,
-                --                               NVL(pp.paymentamount, 0)
-                --                                   paymentamount,
-                --                               a.gallonage261
-                --                                   gallonage
-                --                          FROM bizmod_api.awf_t  a
-                --                               LEFT OUTER JOIN
-                --                               bizmod_api.e_payments_processed_t pp
-                --                                   ON (a.licensenumber = pp.licensenumber)
-                --                         WHERE a.completed IS NULL
-                --               AND ((t_loop = 2 and a.awffeeamount <= 0) -- AWF batch for no change and refund
-                --                  or
-                --                    (t_loop = 1 and a.awffeeamount > 0)) -- AWF batch for payments
-                --                           AND NOT EXISTS
-                --                                   (SELECT 1
-                --                                      FROM bizmod_api.e_payments_t p
-                --                                     WHERE pp.licensenumber = p.licensenumber
-                --                                       AND pp.confirmationnumber =
-                --                                           p.confirmationid
-                --                                       AND pp.paymenttype = 'Primary'
-                --                                       AND p.paymentobjectid IS NOT NULL))
-
                 FOR inx IN 1 .. t_awf.COUNT
                 LOOP
                     t_totalfees := t_totalfees + t_awf(inx).paymentamount; --t_feeamount;
@@ -1124,109 +1072,105 @@ dbms_output.put_line(t_loop || '  to process ' || t_awf.count);
                 api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
 
-dbms_output.put_line('Batch entry completed');
-
                 IF (t_loop = 2)
                 THEN
                     -- complete the batch for refunds and no change AWF's
-
                     api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                                   'CompleteEntryProcess',
                                                   'Y');
 
                     api.pkg_logicaltransactionupdate.endtransaction;
                     COMMIT;
-end if;
-                    -- batch verify process
-                    FOR v
-                        IN (SELECT r.toobjectid
-                              FROM api.relationships r
-                             WHERE r.endpointid =
-                                   api.pkg_configquery.endpointidforname(
-                                       'j_PaymentBatch',
-                                       'BatchPaymentEntry')
-                               AND r.fromobjectid = t_paymentbatchobjectid)
-                    LOOP
-                        -- *****************************************************************
-                        -- Build batch payment entry record
-                        -- *****************************************************************
-                        BEGIN
-                            t_batchpaymententrydefid :=
-                                api.pkg_configquery.objectdefidforname(
-                                    'o_BatchPaymentEntry');
-                            t_batchpaymentverifyobjectid :=
-                                api.pkg_objectupdate.new(
-                                    t_batchpaymententrydefid);
+                END IF;
 
-                            api.pkg_logicaltransactionupdate.endtransaction;
-                            COMMIT;
-                        END;
+                -- batch verify process
+                FOR v
+                    IN (SELECT r.toobjectid
+                          FROM api.relationships r
+                         WHERE r.endpointid =
+                               api.pkg_configquery.endpointidforname(
+                                   'j_PaymentBatch',
+                                   'BatchPaymentEntry')
+                           AND r.fromobjectid = t_paymentbatchobjectid)
+                LOOP
+                    -- *****************************************************************
+                    -- Build batch payment entry record
+                    -- *****************************************************************
+                    BEGIN
+                        t_batchpaymententrydefid :=
+                            api.pkg_configquery.objectdefidforname(
+                                'o_BatchPaymentEntry');
+                        t_batchpaymentverifyobjectid :=
+                            api.pkg_objectupdate.new(
+                                t_batchpaymententrydefid);
 
                         api.pkg_logicaltransactionupdate.endtransaction;
                         COMMIT;
-                        -- *****************************************************************
-                        -- add batch payment entry to payment batch job
-                        -- *****************************************************************
-                        t_endpointid :=
-                            api.pkg_configquery.endpointidforname(
-                                'j_PaymentBatch',
-                                'BatchPaymentEntryVerify');
-                        t_relid :=
-                            api.pkg_relationshipupdate.new(
-                                t_endpointid,
-                                t_paymentbatchobjectid,
-                                t_batchpaymentverifyobjectid);
+                    END;
 
-                        api.pkg_columnupdate.setvalue(
-                            t_batchpaymentverifyobjectid,
-                            'CheckAmount',
-                            api.pkg_columnquery.VALUE(v.toobjectid,
-                                                      'CheckAmount'));
-                        api.pkg_columnupdate.setvalue(
-                            t_batchpaymentverifyobjectid,
-                            'PaymentNumber',
-                            api.pkg_columnquery.VALUE(v.toobjectid,
-                                                      'PaymentNumber'));
+                    api.pkg_logicaltransactionupdate.endtransaction;
+                    COMMIT;
+                    -- *****************************************************************
+                    -- add batch payment entry to payment batch job
+                    -- *****************************************************************
+                    t_endpointid :=
+                        api.pkg_configquery.endpointidforname(
+                            'j_PaymentBatch',
+                            'BatchPaymentEntryVerify');
+                    t_relid :=
+                        api.pkg_relationshipupdate.new(
+                            t_endpointid,
+                            t_paymentbatchobjectid,
+                            t_batchpaymentverifyobjectid);
 
-                        -- add license and payment amount information
-                        api.pkg_columnupdate.setvalue(
-                            t_batchpaymentverifyobjectid,
-                            'LicenseNum',
-                            api.pkg_columnquery.VALUE(v.toobjectid,
-                                                      'LicenseNum'));
-                        api.pkg_columnupdate.setvalue(
-                            t_batchpaymentverifyobjectid,
-                            'LicenseTypeCode',
-                            api.pkg_columnquery.VALUE(v.toobjectid,
-                                                      'LicenseTypeCode'));
-
-                        api.pkg_logicaltransactionupdate.endtransaction;
-                        COMMIT;
-                    END LOOP; -- v
-
-                    api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
-                                                  'BatchIdVerify',
-                                                  t_batchid);
-                    api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
-                                                  'CheckCountValidation',
-                                                  t_checkcount);
-                    api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
-                                                  'BatchAmountValidation',
-                                                  t_totalfees);
-
-                    api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
-                                                  'PaymentNumberFromVerify',
-                                                  t_receiptnumber + 1);
                     api.pkg_columnupdate.setvalue(
-                        t_paymentbatchobjectid,
-                        'PaymentNumberToVerify',
-                        t_receiptnumber + t_checkcount);
-                    api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
-                                                  'Penalty',
-                                                  'Timely');
+                        t_batchpaymentverifyobjectid,
+                        'CheckAmount',
+                        api.pkg_columnquery.VALUE(v.toobjectid,
+                                                  'CheckAmount'));
+                    api.pkg_columnupdate.setvalue(
+                        t_batchpaymentverifyobjectid,
+                        'PaymentNumber',
+                        api.pkg_columnquery.VALUE(v.toobjectid,
+                                                  'PaymentNumber'));
+
+                    -- add license and payment amount information
+                    api.pkg_columnupdate.setvalue(
+                        t_batchpaymentverifyobjectid,
+                        'LicenseNum',
+                        api.pkg_columnquery.VALUE(v.toobjectid, 'LicenseNum'));
+                    api.pkg_columnupdate.setvalue(
+                        t_batchpaymentverifyobjectid,
+                        'LicenseTypeCode',
+                        api.pkg_columnquery.VALUE(v.toobjectid,
+                                                  'LicenseTypeCode'));
+
+                    api.pkg_logicaltransactionupdate.endtransaction;
+                    COMMIT;
+                END LOOP;
+
+                api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
+                                              'BatchIdVerify',
+                                              t_batchid);
+                api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
+                                              'CheckCountValidation',
+                                              t_checkcount);
+                api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
+                                              'BatchAmountValidation',
+                                              t_totalfees);
+
+                api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
+                                              'PaymentNumberFromVerify',
+                                              t_receiptnumber + 1);
+                api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
+                                              'PaymentNumberToVerify',
+                                              t_receiptnumber + t_checkcount);
+                api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
+                                              'Penalty',
+                                              'Timely');
+
                 IF (t_loop = 2)
                 THEN
-
                     api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                                   'CompleteVerifyProcess',
                                                   'Y');
@@ -1237,30 +1181,6 @@ end if;
                 END IF;
 
                 -- update tables
-                --                FOR payment
-                --                    IN (SELECT (SELECT seq
-                --                                  FROM bizmod_api.e_payments_t p
-                --                                 WHERE pp.licensenumber =
-                --                                       p.licensenumber
-                --                                   AND pp.confirmationnumber =
-                --                                       p.confirmationid
-                --                                   AND pp.paymenttype = 'Primary')    seq,
-                --                               a.ROWID                                rowkey
-                --                          FROM bizmod_api.awf_t  a
-                --                               LEFT OUTER JOIN
-                --                               bizmod_api.e_payments_processed_t pp
-                --                                   ON (a.licensenumber = pp.licensenumber)
-                --                         WHERE a.completed IS NULL
-                --                           AND a.awffeeamount >= 0
-                --                           AND NOT EXISTS
-                --                                   (SELECT 1
-                --                                      FROM bizmod_api.e_payments_t p
-                --                                     WHERE pp.licensenumber = p.licensenumber
-                --                                       AND pp.confirmationnumber =
-                --                                           p.confirmationid
-                --                                       AND pp.paymenttype = 'Primary'
-                --                                       AND p.paymentobjectid IS NOT NULL))
-dbms_output.put_line('Updating tables');
                 FOR inx IN 1 .. t_awf.COUNT
                 LOOP
                     IF t_awf(inx).seq IS NOT NULL
@@ -1271,13 +1191,27 @@ dbms_output.put_line('Updating tables');
                     END IF;
 
                     UPDATE bizmod_api.awf_t t
-                       SET t.completed = 'Y'
+                       SET t.completed =
+                               CASE t_loop
+                                   WHEN 2
+                                   THEN
+                                       CASE t.awffeeamount
+                                           WHEN 0 THEN 'Y'
+                                           ELSE NULL
+                                       END
+                                   ELSE
+                                       NULL
+                               END,
+                           t.paymentbatch = t_paymentbatchobjectid,
+                           t.paymentbatchdate = SYSDATE
                      WHERE t.ROWID = t_awf(inx).rowkey;
                 END LOOP;
 
+                api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
             END IF;
-            t_loop := t_loop -1;
+
+            t_loop := t_loop - 1;
         END LOOP;
     END;
 END;

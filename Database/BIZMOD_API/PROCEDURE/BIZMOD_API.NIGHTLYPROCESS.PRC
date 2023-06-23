@@ -11,6 +11,10 @@ IS
     --    Date           Ticket     Comment
     --  05/31/2023 TJL            Initial Procedure Created
     -- ****************************************************************************
+    t_refunded     VARCHAR2(1);
+    t_feetransfer  NUMBER;
+    t_paymenttransfer NUMBER;
+
     t_body         VARCHAR2(32000);
     t_to           VARCHAR2(4000);
     t_from         VARCHAR2(4000);
@@ -198,23 +202,140 @@ BEGIN
     -- ********************************************************************
     --  Update awf fee id and fee object id after payments have been completed
     -- ********************************************************************
-    UPDATE bizmod_api.awf_t lt
-       SET lt.awffeeid =
-               (SELECT f.feeid
+    UPDATE bizmod_api.awf_t a
+       SET (a.completed, a.awffeeid) =
+               (SELECT CASE
+                           WHEN f.feeid IS NOT NULL THEN 'Y'
+                           ELSE a.completed
+                       END,
+                       f.feeid
                   FROM api.fees f
-                 WHERE (f.jobid = lt.licensetypejobid
-                    AND f.transactiondate > lt.awfdate
-                    AND f.description LIKE '%AWF%'))
-     WHERE lt.awffeeid IS NULL
-       AND lt.completed IS NOT NULL;
+                 WHERE f.jobid = a.licensetypejobid
+                   AND f.transactiondate > a.createddate
+                   AND f.description LIKE '%AWF%')
+     WHERE a.awffeeid IS NULL
+       AND a.awffeeamount <= 0;
 
     IF (SQL%ROWCOUNT > 0)
     THEN
         t_body :=
-            t_body || 'AWF Processed: ' || SQL%ROWCOUNT || CHR(10) || CHR(13);
+            t_body
+            || 'AWF Processed (None Refunded): '
+            || SQL%ROWCOUNT
+            || CHR(13);
     END IF;
 
+    -- ********************************************************************
+    --  check to see if AWF Refund has been completed
+    -- ********************************************************************
+    FOR rec IN (SELECT a.renfeeid, a.renfeeobjid, ROWID id
+                  FROM bizmod_api.awf_t a
+                 WHERE a.awffeeamount < 0
+                   AND NVL(a.completed, 'N') != 'Y')
+    LOOP
+          -- check if awf was refunded
+          SELECT CASE
+                     WHEN SUM(
+                              CASE
+                                  WHEN api.pkg_columnquery.VALUE(
+                                           reo.objectid,
+                                           'RefundBatchId')
+                                           IS NOT NULL
+                                  THEN
+                                      1
+                                  ELSE
+                                      0
+                              END) >
+                          0
+                     THEN
+                         'Y'
+                     ELSE
+                         NULL
+                 END
+            INTO t_refunded
+            FROM api.paymenttransactions pt
+                 JOIN api.feetransactions ft
+                     ON pt.transactionid = ft.transactionid
+                 JOIN api.registeredexternalobjects reo
+                     ON (reo.linkvalue = TO_CHAR(pt.paymentid)
+                     AND reo.objectdefid =
+                         api.pkg_configquery.objectdefidforname('o_Payment'))
+           WHERE ft.feeid = rec.renfeeid
+        GROUP BY ft.feeid;
+
+        IF (t_refunded IS NULL)
+        THEN
+            SELECT MAX(r.fromobjectid)
+              INTO t_feetransfer
+              FROM api.relationships r
+             WHERE r.endpointid =
+                   api.pkg_configquery.endpointidforname('p_paymentTransfer',
+                                                         'Fee')
+               AND r.toobjectid = rec.renfeeobjid;
+
+            -- check if payment was transfer out to another license
+            --  no fee transfer but transfer out
+            IF (t_feetransfer IS NULL)
+            THEN
+                FOR pt IN (SELECT ft.*
+                             FROM api.feetransactions ft
+                            WHERE rec.renfeeid = ft.feeid)
+                LOOP
+                    SELECT MAX(r.fromobjectid)
+                      INTO t_paymenttransfer
+                      FROM api.relationships r
+                     WHERE r.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'p_paymentTransfer',
+                               'PaymentTransaction')
+                       AND r.toobjectid =
+                           api.pkg_simplesearch.objectbyindex(
+                               'o_PaymentTransactions',
+                               'TransactionId',
+                               pt.transactionid);
+
+                    t_refunded :=
+                        CASE
+                            WHEN api.pkg_columnquery.VALUE(t_paymenttransfer,
+                                                           'Outcome') =
+                                 'Transfer'
+                            THEN
+                                'Y'
+                            ELSE
+                                t_refunded
+                        END;
+                END LOOP;
+            END IF;
+        END IF;
+
+        IF (NVL(t_refunded, 'N') = 'Y')
+        THEN
+            UPDATE bizmod_api.awf_t a
+               SET a.completed = t_refunded
+             WHERE a.ROWID = rec.id;
+        END IF;
+    END LOOP;
+
     COMMIT;
+
+    t_body := t_body || 'AWF Refunds to Process:' || CHR(13);
+
+    FOR rec IN (SELECT a.licensenumber, a.paymentbatchdate, a.awffeeamount
+                  FROM bizmod_api.awf_t a
+                 WHERE a.awffeeamount < 0
+                   AND NVL(a.completed, 'N') != 'Y')
+    LOOP
+        t_body :=
+            t_body
+            || CHR(9)
+            || rec.licensenumber
+            || CHR(9)
+            || CHR(9)
+            || TO_CHAR(rec.paymentbatchdate, 'MM/DD/YYYY')
+            || CHR(9)
+            || LPAD(TO_CHAR(rec.awffeeamount, 'fm99G999D00'), 10, ' ')
+            || CHR(13);
+    END LOOP;
 
     UPDATE bizmod_api.e_payments_t p
        SET p.feeobjid =
