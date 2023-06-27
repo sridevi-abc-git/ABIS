@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION bizmod_api.requestfees(a_packet       IN CLOB,
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet       IN CLOB,
                                                   a_seq          IN NUMBER)
     RETURN CLOB
 IS
@@ -8,7 +8,8 @@ IS
     --
     -- History
     -------------------------------------------------------------------------------
-    -- 11/17/2022   TJL  Rewrite of REQUESTFEES
+    -- 11/17/2022  TJL  Rewrite of REQUESTFEES
+    -- 06/27/2023  TJL  BIZ-11779 Correct premise address not being retrieved
     -- ****************************************************************************
 
     FUNCTION get_awf(a_licensetypejobid IN NUMBER)
@@ -586,11 +587,7 @@ BEGIN
                                'PREMISEADDRESS' VALUE
                                    api.pkg_columnquery.VALUE(
                                        lic.jobid,
-                                       'PremAddress1stOf2Lines')
-                                   || ','
-                                   || api.pkg_columnquery.VALUE(
-                                          lic.jobid,
-                                          'PremAddress2ndOf2Lines'),
+                                       'PremAddress1Line'),
                                'TOTALAMOUNTDUE' VALUE
                                    (SELECT SUM(
                                                  fee.amount
@@ -651,7 +648,8 @@ BEGIN
                                ABSENT ON NULL))
               INTO t_json
               FROM TABLE(license) lic
-             WHERE ROWNUM = 1;
+             WHERE api.pkg_columnquery.value(lic.jobid, 'objectdefname') = 'j_License'
+               AND ROWNUM = 1;
         ELSE
             t_json :=
                 '{"PACKET_TYPE":"MESSAGE","DATA":{"MSGNO":"1","MSG":"License Number Not Found"}}';
@@ -671,3 +669,6 @@ BEGIN
     END;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.REQUESTFEES TO BIZMOD_USER;
