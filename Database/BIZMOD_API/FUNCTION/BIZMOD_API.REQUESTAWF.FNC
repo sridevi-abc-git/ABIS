@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION requestawf(a_packet IN CLOB, a_seq IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestawf(a_packet IN CLOB, a_seq IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -16,6 +16,7 @@ IS
     --    Date           Ticket     Comment
     --  06/08/2022 TJL  BIZ-      Initial Function Created
     --  02/16/2023 TJL            Converted to using JSON objects.
+    --  06/28/2023 TJL            Fixed bug in generating return packet
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -209,11 +210,11 @@ BEGIN
                     'PACKET_TYPE' VALUE 'LICENSEAWFINFO',
                     'DATA' VALUE
                         json_object(
-                            'LICENSEOBJECTID' VALUE t_objectid,
+--                            'LICENSEOBJECTID' VALUE t_objectid,
                             'LICENSENUMBER' VALUE
                                 api.pkg_columnquery.VALUE(t_objectid,
                                                           'licensenumber'),
-                            'PRIMARYLICENSEE' VALUE
+                            'LICENSEENAME' VALUE
                                 api.pkg_columnquery.VALUE(t_objectid,
                                                           'PrimaryLicensee'), -- PRIMARY OWNER
                             'BUSINESSNAME' VALUE
@@ -229,9 +230,10 @@ BEGIN
                                     t_objectid,
                                     'PremAddress2ndOf2Lines'))));
 
+    l_data := l_obj.get_object('DATA');
+    
     IF (t_msgno IS NOT NULL)
     THEN
-        l_data := l_obj.get_object('DATA');
         l_data.put('MSGNO', t_msgno);
         l_data.put(
             'MSG',
@@ -248,8 +250,8 @@ BEGIN
                    'LICENSETYPECODE' VALUE t.licensetypecode,
                    'DESCRIPTION' VALUE t.description,
                    'FEEACTIVITY' VALUE t.renactivity,
-                   'AWFDATE' VALUE t.awfdate,
                    'EXPIRATIONDATE' VALUE t.expirationdate,
+                   'AWFDATE' VALUE t.awfdate,
                    'RENEWALAMOUNT' VALUE t.renewalamountpaid,
                    'CURRENTGALLONAGE' VALUE t.currgallonage,
                    'ADDITIONALGALLONAGE' VALUE t.curraddionalgallonage,
@@ -263,7 +265,7 @@ BEGIN
                LEFT OUTER JOIN e_payments_t p ON p.feeobjid = t.renfeeobjid
          WHERE t.renfeeid = t_renfeeid;
 
-        l_obj.put('INFO', TREAT(json_object_t.parse(t_awf) AS json_object_t));
+        l_data.put('INFO', TREAT(json_object_t.parse(t_awf) AS json_object_t));
     END IF;
 
     RETURN l_obj.TO_CLOB;
