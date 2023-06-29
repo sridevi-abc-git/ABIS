@@ -1,0 +1,15 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"1"},
+           "H2":{"TEXT":"<<HEADING>>","FORMAT":"@","JUSTIFIED":"CENTER","START":"2","END":"2"},
+           "H3":{"TEXT":"<<START_DATE>> - <<END_DATE>>","FORMAT":"@","JUSTIFIED":"RIGHT","START":"3","END":"3"}
+		  },
+ "HEADINGS":{"COL_1":{"TEXT":" ","JUSTIFIED":"CENTER","LENGTH":"20"},
+			 "COL_2":{"TEXT":" ","JUSTIFIED":"CENTER","LENGTH":"60"},
+			 "COL_3":{"TEXT":" ","JUSTIFIED":"CENTER","LENGTH":"21"}
+		  },
+ "COLUMNS":{"COL_1":{"COLUMN_NUMBER":"1","JUSTIFIED":"RIGHT","FORMAT":"@"},
+			"COL_2":{"COLUMN_NUMBER":"2","JUSTIFIED":"LEFT","FORMAT":"@"},
+			"COL_3":{"COLUMN_NUMBER":"3","JUSTIFIED":"RIGHT","FORMAT":"@"}
+		  }
+}
+
+

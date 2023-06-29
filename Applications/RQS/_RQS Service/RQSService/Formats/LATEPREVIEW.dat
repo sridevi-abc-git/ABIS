@@ -1,0 +1,33 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"3"},
+           "H2":{"TEXT":"<<HEADING>>","FORMAT":"@","JUSTIFIED":"CENTER","START":"4","END":"12"},
+           "H3":{"TEXT":"<<EXPIRATION_DATE>>","FORMAT":"mm/dd/yyyy","JUSTIFIED":"RIGHT","START":"13","END":"13"}
+		  },
+ "HEADINGS":{"licensetype":{"TEXT":"License Type","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "licensenumber":{"TEXT":"License Number","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "licensee":{"TEXT":"Licensee","JUSTIFIED":"CENTER","LENGTH":"50"},
+			 "premiseaddress":{"TEXT":"Premise Address","JUSTIFIED":"CENTER","LENGTH":"70"},
+             "office":{"TEXT":"Office","JUSTIFIED":"CENTER","LENGTH":"20"},
+             "expirationdate":{"TEXT":"Expiration Date","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "status":{"TEXT":"Status","JUSTIFIED":"CENTER","LENGTH":"15"},
+             "description":{"TEXT":"Description","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "feeamount":{"TEXT":"Fee Amount","JUSTIFIED":"CENTER","LENGTH":"12"},
+			 "paidamount":{"TEXT":"Paid Amount","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "paiddate":{"TEXT":"Paid Date","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "paymentid":{"TEXT":"Payment Id","JUSTIFIED":"CENTER","LENGTH":"20"},
+             "batchid":{"TEXT":"Batch Id","JUSTIFIED":"CENTER","LENGTH":"25"}
+		  },
+ "COLUMNS":{"licensetype":{"FORMAT":"00","JUSTIFIED":"RIGHT"},
+            "licensenumber":{"FORMAT":"@","JUSTIFIED":"RIGHT"},
+            "licensee":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "premiseaddress":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "office":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "expirationdate":{"FORMAT":"mm/dd/yyyy","JUSTIFIED":"LEFT"},
+            "status":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "description":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "feeamount":{"FORMAT":"######0.00","JUSTIFIED":"RIGHT"},
+            "paidamount":{"FORMAT":"######0.00","JUSTIFIED":"RIGHT"},
+            "paiddate":{"FORMAT":"mm/dd/yyyy","JUSTIFIED":"LEFT"},
+            "paymentid":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "batchid":{"FORMAT":"@","JUSTIFIED":"LEFT"}
+		  }
+}

@@ -1,0 +1,21 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"2"},
+           "H2":{"TEXT":"<<REPORT_NAME>>","FORMAT":"@","JUSTIFIED":"CENTER","START":"3","END":"4"},
+           "H3":{"TEXT":"<<START_DATE>> - <<END_DATE>>","FORMAT":"@","JUSTIFIED":"RIGHT","START":"5","END":"6"}
+		  },
+ "HEADINGS":{"OFFICENAME":{"TEXT":"District Office","JUSTIFIED":"CENTER","LENGTH":"40"},
+             "REGNUMBER":{"TEXT":"Regristration Number","JUSTIFIED":"CENTER","LENGTH":"13"},
+             "LICENSENUMBER":{"TEXT":"License Number","JUSTIFIED":"CENTER","LENGTH":"9"},
+             "PRIMARYLICENSEE":{"TEXT":"Primary Licensee","JUSTIFIED":"CENTER","LENGTH":"40"},
+             "CREATEDDATE":{"TEXT":"Create Date","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "REGISTEREDDATE":{"TEXT":"Registered Date","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "STATUSNAME":{"TEXT":"Accusation Status","JUSTIFIED":"CENTER","LENGTH":"12"}
+		  },
+ "COLUMNS":{"OFFICENAME":{"FORMAT":"@","JUSTIFIED":"LEFT","LENGTH":"40"},
+             "REGNUMBER":{"FORMAT":"########","JUSTIFIED":"RIGHT","LENGTH":"13"},
+             "LICENSENUMBER":{"FORMAT":"########","JUSTIFIED":"RIGHT","LENGTH":"9"},
+             "PRIMARYLICENSEE":{"FORMAT":"@","JUSTIFIED":"LEFT","LENGTH":"40"},
+             "CREATEDDATE":{"FORMAT":"mm/dd/yyyy","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "REGISTEREDDATE":{"FORMAT":"mm/dd/yyyy","JUSTIFIED":"CENTER","LENGTH":"12"},
+             "STATUSNAME":{"FORMAT":"@","JUSTIFIED":"LEFT","LENGTH":"12"}
+		  }
+}

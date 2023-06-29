@@ -1,0 +1,21 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"2"},
+           "H2":{"TEXT":"<<REPORT_NAME>>","FORMAT":"@","JUSTIFIED":"CENTER","START":"3","END":"5"},
+           "H3":{"TEXT":"<<START_DATE>> - <<END_DATE>>","FORMAT":"@","JUSTIFIED":"RIGHT","START":"6","END":"7"}
+		  },
+ "HEADINGS":{"LIC_TYPE_AND_NUM":{"TEXT":"License Type and Number","JUSTIFIED":"CENTER","LENGTH":"9"},
+             "REGNUMBER":{"TEXT":"Regristration Number","JUSTIFIED":"CENTER","LENGTH":"13"},
+             "ACCUSATION_STATUS":{"TEXT":"Accusation Status","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "DISTRICT":{"TEXT":"District Office","JUSTIFIED":"CENTER","LENGTH":"40"},
+             "SCHEDULEDSTARTDATE":{"TEXT":"Scheduled Start Date","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "OUTCOME":{"TEXT":"Outcome","JUSTIFIED":"CENTER","LENGTH":"18"},
+             "POSTINGDATE":{"TEXT":"Posting Date","JUSTIFIED":"CENTER","LENGTH":"10"}
+		  },
+ "COLUMNS":{"LIC_TYPE_AND_NUM":{"FORMAT":"@","JUSTIFIED":"RIGHT","LENGTH":"9"},
+             "REGNUMBER":{"FORMAT":"########","JUSTIFIED":"CENTER","LENGTH":"13"},
+             "ACCUSATION_STATUS":{"FORMAT":"@","JUSTIFIED":"LEFT","LENGTH":"10"},
+             "DISTRICT":{"FORMAT":"@","JUSTIFIED":"LEFT","LENGTH":"40"},
+             "SCHEDULEDSTARTDATE":{"FORMAT":"mm/dd/yyyy","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "OUTCOME":{"FORMAT":"@","JUSTIFIED":"RIGHT","LENGTH":"18"},
+             "POSTINGDATE":{"FORMAT":"mm/dd/yyyy","JUSTIFIED":"CENTER","LENGTH":"10"}
+		  }
+}

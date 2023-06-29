@@ -1,0 +1,26 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"1"},
+           "H2":{"TEXT":"Arrest and Citation Register","FORMAT":"@","JUSTIFIED":"CENTER","START":"2","END":"6"},
+           "H3":{"TEXT":"<<START_DATE>> - <<END_DATE>>","FORMAT":"@","JUSTIFIED":"RIGHT","START":"8","END":"9"}
+		  },
+ "HEADINGS":{"OFFICENAME":{"TEXT":"Office","JUSTIFIED":"CENTER","LENGTH":"25"},
+             "FORMATTEDNAME":{"TEXT":"Name","JUSTIFIED":"CENTER","LENGTH":"40"},
+             "BIRTHDATE":{"TEXT":"Birthdate","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "GENDER":{"TEXT":"Sex","JUSTIFIED":"CENTER","LENGTH":"4"},
+             "ARRESTDATE":{"TEXT":"Date Arrested","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "CHARGES":{"TEXT":"Charges","JUSTIFIED":"CENTER","LENGTH":"40"},
+             "ARRESTLOCATION":{"TEXT":"Arrest Location","JUSTIFIED":"CENTER","LENGTH":"50"},
+             "ARRESTEEADDRESS":{"TEXT":"Arrestee Address","JUSTIFIED":"CENTER","LENGTH":"50"},
+             "ARRESTINGINVESTIGATOR":{"TEXT":"Arresting Investigator","JUSTIFIED":"CENTER","LENGTH":"30"}
+		  },
+ "COLUMNS":{ "OFFICENAME":{"COLUMN_NUMBER":"1","JUSTIFIED":"LEFT","FORMAT":"@"},
+             "FORMATTEDNAME":{"COLUMN_NUMBER":"2","JUSTIFIED":"LEFT","FORMAT":"@"},
+             "BIRTHDATE":{"COLUMN_NUMBER":"3","JUSTIFIED":"CENTER","FORMAT":"mm/dd/yyyy"},
+             "GENDER":{"COLUMN_NUMBER":"4","JUSTIFIED":"CENTER","FORMAT":"@"},
+             "ARRESTDATE":{"COLUMN_NUMBER":"5","JUSTIFIED":"CENTER","FORMAT":"mm/dd/yyyy"},
+             "CHARGES":{"COLUMN_NUMBER":"6","FORMAT":"@"},
+             "ARRESTLOCATION":{"COLUMN_NUMBER":"7","FORMAT":"@"},
+             "ARRESTEEADDRESS":{"COLUMN_NUMBER":"8","JUSTIFIED":"LEFT","FORMAT":"@"},
+             "ARRESTINGINVESTIGATOR":{"COLUMN_NUMBER":"9","JUSTIFIED":"LEFT","FORMAT":"@"}
+		  }
+}
+

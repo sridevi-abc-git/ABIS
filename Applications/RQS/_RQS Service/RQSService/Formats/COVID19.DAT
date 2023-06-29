@@ -1,0 +1,22 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"1"},
+           "H2":{"TEXT":"<<HEADING>>","FORMAT":"@","JUSTIFIED":"CENTER","START":"2","END":"5"},
+           "H3":{"TEXT":"<<START_DATE>> - <<END_DATE>>","FORMAT":"@","JUSTIFIED":"RIGHT","START":"6","END":"7"}
+		  },
+ "HEADINGS":{"DISTRICT_OFFICE":{"TEXT":"District Office","JUSTIFIED":"CENTER","LENGTH":"30"},
+             "TRANSACTION_DATE":{"TEXT":"Transaction Date","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "LICENSE_TYPE_CODE":{"TEXT":"License Type","JUSTIFIED":"CENTER","LENGTH":"10"},
+			 "LICENSE_NUM":{"TEXT":"License Number","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "PRIMARY_OWNER":{"TEXT":"Licensee","JUSTIFIED":"CENTER","LENGTH":"50"},
+             "PREM_ADDR":{"TEXT":"Premise Address","JUSTIFIED":"CENTER","LENGTH":"80"},
+             "PAID":{"TEXT":"Paid","JUSTIFIED":"CENTER","LENGTH":"10"}
+		  },
+ "COLUMNS":{"DISTRICT_OFFICE":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "TRANSACTION_DATE":{"FORMAT":"mm/dd/yyyy","JUSTIFIED":"LEFT"},
+            "LICENSE_TYPE_CODE":{"FORMAT":"@","JUSTIFIED":"RIGHT"},
+            "LICENSE_NUM":{"FORMAT":"@","JUSTIFIED":"RIGHT"},
+            "PRIMARY_OWNER":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "PREM_ADDR":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "PAID":{"FORMAT":"@","JUSTIFIED":"LEFT"}
+		  }
+}
+
