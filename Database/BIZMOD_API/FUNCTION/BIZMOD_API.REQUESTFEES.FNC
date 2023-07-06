@@ -10,6 +10,7 @@ IS
     -------------------------------------------------------------------------------
     -- 11/17/2022  TJL  Rewrite of REQUESTFEES
     -- 06/27/2023  TJL  BIZ-11779 Correct premise address not being retrieved
+    -- 06/30/2023  TJL  Fixed bug with incorrect message number.
     -- ****************************************************************************
 
     FUNCTION get_awf(a_licensetypejobid IN NUMBER)
@@ -83,8 +84,8 @@ IS
                        AND f.description LIKE '%AWF%')
            AND p.depositbatchid IS NULL;
 
---        DBMS_OUTPUT.put_line('AWF count: ' || t_feetbl.COUNT);
---        DBMS_OUTPUT.put_line('awf::totalowing: ' || t_feetbl(1).totalowing);
+        --        DBMS_OUTPUT.put_line('AWF count: ' || t_feetbl.COUNT);
+        --        DBMS_OUTPUT.put_line('awf::totalowing: ' || t_feetbl(1).totalowing);
         RETURN t_feetbl;
     END;
 
@@ -562,13 +563,13 @@ BEGIN
 
                 IF (t_paid = 'Y')
                 THEN
-                    license(1).msgno := 6;
+                    license(1).msgno := 12;
                     license(1).msg := 'Processing Paid Fees';
                 END IF;
 
                 IF (t_paid = 'R')
                 THEN
-                    license(1).msgno := 7;
+                    license(1).msgno := 13;
                     license(1).msg := 'Fee cannot be paid online';
                 END IF;
             END IF;
@@ -648,7 +649,8 @@ BEGIN
                                ABSENT ON NULL))
               INTO t_json
               FROM TABLE(license) lic
-             WHERE api.pkg_columnquery.value(lic.jobid, 'objectdefname') = 'j_License'
+             WHERE api.pkg_columnquery.VALUE(lic.jobid, 'objectdefname') =
+                   'j_License'
                AND ROWNUM = 1;
         ELSE
             t_json :=
@@ -669,6 +671,3 @@ BEGIN
     END;
 END;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.REQUESTFEES TO BIZMOD_USER;
