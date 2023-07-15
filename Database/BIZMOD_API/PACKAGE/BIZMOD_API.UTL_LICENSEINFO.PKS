@@ -6,6 +6,11 @@ AS
     PROCEDURE clean(a_json IN OUT json_object_t);
 
     FUNCTION awfrequired(a_licensetypeobjectid in NUMBER)
-        RETURN VARCHAR2;
+        RETURN NUMBER;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
