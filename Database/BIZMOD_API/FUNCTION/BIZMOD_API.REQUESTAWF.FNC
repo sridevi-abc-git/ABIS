@@ -1,5 +1,4 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.requestawf(a_packet       IN CLOB,
-                                                 a_seq          IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestawf(a_packet IN CLOB, a_seq IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -19,6 +18,8 @@ IS
     --  02/16/2023 TJL            Converted to using JSON objects.
     --  06/28/2023 TJL            Fixed bug in generating return packet
     --  07/06/2023 TJL  BIZ-11891   Change which renewal fee being returned
+	--	07/19/2023 TJL  BIZ-11977	Fixed bug where liccenses without application 
+	--								  would throw exception License Not Found.
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -79,26 +80,34 @@ BEGIN
             api.pkg_columnquery.datevalue(t_objectid, 'ExpirationDate');
         t_issuedate := api.pkg_columnquery.datevalue(t_objectid, 'IssueDate');
 
-        t_start_date := ADD_MONTHS(t_expiration + 1, -24);
-        t_end_date := ADD_MONTHS(t_expiration, -12);
+        t_start_date := ADD_MONTHS(t_expiration + 1, -36);
+        t_end_date := ADD_MONTHS(t_expiration, -24);
 
-        -- get application for this license
-        SELECT a.toobjectid
-          INTO t_application
-          FROM api.relationships  l
-               JOIN api.relationships a
-                   ON (a.endpointid =
-                       api.pkg_configquery.endpointidforname(
-                           'j_License',
-                           'ApplicationLicense')
-                   AND a.fromobjectid = l.toobjectid)
-         WHERE l.endpointid =
-               api.pkg_configquery.endpointidforname('j_LicenseType',
-                                                     'License')
-           AND l.fromobjectid = t_objectid;
+        -- 07/19/2023 TJL  BIZ-11977 added issue date test.  Older license don't have applications in ABIS
+        IF (TRUNC(t_issuedate) >= ADD_MONTHS(t_expiration + 1, -36))
+        THEN
+            -- get application for this license
+            SELECT a.toobjectid
+              INTO t_application
+              FROM api.relationships  l
+                   JOIN api.relationships a
+                       ON (a.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'j_License',
+                               'ApplicationLicense')
+                       AND a.fromobjectid = l.toobjectid)
+             WHERE l.endpointid =
+                   api.pkg_configquery.endpointidforname('j_LicenseType',
+                                                         'License')
+               AND l.fromobjectid = t_objectid
+               AND REGEXP_LIKE(
+                       api.pkg_columnquery.VALUE(a.toobjectid,
+                                                 'PrimaryLicenseTypeCodes'),
+                       '02|22');
 
-        t_applicationtype :=
-            api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
+            t_applicationtype :=
+                api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
+        END IF;
 
         IF (t_applicationtype = 'Transfer')
         THEN
