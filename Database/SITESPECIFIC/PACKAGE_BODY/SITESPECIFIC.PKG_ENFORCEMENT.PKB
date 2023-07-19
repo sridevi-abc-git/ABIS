@@ -352,7 +352,7 @@ IS
             FROM api.processes p
                     join API.OBJECTS o on o.OBJECTID = p.PROCESSID
                     join API.LOGICALTRANSACTIONS lt on lt.LOGICALTRANSACTIONID  = o.CREATEDLOGICALTRANSACTIONID
-                    WHERE jobid = 88834725
+                    WHERE jobid = a_JobId
                     AND processtypeid IN
                        (api.pkg_objectdefquery.idforname (
                             'p_ConductEnforcementInv'),
