@@ -1,0 +1,17 @@
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\RQSFTP2.exe.config
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\RQSFTP2.exe
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\RQSFTP2.pdb
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\ABCRQSUtils.dll
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Oracle.DataAccess.dll
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\ABCRQSUtils.pdb
+C:\Development\SFTP\RQSFTP2\RQSFTP2\obj\Debug\RQSFTP2.csprojResolveAssemblyReference.cache
+C:\Development\SFTP\RQSFTP2\RQSFTP2\obj\Debug\RQSFTP2.exe
+C:\Development\SFTP\RQSFTP2\RQSFTP2\obj\Debug\RQSFTP2.pdb
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\ftp.config
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Tamir.SharpSSH.dll
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\DiffieHellman.dll
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Org.Mentalis.Security.dll
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Tamir.SharpSSH.pdb
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Renci.SshNet.dll
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Renci.SshNet.pdb
+C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Renci.SshNet.xml

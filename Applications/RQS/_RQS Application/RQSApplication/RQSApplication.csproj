@@ -1,0 +1,318 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>
+    </ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{1C60F008-E47B-43A4-939C-B9D55903F675}</ProjectGuid>
+    <ProjectTypeGuids>{349c5851-65df-11da-9384-00065b846f21};{fae04ec0-301f-11d3-bf4b-00c04f79efbc}</ProjectTypeGuids>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>RQS</RootNamespace>
+    <AssemblyName>RQSApplication</AssemblyName>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <WcfConfigValidationEnabled>True</WcfConfigValidationEnabled>
+    <UseIISExpress>true</UseIISExpress>
+    <IISExpressSSLPort />
+    <IISExpressAnonymousAuthentication>enabled</IISExpressAnonymousAuthentication>
+    <IISExpressWindowsAuthentication>enabled</IISExpressWindowsAuthentication>
+    <IISExpressUseClassicPipelineMode>false</IISExpressUseClassicPipelineMode>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ABCRQSUtils, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\_RQS Service\ABCRQSUtils\bin\x64\Release\ABCRQSUtils.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Oracle.DataAccess, Version=4.121.2.0, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\client\TLord\product\19.0.0\client_1\ODP.NET\bin\4\Oracle.DataAccess.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.DirectoryServices.AccountManagement" />
+    <Reference Include="System.Web.DynamicData" />
+    <Reference Include="System.Web.Entity" />
+    <Reference Include="System.Web.ApplicationServices" />
+    <Reference Include="System" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.EnterpriseServices" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.ServiceModel.Web" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Web.Services" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="CSS\blue-color.css" />
+    <Content Include="CSS\default-color.css" />
+    <Content Include="CSS\default.css" />
+    <Content Include="default.aspx" />
+    <Content Include="Formats\G4G_03.xslt">
+      <SubType>Designer</SubType>
+    </Content>
+    <Content Include="Formats\G4G_01.xslt">
+      <SubType>Designer</SubType>
+    </Content>
+    <Content Include="Formats\HL_Lic_Rev_Susp.xslt" />
+    <Content Include="App_Data\indicator.xslt">
+      <SubType>Designer</SubType>
+    </Content>
+    <Content Include="Images\RQS-Banner.png" />
+    <Content Include="Images\RQS-Banner-2.png" />
+    <Content Include="Javascript\ABC-Bargraph.js" />
+    <Content Include="Javascript\AJAX.js" />
+    <Content Include="Javascript\ChangeStatus.js" />
+    <Content Include="Javascript\Globals.js" />
+    <Content Include="Javascript\JobManager.js" />
+    <Content Include="Javascript\jquery-2.1.1.js" />
+    <Content Include="Javascript\jquery.simplemodal.1.4.4.min.js" />
+    <Content Include="Javascript\Demo.js" />
+    <Content Include="Javascript\ReportRequestLog.js" />
+    <Content Include="Javascript\Retrieve.js" />
+    <Content Include="Javascript\Schedule.js" />
+    <Content Include="Javascript\SiteNavigation.js" />
+    <Content Include="Javascript\UserMaintenance.js" />
+    <Content Include="Javascript\Utils.js" />
+    <Content Include="Javascript\validator.js" />
+    <Content Include="Readme.txt" />
+    <Content Include="Screens\ReportRequestLog.aspx" />
+    <Content Include="Screens\UserMaintenance.aspx" />
+    <Content Include="Screens\ChangeStatus.aspx" />
+    <Content Include="Screens\Finalize.aspx" />
+    <Content Include="Screens\Home.aspx" />
+    <Content Include="Screens\JobManager.aspx" />
+    <Content Include="Screens\Retrieve.aspx" />
+    <Content Include="Screens\Schedule.aspx" />
+    <Content Include="Screens\ViewErrors.aspx" />
+    <Content Include="Web.config">
+      <SubType>Designer</SubType>
+    </Content>
+    <Content Include="WebService.svc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Common\OraReports.cs" />
+    <Compile Include="Common\ProcessErrors.cs" />
+    <Compile Include="Common\RptParameters.cs" />
+    <Compile Include="Common\User.cs" />
+    <Compile Include="default.aspx.cs">
+      <DependentUpon>default.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="default.aspx.designer.cs">
+      <DependentUpon>default.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="IWebService.cs" />
+    <Compile Include="Screens\ReportRequestLog.aspx.cs">
+      <DependentUpon>ReportRequestLog.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\ReportRequestLog.aspx.designer.cs">
+      <DependentUpon>ReportRequestLog.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\UserMaintenance.aspx.cs">
+      <DependentUpon>UserMaintenance.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\ChangeStatus.aspx.cs">
+      <DependentUpon>ChangeStatus.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\ChangeStatus.aspx.designer.cs">
+      <DependentUpon>ChangeStatus.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\Finalize.aspx.cs">
+      <DependentUpon>Finalize.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\Finalize.aspx.designer.cs">
+      <DependentUpon>Finalize.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\Home.aspx.cs">
+      <DependentUpon>Home.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\Home.aspx.designer.cs">
+      <DependentUpon>Home.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\JobManager.aspx.cs">
+      <DependentUpon>JobManager.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\JobManager.aspx.designer.cs">
+      <DependentUpon>JobManager.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\Retrieve.aspx.cs">
+      <DependentUpon>Retrieve.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\Retrieve.aspx.designer.cs">
+      <DependentUpon>Retrieve.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\Schedule.aspx.cs">
+      <DependentUpon>Schedule.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\Schedule.aspx.designer.cs">
+      <DependentUpon>Schedule.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\Site.Master.cs">
+      <DependentUpon>Site.Master</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\Site.Master.designer.cs">
+      <DependentUpon>Site.Master</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\SiteNavigation.master.cs">
+      <DependentUpon>SiteNavigation.master</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\SiteNavigation.master.designer.cs">
+      <DependentUpon>SiteNavigation.master</DependentUpon>
+    </Compile>
+    <Compile Include="Screens\ViewErrors.aspx.cs">
+      <DependentUpon>ViewErrors.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Screens\ViewErrors.aspx.designer.cs">
+      <DependentUpon>ViewErrors.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="WebService.svc.cs">
+      <DependentUpon>WebService.svc</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Formats\HL_Lic_Rev_Susp.csv" />
+    <Content Include="Formats\G4G_03.csv" />
+    <Content Include="Formats\SUSPENSIONS.csv" />
+    <Content Include="Manuals\RQS User Manual.pdf" />
+    <Content Include="itu31568l.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <SubType>Designer</SubType>
+    </Content>
+    <None Include="Properties\PublishProfiles\File Publish.pubxml" />
+    <None Include="Properties\PublishProfiles\RQS - Development %28ABCFDCITDEV100%29.pubxml" />
+    <None Include="Properties\PublishProfiles\RQS - Production %28ABCFDCNET%29.pubxml" />
+    <None Include="Properties\PublishProfiles\Sandbox.pubxml" />
+    <None Include="Properties\PublishProfiles\TEST - ABCFDCITTEST300.pubxml" />
+    <None Include="Properties\PublishProfiles\RQS_itu30059l.pubxml" />
+    <None Include="Properties\PublishProfiles\RQS_abcfdcnet_test.pubxml" />
+    <None Include="Properties\PublishProfiles\RQS_itu28526d.pubxml" />
+    <Content Include="Screens\Site.Master" />
+    <Content Include="Screens\SiteNavigation.master" />
+    <None Include="Web.Debug.config">
+      <DependentUpon>Web.config</DependentUpon>
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="Web.Release.config">
+      <DependentUpon>Web.config</DependentUpon>
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Service References\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Download\" />
+  </ItemGroup>
+  <PropertyGroup>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
+    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets" Condition="'$(VSToolsPath)' != ''" />
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v10.0\WebApplications\Microsoft.WebApplication.targets" Condition="false" />
+  <ProjectExtensions>
+    <VisualStudio>
+      <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}">
+        <WebProjectProperties>
+          <UseIIS>True</UseIIS>
+          <AutoAssignPort>True</AutoAssignPort>
+          <DevelopmentServerPort>55388</DevelopmentServerPort>
+          <DevelopmentServerVPath>/</DevelopmentServerVPath>
+          <IISUrl>http://localhost:55389/</IISUrl>
+          <NTLMAuthentication>False</NTLMAuthentication>
+          <UseCustomServer>False</UseCustomServer>
+          <CustomServerUrl>
+          </CustomServerUrl>
+          <SaveServerSettingsInUserFile>False</SaveServerSettingsInUserFile>
+        </WebProjectProperties>
+      </FlavorProperties>
+    </VisualStudio>
+  </ProjectExtensions>
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

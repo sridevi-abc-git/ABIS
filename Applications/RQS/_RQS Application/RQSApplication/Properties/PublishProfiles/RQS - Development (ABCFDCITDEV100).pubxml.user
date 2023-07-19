@@ -1,0 +1,188 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+This file is used by the publish/package process of your Web project. You can customize the behavior of this process
+by editing this MSBuild file. In order to learn more about this please visit http://go.microsoft.com/fwlink/?LinkID=208121. 
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <TimeStampOfAssociatedLegacyPublishXmlFile />
+    <EncryptedPassword>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAxbFy2Nw9V02Pq7FVdmGTtAAAAAACAAAAAAADZgAAwAAAABAAAAD6cWax0Un/cBjfYFzOl758AAAAAASAAACgAAAAEAAAAKDMPxURL5hq08O8RoKfR9gYAAAA7w8E5t2A9vDKrhAfMQhQAcinTlTErHzgFAAAAB/A5of/540K+fm44plwsdur3llx</EncryptedPassword>
+    <_PublishTargetUrl>ftp://abcfdcitdev100/Web/ReportQuerySystem</_PublishTargetUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <File Include="abcsb.config">
+      <publishTime>09/05/2018 07:56:14</publishTime>
+    </File>
+    <File Include="App_Data/indicator.xslt">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="bin/ABCRQSUtils.dll">
+      <publishTime>09/05/2018 08:08:34</publishTime>
+    </File>
+    <File Include="bin/ABCRQSUtils.pdb">
+      <publishTime>09/05/2018 08:08:34</publishTime>
+    </File>
+    <File Include="bin/abcsb.config">
+      <publishTime>09/05/2018 07:56:14</publishTime>
+    </File>
+    <File Include="bin/itu31568l.config">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="bin/Renci.SshNet.dll">
+      <publishTime>09/28/2017 12:44:14</publishTime>
+    </File>
+    <File Include="bin/Renci.SshNet.pdb">
+      <publishTime>09/28/2017 12:44:14</publishTime>
+    </File>
+    <File Include="bin/rqs.config">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="bin/RQSApplication.dll">
+      <publishTime>09/05/2018 10:45:26</publishTime>
+    </File>
+    <File Include="bin/RQSApplication.pdb">
+      <publishTime>09/05/2018 10:45:26</publishTime>
+    </File>
+    <File Include="bin/rqsdev.config">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="bin/rqstest.config">
+      <publishTime>09/05/2018 10:23:10</publishTime>
+    </File>
+    <File Include="CSS/blue-color.css">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="CSS/default-color.css">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="CSS/default.css">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="default.aspx">
+      <publishTime>09/05/2018 08:31:40</publishTime>
+    </File>
+    <File Include="Formats/G4G_01.xslt">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Formats/G4G_03.csv">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Formats/G4G_03.xslt">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Formats/HL_Lic_Rev_Susp.csv">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Formats/HL_Lic_Rev_Susp.xslt">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Formats/SUSPENSIONS.csv">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Images/RQS-Banner-2.png">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Images/RQS-Banner.png">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="itu31568l.config">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Javascript/ABC-Bargraph.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/AJAX.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/ChangeStatus.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/Demo.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/Globals.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/JobManager.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/jquery-2.1.1.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/jquery.simplemodal.1.4.4.min.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/ReportRequestLog.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/Retrieve.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/Schedule.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/SiteNavigation.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/UserMaintenance.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Javascript/Utils.js">
+      <publishTime>09/05/2018 12:51:03</publishTime>
+    </File>
+    <File Include="Javascript/validator.js">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Manuals/RQS User Manual.pdf">
+      <publishTime>09/05/2018 07:03:37</publishTime>
+    </File>
+    <File Include="Readme.txt">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="rqs.config">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="rqsdev.config">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/ChangeStatus.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/Finalize.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/Home.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/JobManager.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/ReportRequestLog.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/Retrieve.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/Schedule.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/Site.Master">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/SiteNavigation.master">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/UserMaintenance.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Screens/ViewErrors.aspx">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+    <File Include="Web.config">
+      <publishTime>09/05/2018 10:45:27</publishTime>
+    </File>
+    <File Include="WebService.svc">
+      <publishTime>09/05/2018 07:03:38</publishTime>
+    </File>
+  </ItemGroup>
+</Project>

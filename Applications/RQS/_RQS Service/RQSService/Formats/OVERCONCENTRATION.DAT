@@ -1,0 +1,19 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"1"},
+           "H2":{"TEXT":"<<REPORT_NAME>>","FORMAT":"@","JUSTIFIED":"CENTER","START":"2","END":"6"}
+		  },
+ "HEADINGS":{"COUNTYNAME":{"TEXT":"County Name","JUSTIFIED":"CENTER","LENGTH":"20"},
+             "CENSUSTRACT":{"TEXT":"Census Tract","JUSTIFIED":"CENTER","LENGTH":"15"},
+             "ONSALEALLOWED":{"TEXT":"On-Sale Allowed","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "ONSALEEXISTING":{"TEXT":"On-Sale Existing","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "OFFSALEALLOWED":{"TEXT":"Off-Sale Allowed","JUSTIFIED":"CENTER","LENGTH":"10"},
+             "OFFSALEEXISTING":{"TEXT":"Off-Sale Existing","JUSTIFIED":"CENTER","LENGTH":"10"}
+		  },
+ "COLUMNS":{"COUNTYNAME":{"FORMAT":"@","JUSTIFIED":"LEFT"},
+            "CENSUSTRACT":{"FORMAT":"@","JUSTIFIED":"RIGHT"},
+            "ONSALEALLOWED":{"FORMAT":"@","JUSTIFIED":"RIGHT"},
+            "ONSALEEXISTING":{"FORMAT":"@","JUSTIFIED":"RIGHT"},
+            "OFFSALEALLOWED":{"FORMAT":"@","JUSTIFIED":"RIGHT"},
+            "OFFSALEEXISTING":{"FORMAT":"@","JUSTIFIED":"RIGHT"}
+		  }
+}
+

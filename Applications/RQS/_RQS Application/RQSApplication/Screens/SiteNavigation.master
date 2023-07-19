@@ -1,0 +1,71 @@
+﻿<%--
+*******************************************************************************************
+//    File:         SiteNavigation.Master         
+//    Author:       Timothy J. Lord
+//    
+//    Description:  Contains the navigation menu for the different RQS screens and content
+//					holder for the different screen contents.
+//    		 
+//    $Rev: 51 $   $Date: 2018-09-01 12:02:56 -0700 (Sat, 01 Sep 2018) $
+//    Modified By: $Author: TLord $
+//*******************************************************************************************
+//  History:
+//     Date  Developer  
+//----------------------------------------------------------------------------------
+//  04/06/2015  TJL     6197
+//  04/06/2015	TJL		9348	Updated manual revision date
+//*******************************************************************************************	 
+--%>
+
+<%@ Master Language="C#" MasterPageFile="~/Screens/Site.Master" AutoEventWireup="true" 
+           CodeBehind="SiteNavigation.master.cs" Inherits="RQS.Screens.SiteNavigation" %>
+
+<asp:Content ID="Content1" ContentPlaceHolderID="head" runat="server">
+	<script type="text/javascript" src="../Javascript/SiteNavigation.js"></script>
+	<asp:ContentPlaceHolder ID="head" runat="server">
+    </asp:ContentPlaceHolder>
+</asp:Content>
+
+<asp:Content ID="Content2" ContentPlaceHolderID="ContentPlaceHolder1" runat="server">
+    <div>
+        <div id="page-left">
+			<div>Welcome:</div>
+            <div style="padding-left:20px; text-indent:-15px;">
+                 <asp:Label runat="server" ID="username" />
+            </div>
+            <hr />
+            <div class="btn" onclick="btn_onclick('/Screens/Home.aspx')" >
+                <div>
+                    Home
+                </div>
+            </div>
+            <div class="btn" onclick="btn_onclick('/Screens/Schedule.aspx')">
+                <div>
+                    Request / Schedule Reports
+                </div>
+            </div>
+            <div class="btn" onclick="btn_onclick('/Screens/Retrieve.aspx')" >
+                <div>
+                    Retrieve Reports
+                </div>
+            </div>
+            <div class="btn" onclick="btn_onclick('/Manuals/RQS User Manual.pdf')" >
+                <div>
+                    RQS User Manual <br /> (Updated 04/06/2016)
+                </div>
+            </div>
+			<hr />
+			<div id="admin-options" class="no-display">
+				<div class="btn" onclick="btn_onclick('/Screens/UserMaintenance.aspx')">
+					<div>Add / Edit / Remove Users</div>
+				</div>
+				<hr />
+			</div>
+        </div>
+
+        <div id="page-right" style="">
+            <asp:ContentPlaceHolder ID="ContentPlaceHolder1" runat="server">
+            </asp:ContentPlaceHolder>
+        </div>
+    </div>
+</asp:Content>

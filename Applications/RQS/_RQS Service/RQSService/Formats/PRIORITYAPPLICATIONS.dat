@@ -1,0 +1,33 @@
+﻿{"HEADER":{"H1":{"TEXT":"<<REPORT_DATE>>","FORMAT":"mm/dd/yyyy hh:mm AM/PM","JUSTIFIED":"LEFT","START":"1","END":"1"},
+           "H2":{"TEXT":"Priority Applications Filed","FORMAT":"@","JUSTIFIED":"CENTER","START":"2","END":"9"},
+           "H3":{"TEXT":"<<START_DATE>> - <<END_DATE>>","FORMAT":"@","JUSTIFIED":"RIGHT","START":"10","END":"12"}
+		  },
+ "HEADINGS":{"COUNTY":{"TEXT":"County","JUSTIFIED":"CENTER","LENGTH":"30"},
+             "OFFICE":{"TEXT":"Office","JUSTIFIED":"CENTER","LENGTH":"30"},
+             "RECDIST":{"TEXT":"Dist Office","JUSTIFIED":"CENTER","LENGTH":"6"},
+             "PAIDDATE":{"TEXT":"Paid Date","JUSTIFIED":"CENTER","LENGTH":"11"},
+             "LICENSENUMBER":{"TEXT":"License Number","JUSTIFIED":"CENTER","LENGTH":"10"},
+			 "LICENSEE":{"TEXT":"Licensee","JUSTIFIED":"CENTER","LENGTH":"40"},
+			 "STATUS":{"TEXT":"Status","JUSTIFIED":"CENTER","LENGTH":"13"},
+			 "LICENSETYPECODE":{"TEXT":"License Type Code","JUSTIFIED":"CENTER","LENGTH":"7"},
+			 "TRANSCODE":{"TEXT":"Transaction Code","JUSTIFIED":"CENTER","LENGTH":"11"},
+			 "DUP":{"TEXT":"Dup","JUSTIFIED":"CENTER","LENGTH":"4"},
+			 "RECEIPTNUMBER":{"TEXT":"Receipt Number","JUSTIFIED":"CENTER","LENGTH":"8"},
+			 "RECEIPTAMOUNT":{"TEXT":"Receipt Amount","JUSTIFIED":"CENTER","LENGTH":"12"}
+		  },
+ "COLUMNS":{ "COUNTY":{"JUSTIFIED":"LEFT","FORMAT":"@"},
+             "OFFICE":{"JUSTIFIED":"LEFT","FORMAT":"@"},
+             "RECDIST":{"JUSTIFIED":"RIGHT","FORMAT":"00"},
+             "PAIDDATE":{"JUSTIFIED":"LEFT","FORMAT":"mm/dd/yyyy"},
+             "LICENSENUMBER":{"JUSTIFIED":"RIGHT","FORMAT":"@"},
+			 "LICENSEE":{"JUSTIFIED":"LEFT","FORMAT":"@"},
+			 "STATUS":{"JUSTIFIED":"LEFT","FORMAT":"@"},
+			 "LICENSETYPECODE":{"JUSTIFIED":"RIGHT","FORMAT":"@"},
+			 "TRANSCODE":{"JUSTIFIED":"LEFT","FORMAT":"@"},
+			 "DUP":{"JUSTIFIED":"RIGHT","FORMAT":"@"},
+			 "RECEIPTNUMBER":{"JUSTIFIED":"RIGHT","FORMAT":"@"},
+			 "RECEIPTAMOUNT":{"JUSTIFIED":"RIGHT","FORMAT":"###,##0.00"}
+		  }
+}
+
+
