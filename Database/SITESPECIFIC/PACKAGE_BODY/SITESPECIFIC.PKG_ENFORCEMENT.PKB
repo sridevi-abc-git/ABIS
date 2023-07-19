@@ -22,6 +22,7 @@ IS
     -- 05/05/2023 PK          Changed createinvfrompostsusprev to resolve problem after Objectid have been moved to new gap
     -- 05/05/2023 PK          Updated Sitespecific.pkg_Enforcement.activatesuspendedlicense joined with Api statuses and added s.tag in wehere clause to improve performance
     -- 03/29/2023 PK          WO 31538 'HoldType', 'H '||chr(38)||' L PROTEST'); --'||chr(38)||' An ampersand 
+    -- 07/18/2023 PK          Updated assignconductinv to resolve error exact fetch returns more than requested number of rows WO-32646
     
     
     -- **************************************************************************
@@ -346,11 +347,12 @@ IS
         -- find the ProcessId for the Conduct Investigation process
         BEGIN
        ---- 01/31/2023 PK          Changed assignconductinv to resolve problem after Objectid have been moved to new gap
-        SELECT p2.PROCESSID
+         SELECT p.PROCESSID
             INTO t_conductinvprocessid
-            FROM (SELECT MAX (p.createddate) Maxcreateddate
-                    FROM api.processes p
-                    WHERE jobid = a_jobid
+            FROM api.processes p
+                    join API.OBJECTS o on o.OBJECTID = p.PROCESSID
+                    join API.LOGICALTRANSACTIONS lt on lt.LOGICALTRANSACTIONID  = o.CREATEDLOGICALTRANSACTIONID
+                    WHERE jobid = 88834725
                     AND processtypeid IN
                        (api.pkg_objectdefquery.idforname (
                             'p_ConductEnforcementInv'),
@@ -359,9 +361,9 @@ IS
                         api.pkg_objectdefquery.idforname (
                             'p_ConductAdminInvestigation'),
                         api.pkg_objectdefquery.idforname (
-                            'p_ConductLicenseInvestigation'))) x
-                    JOIN api.processes p2 ON p2.CREATEDDATE = x.Maxcreateddate
-                        WHERE p2.jobid = a_jobid;  ---- 01/27/2023 PK          Changed assignconductinv to resolve problem after Objectid have been moved to new gap
+                            'p_ConductLicenseInvestigation'))
+                            order by lt.LOGICALTRANSACTIONID
+                            fetch first 1 row only; ---- 07/18/2023 PK   Updated assignconductinv to resolve error exact fetch returns more than requested number of rows WO-32646
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
                 api.pkg_errors.raiseerror(
