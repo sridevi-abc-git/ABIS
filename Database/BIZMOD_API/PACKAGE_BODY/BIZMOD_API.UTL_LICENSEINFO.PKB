@@ -1,5 +1,19 @@
 CREATE OR REPLACE PACKAGE BODY BIZMOD_API.utl_licenseinfo
 AS
+    -- ****************************************************************************
+    -- File:        BIZMOD_API.UTL_LICENSEINFO.PKB
+    -- Author:      Timothy J. Lord
+    --
+    -- Purpose:
+    --
+    -- History:
+    -------------------------------------------------------------------------------
+    --    Date           Ticket     Comment
+    --  07/20/2023 TJL  BIZ-11991   Added return code 7 for license that have not
+    --                                been renewed for current fiscal year.
+    -- ****************************************************************************
+
+
     FUNCTION statusmatrix(a_status IN VARCHAR2)
         RETURN VARCHAR2
     IS
@@ -115,6 +129,10 @@ AS
                                       'LicenseTypeCode') IN
                 ('02', '22'))
         THEN
+            t_expiration :=
+                api.pkg_columnquery.datevalue(a_licensetypeobjectid,
+                                              'ExpirationDate');
+
             SELECT CASE NVL(cnt, 0) WHEN 0 THEN 'N' ELSE 'Y' END
               INTO t_branchapplies
               FROM (SELECT COUNT(1)     cnt
@@ -129,156 +147,155 @@ AS
                                 'MasterLicenseType'))
                        AND r.fromobjectid = a_licensetypeobjectid);
 
-            IF (t_branchapplies = 'Y')
-            THEN
-                t_msgno := 8;
-            ELSE
-                t_expiration :=
-                    api.pkg_columnquery.datevalue(a_licensetypeobjectid,
-                                                  'ExpirationDate');
-                t_issuedate :=
-                    api.pkg_columnquery.datevalue(a_licensetypeobjectid,
-                                                  'IssueDate');
-
-                t_start_date :=
-                    TO_DATE(
-                        '01-07-'
-                        || EXTRACT(YEAR FROM ADD_MONTHS(t_expiration, -6)),
-                        'dd-mm-yyyy');
-                t_end_date :=
-                    TO_DATE(
-                        '30-06-'
-                        || EXTRACT(YEAR FROM ADD_MONTHS(t_expiration, 6)),
-                        'dd-mm-yyyy');
-
-                --            DBMS_OUTPUT.put_line(t_start_date || CHR(9) || t_end_date);
-
-                SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
-                  INTO t_msgno -- t_awfrequired
-                  FROM (SELECT COUNT(1)     cnt
-                          FROM api.fees f
-                         WHERE f.jobid = a_licensetypeobjectid
-                           AND TRUNC(f.transactiondate) BETWEEN t_start_date
-                                                            AND t_end_date
-                           AND f.description LIKE '%AWF%'
-                        UNION
-                        SELECT COUNT(1)     cnt
-                          FROM bizmod_api.e_payments_t p
-                         WHERE (p.licensenumber =
-                                api.pkg_columnquery.VALUE(
-                                    a_licensetypeobjectid,
-                                    'LicenseNumber')
-                            AND p.licensetypecode = '02'
-                            AND p.description LIKE '%AWF%'
-                            AND p.description LIKE '%AWF%'
-                            AND TRUNC(p.createddate) BETWEEN t_start_date
-                                                         AND t_end_date));
-
-                --            DBMS_OUTPUT.put_line(
-                --                'xxx: '
-                --                || t_awfrequired
-                --                || CHR(9)
-                --                || t_issuedate
-                --                || CHR(9)
-                --                || ADD_MONTHS(t_expiration, -24));
-
-                -- check if this was liense was just issued or was transfered
-                IF (t_msgno IS NULL
-                AND t_issuedate > ADD_MONTHS(t_expiration, -24))
+            CASE
+                WHEN (t_branchapplies = 'Y')
                 THEN
-                    -- get application for this license
-                    SELECT a.toobjectid
-                      INTO t_application
-                      FROM api.relationships  l
-                           JOIN api.relationships a
-                               ON (a.endpointid =
-                                   api.pkg_configquery.endpointidforname(
-                                       'j_License',
-                                       'ApplicationLicense')
-                               AND a.fromobjectid = l.toobjectid)
-                     WHERE l.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'j_LicenseType',
-                               'License')
-                       AND l.fromobjectid = a_licensetypeobjectid;
+                    t_msgno := 8;
+                WHEN (t_expiration < TRUNC(SYSDATE))
+                THEN
+                    t_msgno := 7;
+                ELSE
+                    t_issuedate :=
+                        api.pkg_columnquery.datevalue(a_licensetypeobjectid,
+                                                      'IssueDate');
 
-                    t_applicationtype :=
-                        api.pkg_columnquery.VALUE(t_application,
-                                                  'ApplicationType');
+                    SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
+                      INTO t_msgno -- t_awfrequired
+                      FROM (SELECT COUNT(1)     cnt
+                              FROM api.fees f
+                             WHERE f.jobid = a_licensetypeobjectid
+                               AND TRUNC(f.transactiondate) BETWEEN t_start_date
+                                                                AND t_end_date
+                               AND f.description LIKE '%AWF%'
+                            UNION
+                            SELECT COUNT(1)     cnt
+                              FROM bizmod_api.e_payments_t p
+                             WHERE (p.licensenumber =
+                                    api.pkg_columnquery.VALUE(
+                                        a_licensetypeobjectid,
+                                        'LicenseNumber')
+                                AND p.licensetypecode = '02'
+                                AND p.description LIKE '%AWF%'
+                                AND p.description LIKE '%AWF%'
+                                AND TRUNC(p.createddate) BETWEEN t_start_date
+                                                             AND t_end_date));
 
-                    --                DBMS_OUTPUT.put_line(
-                    --                    t_application
-                    --                    || CHR(9)
-                    --                    || t_applicationtype
-                    --                    || CHR(9)
-                    --                    || t_issuedate);
+                    --            DBMS_OUTPUT.put_line(
+                    --                'xxx: '
+                    --                || t_awfrequired
+                    --                || CHR(9)
+                    --                || t_issuedate
+                    --                || CHR(9)
+                    --                || ADD_MONTHS(t_expiration, -24));
 
-                    -- make sure that this license has been renewed in the pass not issued this year
-                    CASE
-                        WHEN ((t_issuedate >= ADD_MONTHS(t_expiration, -12)
-                           AND ((t_applicationtype = 'Original')
-                             OR (t_applicationtype = 'Transfer'
-                             AND api.pkg_columnquery.VALUE(t_application,
-                                                           'PersonToPerson') =
-                                 'Y')
-                             OR (t_applicationtype = 'Change'
-                             AND api.pkg_columnquery.VALUE(
-                                     t_application,
-                                     'AddPrimaryLicenseType') =
-                                 'Y'))))
-                        THEN
-                            t_msgno := 10;
-                        ELSE
-                            -- find license transfer from
-                            SELECT lt.toobjectid
-                              INTO t_transferfromobjectid
-                              FROM api.relationships lt
-                             WHERE (lt.endpointid =
-                                    api.pkg_configquery.endpointidforname(
-                                        'j_License',
-                                        'LicenseType')
-                                AND lt.fromobjectid =
-                                    api.pkg_columnquery.numericvalue(
-                                        t_application,
-                                        'TransferFromLicenseObjectId')
-                                AND api.pkg_columnquery.VALUE(
-                                        lt.toobjectid,
-                                        'LicenseTypeCode') =
-                                    '02');
+                    -- check if this was liense was just issued or was transfered
+                    IF (t_msgno IS NULL
+                    AND t_issuedate > ADD_MONTHS(t_expiration, -24))
+                    THEN
+                        -- get application for this license
+                        SELECT a.toobjectid
+                          INTO t_application
+                          FROM api.relationships  l
+                               JOIN api.relationships a
+                                   ON (a.endpointid =
+                                       api.pkg_configquery.endpointidforname(
+                                           'j_License',
+                                           'ApplicationLicense')
+                                   AND a.fromobjectid = l.toobjectid)
+                         WHERE l.endpointid =
+                               api.pkg_configquery.endpointidforname(
+                                   'j_LicenseType',
+                                   'License')
+                           AND l.fromobjectid = a_licensetypeobjectid
+                           AND REGEXP_LIKE(
+                                   api.pkg_columnquery.VALUE(
+                                       a.toobjectid,
+                                       'PrimaryLicenseTypeCodes'),
+                                   '02|22');
 
-                            --t_transferfromobjectid := api.pkg_columnquery.numericvalue(
-                            --                                    t_application,
-                            --                                    'TransferFromLicenseObjectId');
+                        t_applicationtype :=
+                            api.pkg_columnquery.VALUE(t_application,
+                                                      'ApplicationType');
 
-                            --                        DBMS_OUTPUT.put_line(
-                            --                            'transfer: ' || t_transferfromobjectid);
+                        --                DBMS_OUTPUT.put_line(
+                        --                    t_application
+                        --                    || CHR(9)
+                        --                    || t_applicationtype
+                        --                    || CHR(9)
+                        --                    || t_issuedate);
+
+                        -- make sure that this license has been renewed in the pass not issued this year
+                        CASE
+                            WHEN ((t_issuedate >=
+                                   ADD_MONTHS(t_expiration, -12)
+                               AND ((t_applicationtype = 'Original')
+                                 OR (t_applicationtype = 'Transfer'
+                                 AND api.pkg_columnquery.VALUE(
+                                         t_application,
+                                         'PersonToPerson') =
+                                     'Y')
+                                 OR (t_applicationtype = 'Change'
+                                 AND api.pkg_columnquery.VALUE(
+                                         t_application,
+                                         'AddPrimaryLicenseType') =
+                                     'Y'))))
+                            THEN
+                                t_msgno := 10;
+                            WHEN t_applicationtype = 'Transfer'
+                            THEN
+                                -- find license transfer from
+                                SELECT lt.toobjectid
+                                  INTO t_transferfromobjectid
+                                  FROM api.relationships lt
+                                 WHERE (lt.endpointid =
+                                        api.pkg_configquery.endpointidforname(
+                                            'j_License',
+                                            'LicenseType')
+                                    AND lt.fromobjectid =
+                                        api.pkg_columnquery.numericvalue(
+                                            t_application,
+                                            'TransferFromLicenseObjectId')
+                                    AND api.pkg_columnquery.VALUE(
+                                            lt.toobjectid,
+                                            'LicenseTypeCode') =
+                                        '02');
+
+                                --t_transferfromobjectid := api.pkg_columnquery.numericvalue(
+                                --                                    t_application,
+                                --                                    'TransferFromLicenseObjectId');
+
+                                --                        DBMS_OUTPUT.put_line(
+                                --                            'transfer: ' || t_transferfromobjectid);
 
 
-                            SELECT CASE
-                                       WHEN SUM(cnt) = 0 THEN NULL
-                                       ELSE 9
-                                   END
-                              INTO t_msgno
-                              FROM (SELECT COUNT(1)     cnt
-                                      FROM api.fees f
-                                     WHERE f.jobid = t_transferfromobjectid
-                                       AND TRUNC(f.transactiondate) BETWEEN t_start_date
+                                SELECT CASE
+                                           WHEN SUM(cnt) = 0 THEN NULL
+                                           ELSE 9
+                                       END
+                                  INTO t_msgno
+                                  FROM (SELECT COUNT(1)     cnt
+                                          FROM api.fees f
+                                         WHERE f.jobid =
+                                               t_transferfromobjectid
+                                           AND TRUNC(f.transactiondate) BETWEEN t_start_date
+                                                                            AND t_end_date
+                                           AND f.description LIKE '%AWF%'
+                                        UNION
+                                        SELECT COUNT(1)     cnt
+                                          FROM bizmod_api.e_payments_t p
+                                         WHERE p.licensenumber =
+                                               api.pkg_columnquery.VALUE(
+                                                   t_transferfromobjectid,
+                                                   'LicenseNumber')
+                                           AND p.licensetypecode = '02'
+                                           AND TRUNC(p.createddate) BETWEEN t_start_date
                                                                         AND t_end_date
-                                       AND f.description LIKE '%AWF%'
-                                    UNION
-                                    SELECT COUNT(1)     cnt
-                                      FROM bizmod_api.e_payments_t p
-                                     WHERE p.licensenumber =
-                                           api.pkg_columnquery.VALUE(
-                                               t_transferfromobjectid,
-                                               'LicenseNumber')
-                                       AND p.licensetypecode = '02'
-                                       AND TRUNC(p.createddate) BETWEEN t_start_date
-                                                                    AND t_end_date
-                                       AND p.description LIKE '%AWF%');
-                    END CASE;
-                END IF;
-            END IF;
+                                           AND p.description LIKE '%AWF%');
+                            ELSE
+                                NULL;
+                        END CASE;
+                    END IF;
+            END CASE;
         END IF;
 
         RETURN t_msgno;
