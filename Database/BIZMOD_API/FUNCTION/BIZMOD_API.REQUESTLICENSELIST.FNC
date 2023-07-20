@@ -13,6 +13,7 @@ IS
     --    Date                       Comment
     --  04/13/2022 TJL   Initial Package Created for 19C Database
     --  12/09/2022 TJL   Implemented for eservices after 19C upgrad
+    --  07/19/2023 TJL  BIZ-11770 -
     -- ****************************************************************************
     FUNCTION secondary(a_licensetypejobid IN NUMBER)
         RETURN CLOB
@@ -90,7 +91,7 @@ IS
 BEGIN
     DECLARE
         t_json_obj     json_object_t;
-        t_json_arr     json_array_t := json_array_t();
+        t_json_arr     json_array_t;
 
         t_packet       CLOB;
         t_results      CLOB;
@@ -98,6 +99,11 @@ BEGIN
         t_trace        VARCHAR2(4000);
         t_msg          VARCHAR2(4000 BYTE);
     BEGIN
+        -- 07/19/2023 TJL  BIZ-11770 
+        t_json_obj := NEW json_object_t(json_object('PACKET_TYPE' VALUE 'LICENSELISTINFO'));
+        t_json_obj.put('DATA', new json_array_t());
+        t_json_arr := t_json_obj.get_Array('DATA');
+        
         FOR l
             IN ((SELECT *
                    FROM JSON_TABLE(
@@ -130,13 +136,9 @@ BEGIN
             t_json_arr.append(json_object_t(t_packet));
         END LOOP;
 
-        t_packet :=
-            json_object('PACKET_TYPE' VALUE 'LICENSELISTINFO',
-                        'DATA' VALUE t_json_arr.TO_CLOB FORMAT JSON);
-
-        t_json_obj := NEW json_object_t(t_packet);
         utl_licenseinfo.clean(a_json => t_json_obj);
         RETURN t_json_obj.TO_CLOB;
+        
     EXCEPTION
         WHEN OTHERS
         THEN
