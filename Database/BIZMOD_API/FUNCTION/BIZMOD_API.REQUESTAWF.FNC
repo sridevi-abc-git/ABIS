@@ -2,7 +2,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.requestawf(a_packet IN CLOB, a_seq IN NUMB
     RETURN CLOB
 IS
     -- ****************************************************************************
-    -- File:        REQUESTAWF.FNC
+    -- File:        BIZMOD_API.REQUESTAWF.FNC
     -- Author:      Timothy J. Lord
     --
     -- Purpose :    This function is called thru the eservices API to return
@@ -20,6 +20,8 @@ IS
     --  07/06/2023 TJL  BIZ-11891   Change which renewal fee being returned
 	--	07/19/2023 TJL  BIZ-11977	Fixed bug where liccenses without application 
 	--								  would throw exception License Not Found.
+	--  07/20/2023 TJL  BIZ-11991   Change what date is used in figuring out which
+	--                                renewal is returned
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -29,6 +31,8 @@ IS
     t_licensenumber VARCHAR(10);
     t_issuedate    DATE;
     t_expiration   DATE;
+    t_fiscal_end   DATE := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
+                       'dd-mm-yyyy'); 
     t_start_date   DATE;
     t_end_date     DATE;
     t_application  NUMBER;
@@ -80,8 +84,8 @@ BEGIN
             api.pkg_columnquery.datevalue(t_objectid, 'ExpirationDate');
         t_issuedate := api.pkg_columnquery.datevalue(t_objectid, 'IssueDate');
 
-        t_start_date := ADD_MONTHS(t_expiration + 1, -36);
-        t_end_date := ADD_MONTHS(t_expiration, -24);
+        t_start_date := ADD_MONTHS(t_fiscal_end + 1, -36);
+        t_end_date := ADD_MONTHS(t_fiscal_end, -24);
 
         -- 07/19/2023 TJL  BIZ-11977 added issue date test.  Older license don't have applications in ABIS
         IF (TRUNC(t_issuedate) >= ADD_MONTHS(t_expiration + 1, -36))
@@ -267,6 +271,12 @@ BEGIN
                api.pkg_configquery.objectdefidforname('o_fee')
            AND reo.linkvalue = TO_CHAR(t_renfeeid);
 
+--        IF (t_renfeeactivity in ('REN50', 'REN100'))
+--        then
+--            t_renfeeactivity := 'REN';
+--        
+--        end if;
+        
         MERGE INTO bizmod_api.awf_t a
              USING (SELECT t_renfeeid renfeeid FROM DUAL) a2
                 ON (a.renfeeid = a2.renfeeid)
@@ -356,11 +366,12 @@ BEGIN
                    'CREATEDDATE' VALUE t.createddate,
                    'GALLONAGE' VALUE t.gallonage261,
                    'AWFAMOUNTOWED' VALUE t.awffeeamount,
+                   'JUSTIFICATION' VALUE t.justification,
+                   'FEEREQUIRED' VALUE case when t.awffeeamount > 0 then t.awffeeamount else NULL end,
                    'AWFPAID' VALUE NULL
                    ABSENT ON NULL)
           INTO t_awf
           FROM bizmod_api.awf_t t
-         --               LEFT OUTER JOIN bizmod_api.e_payments_t p ON p.feeobjid = t.renfeeobjid
          WHERE t.renfeeid = t_renfeeid;
 
         l_data.put('INFO',
