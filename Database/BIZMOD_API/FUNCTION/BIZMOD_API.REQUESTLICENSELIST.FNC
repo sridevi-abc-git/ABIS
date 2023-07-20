@@ -11,9 +11,10 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Date                       Comment
-    --  04/13/2022 TJL   Initial Package Created for 19C Database
-    --  12/09/2022 TJL   Implemented for eservices after 19C upgrad
-    --  07/19/2023 TJL  BIZ-11770 -
+    --  04/13/2022 TJL              Initial Package Created for 19C Database
+    --  12/09/2022 TJL              Implemented for eservices after 19C upgrad
+    --  07/19/2023 TJL  BIZ-11770   Correct string to long bug exception
+    --  07/20/2023 TJL  BIZ-11991   
     -- ****************************************************************************
     FUNCTION secondary(a_licensetypejobid IN NUMBER)
         RETURN CLOB
@@ -75,6 +76,7 @@ IS
                             THEN 
                                 case nvl(utl_licenseinfo.awfrequired(o.objectid), 0) 
                                   when 0 then 'Y'
+                                  when 7 then 'Y'   -- not renewed in penalty
                                   when 8 then 'NA'
                                   else 'N' end
                             ELSE
