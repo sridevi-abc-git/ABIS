@@ -362,7 +362,7 @@ IS
                             'p_ConductAdminInvestigation'),
                         api.pkg_objectdefquery.idforname (
                             'p_ConductLicenseInvestigation'))
-                            order by lt.LOGICALTRANSACTIONID
+                            order by lt.LOGICALTRANSACTIONID desc
                             fetch first 1 row only; ---- 07/18/2023 PK   Updated assignconductinv to resolve error exact fetch returns more than requested number of rows WO-32646
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
