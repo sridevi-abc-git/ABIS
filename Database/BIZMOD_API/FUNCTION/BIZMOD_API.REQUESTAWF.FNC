@@ -13,15 +13,16 @@ IS
     --
     -- History:
     -------------------------------------------------------------------------------
-    --    Date           Ticket     Comment
-    --  06/08/2022 TJL  BIZ-      Initial Function Created
-    --  02/16/2023 TJL            Converted to using JSON objects.
-    --  06/28/2023 TJL            Fixed bug in generating return packet
-    --  07/06/2023 TJL  BIZ-11891   Change which renewal fee being returned
-	--	07/19/2023 TJL  BIZ-11977	Fixed bug where liccenses without application 
-	--								  would throw exception License Not Found.
-	--  07/20/2023 TJL  BIZ-11991   Change what date is used in figuring out which
-	--                                renewal is returned
+    --  Ver:       Date          Ticket       Comment
+    --          06/08/2022 TJL  BIZ-        Initial Function Created
+    --          02/16/2023 TJL              Converted to using JSON objects.
+    --          06/28/2023 TJL              Fixed bug in generating return packet
+    --          07/06/2023 TJL  BIZ-11891   Change which renewal fee being returned
+    --         07/19/2023 TJL  BIZ-11977 Fixed bug where liccenses without application
+    --                  would throw exception License Not Found.
+    --          07/20/2023 TJL  BIZ-11991   Change what date is used in figuring out which
+    --                                         renewal is returned
+    --   2.1    07/25/2023 TJL  BIZ-12090   Added FeeRequired and Justification fields to return packet
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -29,24 +30,16 @@ IS
     -- ****************************************************************************
     t_objectid     api.pkg_definition.udt_id;
     t_licensenumber VARCHAR(10);
-    t_issuedate    DATE;
     t_expiration   DATE;
-    t_fiscal_end   DATE := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
-                       'dd-mm-yyyy'); 
-    t_start_date   DATE;
-    t_end_date     DATE;
-    t_application  NUMBER;
-    t_applicationtype VARCHAR2(20);
-    t_transferfromobjectid NUMBER;
+    t_fiscal_end   DATE
+        := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
+                   'dd-mm-yyyy');
     t_msgno        NUMBER;
     t_renfeeid     NUMBER;
     t_feeobjid     NUMBER;
     t_awfdate      DATE;
     t_renfeeactivity VARCHAR2(20);
-    t_feeactivity  VARCHAR2(20);
     t_awf          VARCHAR2(4000);
-    t_feeid        NUMBER;
-    t_description  VARCHAR2(200);
     t_paidamount   NUMBER;
     l_data         json_object_t;
     l_obj          json_object_t;
@@ -82,201 +75,27 @@ BEGIN
     THEN
         t_expiration :=
             api.pkg_columnquery.datevalue(t_objectid, 'ExpirationDate');
-        t_issuedate := api.pkg_columnquery.datevalue(t_objectid, 'IssueDate');
 
-        t_start_date := ADD_MONTHS(t_fiscal_end + 1, -36);
-        t_end_date := ADD_MONTHS(t_fiscal_end, -24);
+        t_feeobjid :=
+            bizmod_api.utl_licenseinfo.get_awfreninfo(
+                a_fiscalend => t_fiscal_end,
+                a_jobid     => t_objectid);
 
-        -- 07/19/2023 TJL  BIZ-11977 added issue date test.  Older license don't have applications in ABIS
-        IF (TRUNC(t_issuedate) >= ADD_MONTHS(t_expiration + 1, -36))
-        THEN
-            -- get application for this license
-            SELECT a.toobjectid
-              INTO t_application
-              FROM api.relationships  l
-                   JOIN api.relationships a
-                       ON (a.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'j_License',
-                               'ApplicationLicense')
-                       AND a.fromobjectid = l.toobjectid)
-             WHERE l.endpointid =
-                   api.pkg_configquery.endpointidforname('j_LicenseType',
-                                                         'License')
-               AND l.fromobjectid = t_objectid
-               AND REGEXP_LIKE(
-                       api.pkg_columnquery.VALUE(a.toobjectid,
-                                                 'PrimaryLicenseTypeCodes'),
-                       '02|22');
-
-            t_applicationtype :=
-                api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
-        END IF;
-
-        IF (t_applicationtype = 'Transfer')
-        THEN
-            -- find license transfer from
-            SELECT lt.toobjectid
-              INTO t_transferfromobjectid
-              FROM api.relationships lt
-             WHERE (lt.endpointid =
-                    api.pkg_configquery.endpointidforname('j_License',
-                                                          'LicenseType')
-                AND lt.fromobjectid =
-                    api.pkg_columnquery.numericvalue(
-                        t_application,
-                        'TransferFromLicenseObjectId')
-                AND api.pkg_columnquery.VALUE(lt.toobjectid,
-                                              'LicenseTypeCode') =
-                    '02');
-        END IF;
+        t_renfeeid := api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
+        t_awfdate :=
+            api.pkg_columnquery.datevalue(t_feeobjid, 'TransactionDate');
+        t_renfeeactivity :=
+            REGEXP_SUBSTR(
+                api.pkg_columnquery.VALUE(t_feeobjid,
+                                          'FeeScheduleDescription'),
+                '[^ ]+',
+                1,
+                3);
+        t_paidamount :=
+              api.pkg_columnquery.numericvalue(t_feeobjid, 'adjustedamount')
+            + api.pkg_columnquery.numericvalue(t_feeobjid, 'paidamount');
 
 
-        CASE
-            -- get renewal fee information for licenses over a couple of years old
-            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(t_expiration + 1, -24)
-            THEN
-                -- get renewal fee
-                SELECT f.feeid,
-                       f.transactiondate,
-                       (SELECT REGEXP_SUBSTR(
-                                   api.pkg_columnquery.VALUE(
-                                       reo.objectid,
-                                       'FeeScheduleDescription'),
-                                   '[^ ]+',
-                                   1,
-                                   3)
-                          FROM api.registeredexternalobjects reo
-                         WHERE reo.objectdefid =
-                               api.pkg_configquery.objectdefidforname(
-                                   'o_fee')
-                           AND reo.linkvalue = TO_CHAR(f.feeid) -- feeid
-                                                               )
-                           description,
-                       f.paidamount
-                  INTO t_renfeeid,
-                       t_awfdate,
-                       t_renfeeactivity,
-                       t_paidamount
-                  FROM api.fees f
-                 WHERE f.jobid = t_objectid
-                   AND (f.description LIKE '02 - REN%'
-                     OR f.description LIKE '22 - REN%')
-                   AND f.transactiondate BETWEEN t_start_date AND t_end_date;
-            -- for licenses issued this year get renewal fees from previous license
-            WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(t_expiration + 1, -12)
-                                        AND t_expiration
-            THEN
-                -- get renewal fee
-                SELECT f.feeid,
-                       f.transactiondate,
-                       (SELECT REGEXP_SUBSTR(
-                                   api.pkg_columnquery.VALUE(
-                                       reo.objectid,
-                                       'FeeScheduleDescription'),
-                                   '[^ ]+',
-                                   1,
-                                   3)
-                          FROM api.registeredexternalobjects reo
-                         WHERE reo.objectdefid =
-                               api.pkg_configquery.objectdefidforname(
-                                   'o_fee')
-                           AND reo.linkvalue = TO_CHAR(f.feeid) -- feeid
-                                                               )
-                           description,
-                       f.paidamount
-                  INTO t_renfeeid,
-                       t_awfdate,
-                       t_renfeeactivity,
-                       t_paidamount
-                  FROM api.fees f
-                 WHERE f.jobid = t_transferfromobjectid
-                   AND (f.description LIKE '02 - REN%'
-                     OR f.description LIKE '22 - REN%')
-                   AND f.transactiondate BETWEEN t_start_date AND t_end_date;
-            ELSE
-                -- get renewal fee or ANN fee for licenses issued last fiscal year
-                IF ((t_applicationtype = 'Original')
-                 OR (t_applicationtype = 'Transfer'
-                 AND api.pkg_columnquery.VALUE(t_application,
-                                               'PersonToPerson') =
-                     'Y')
-                 OR (t_applicationtype = 'Change'
-                 AND api.pkg_columnquery.VALUE(t_application,
-                                               'AddPrimaryLicenseType') =
-                     'Y'))
-                THEN
-                    -- get ANN Fees
-                    SELECT f.feeid,
-                           f.transactiondate,
-                           (SELECT REGEXP_SUBSTR(
-                                       api.pkg_columnquery.VALUE(
-                                           reo.objectid,
-                                           'FeeScheduleDescription'),
-                                       '[^ ]+',
-                                       1,
-                                       3)
-                              FROM api.registeredexternalobjects reo
-                             WHERE reo.objectdefid =
-                                   api.pkg_configquery.objectdefidforname(
-                                       'o_fee')
-                               AND reo.linkvalue = TO_CHAR(f.feeid) -- feeid
-                                                                   )
-                               description,
-                           f.paidamount
-                      INTO t_renfeeid,
-                           t_awfdate,
-                           t_renfeeactivity,
-                           t_paidamount
-                      FROM api.fees f
-                     WHERE f.jobid = t_application
-                       AND SUBSTR(f.description, 1, 2) IN ('02', '22')
-                       AND (f.description LIKE '%ANN%');
-                ELSE
-                    -- get ren fees from tranfered license
-                    SELECT f.feeid,
-                           f.transactiondate,
-                           (SELECT REGEXP_SUBSTR(
-                                       api.pkg_columnquery.VALUE(
-                                           reo.objectid,
-                                           'FeeScheduleDescription'),
-                                       '[^ ]+',
-                                       1,
-                                       3)
-                              FROM api.registeredexternalobjects reo
-                             WHERE reo.objectdefid =
-                                   api.pkg_configquery.objectdefidforname(
-                                       'o_fee')
-                               AND reo.linkvalue = TO_CHAR(f.feeid) -- feeid
-                                                                   )
-                               description,
-                           f.paidamount
-                      INTO t_renfeeid,
-                           t_awfdate,
-                           t_renfeeactivity,
-                           t_paidamount
-                      FROM api.fees f
-                     WHERE f.jobid = t_transferfromobjectid
-                       AND (f.description LIKE '02 - REN%'
-                         OR f.description LIKE '22 - REN%')
-                       AND f.transactiondate BETWEEN t_start_date
-                                                 AND t_end_date;
-                END IF;
-        END CASE;
-
-        SELECT reo.objectid
-          INTO t_feeobjid
-          FROM api.registeredexternalobjects reo
-         WHERE reo.objectdefid =
-               api.pkg_configquery.objectdefidforname('o_fee')
-           AND reo.linkvalue = TO_CHAR(t_renfeeid);
-
---        IF (t_renfeeactivity in ('REN50', 'REN100'))
---        then
---            t_renfeeactivity := 'REN';
---        
---        end if;
-        
         MERGE INTO bizmod_api.awf_t a
              USING (SELECT t_renfeeid renfeeid FROM DUAL) a2
                 ON (a.renfeeid = a2.renfeeid)
@@ -367,7 +186,7 @@ BEGIN
                    'GALLONAGE' VALUE t.gallonage261,
                    'AWFAMOUNTOWED' VALUE t.awffeeamount,
                    'JUSTIFICATION' VALUE t.justification,
-                   'FEEREQUIRED' VALUE case when t.awffeeamount > 0 then t.awffeeamount else NULL end,
+                   'FEEREQUIRED' VALUE t.feerequired,
                    'AWFPAID' VALUE NULL
                    ABSENT ON NULL)
           INTO t_awf
