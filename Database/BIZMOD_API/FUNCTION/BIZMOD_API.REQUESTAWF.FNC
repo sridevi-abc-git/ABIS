@@ -23,6 +23,7 @@ IS
     --          07/20/2023 TJL  BIZ-11991   Change what date is used in figuring out which
     --                                         renewal is returned
     --   2.1    07/25/2023 TJL  BIZ-12090   Added FeeRequired and Justification fields to return packet
+    --   2.2    07/27/2023 TJL  BIZ-12070   Added error handling for renewal fee not found
     -- ****************************************************************************
 
     -- ****************************************************************************
