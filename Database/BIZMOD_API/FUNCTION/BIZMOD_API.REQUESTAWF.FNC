@@ -81,6 +81,7 @@ BEGIN
                 a_fiscalend => t_fiscal_end,
                 a_jobid     => t_objectid);
 
+        if (t_feeobjid is not null) then
         t_renfeeid := api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
         t_awfdate :=
             api.pkg_columnquery.datevalue(t_feeobjid, 'TransactionDate');
@@ -128,6 +129,9 @@ BEGIN
                     t_paidamount);
 
         COMMIT;
+        else
+            t_msgno := 14;
+        END IF;
     END IF;
 
     l_obj :=
@@ -168,6 +172,7 @@ BEGIN
                 WHEN 8 THEN 'License is a Branch License.'
                 WHEN 9 THEN 'AFW Fee already paid for this renewal year.'
                 WHEN 10 THEN 'License was issued this licensing period.'
+                WHEN 14 THEN 'Renewal/Annual Fee Not found for license number.'
                 WHEN 0 THEN 'Application Annual Fee Not Found'
                 ELSE 'Unknown error'
             END);
