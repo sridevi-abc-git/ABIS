@@ -8,9 +8,10 @@ AS
     --
     -- History:
     -------------------------------------------------------------------------------
-    --    Date           Ticket     Comment
-    --  07/20/2023 TJL  BIZ-11991   Added return code 7 for license that have not
-    --                                been renewed for current fiscal year.
+    --              Date           Ticket     Comment
+    --          07/20/2023  TJL  BIZ-11991    Added return code 7 for license that have not
+    --                                        been renewed for current fiscal year.
+    --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo
     -- ****************************************************************************
 
 
@@ -302,6 +303,145 @@ AS
     --EXCEPTION
 
     END;
+
+    FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
+        RETURN NUMBER
+    IS
+        t_start_date   DATE;
+        t_end_date     DATE;
+        t_application  NUMBER;
+        t_applicationtype VARCHAR2(20);
+        t_transferfromobjectid NUMBER;
+        t_issuedate    DATE;
+        t_feeid        NUMBER;
+        t_feeobjid     NUMBER;
+    BEGIN
+        t_issuedate := api.pkg_columnquery.datevalue(a_jobid, 'IssueDate');
+
+        t_start_date := ADD_MONTHS(a_fiscalend + 1, -36);
+        t_end_date := ADD_MONTHS(a_fiscalend, -24);
+
+        -- Older license don't have applications in ABIS
+        IF (TRUNC(t_issuedate) >= ADD_MONTHS(a_fiscalend + 1, -36))
+        THEN
+            -- get application for this license
+            SELECT a.toobjectid
+              INTO t_application
+              FROM api.relationships  l
+                   JOIN api.relationships a
+                       ON (a.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'j_License',
+                               'ApplicationLicense')
+                       AND a.fromobjectid = l.toobjectid)
+             WHERE l.endpointid =
+                   api.pkg_configquery.endpointidforname('j_LicenseType',
+                                                         'License')
+               AND l.fromobjectid = a_jobid
+               AND REGEXP_LIKE(
+                       api.pkg_columnquery.VALUE(a.toobjectid,
+                                                 'PrimaryLicenseTypeCodes'),
+                       '02|22');
+
+            t_applicationtype :=
+                api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
+        END IF;
+
+        IF (t_applicationtype = 'Transfer')
+        THEN
+            -- find license transfer from
+            SELECT lt.toobjectid
+              INTO t_transferfromobjectid
+              FROM api.relationships lt
+             WHERE (lt.endpointid =
+                    api.pkg_configquery.endpointidforname('j_License',
+                                                          'LicenseType')
+                AND lt.fromobjectid =
+                    api.pkg_columnquery.numericvalue(
+                        t_application,
+                        'TransferFromLicenseObjectId')
+                AND api.pkg_columnquery.VALUE(lt.toobjectid,
+                                              'LicenseTypeCode') =
+                    '02');
+        END IF;
+
+        CASE
+            -- get renewal fee information for licenses over a couple of years old
+            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalend + 1, -24)
+            THEN
+                -- get renewal fee
+                SELECT f.feeid
+                  INTO t_feeid
+                  FROM api.fees f
+                 WHERE f.jobid = a_jobid
+                   AND (f.description LIKE '02 - REN%'
+                     OR f.description LIKE '22 - REN%')
+                   AND f.transactiondate BETWEEN t_start_date AND t_end_date;
+            -- for licenses issued this year get renewal fees from previous license
+            WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalend + 1, -12)
+                                        AND a_fiscalend
+            THEN
+                IF ((t_applicationtype = 'Transfer'
+                 AND api.pkg_columnquery.VALUE(t_application,
+                                               'PersonToPerson') =
+                     'N')
+                 OR (t_applicationtype = 'Change'
+                 AND api.pkg_columnquery.VALUE(t_application,
+                                               'AddPrimaryLicenseType') =
+                     'N'))
+                THEN
+                    -- get renewal fee
+                    SELECT f.feeid
+                      INTO t_feeid
+                      FROM api.fees f
+                     WHERE f.jobid = t_transferfromobjectid
+                       AND (f.description LIKE '02 - REN%'
+                         OR f.description LIKE '22 - REN%')
+                       AND f.transactiondate BETWEEN t_start_date
+                                                 AND t_end_date;
+                END IF;
+            ELSE
+                -- get renewal fee or ANN fee for licenses issued last fiscal year
+                IF ((t_applicationtype = 'Original')
+                 OR (t_applicationtype = 'Transfer'
+                 AND api.pkg_columnquery.VALUE(t_application,
+                                               'PersonToPerson') =
+                     'Y')
+                 OR (t_applicationtype = 'Change'
+                 AND api.pkg_columnquery.VALUE(t_application,
+                                               'AddPrimaryLicenseType') =
+                     'Y'))
+                THEN
+                    -- get ANN Fees
+                    SELECT f.feeid
+                      INTO t_feeid
+                      FROM api.fees f
+                     WHERE f.jobid = t_application
+                       AND SUBSTR(f.description, 1, 2) IN ('02', '22')
+                       AND (f.description LIKE '%ANN%');
+                ELSE
+                    -- get ren fees from tranfered license
+                    SELECT f.feeid
+                      INTO t_feeid
+                      FROM api.fees f
+                     WHERE f.jobid = t_transferfromobjectid
+                       AND (f.description LIKE '02 - REN%'
+                         OR f.description LIKE '22 - REN%')
+                       AND f.transactiondate BETWEEN t_start_date
+                                                 AND t_end_date;
+                END IF;
+        END CASE;
+
+        SELECT reo.objectid
+          INTO t_feeobjid
+          FROM api.registeredexternalobjects reo
+         WHERE reo.objectdefid =
+               api.pkg_configquery.objectdefidforname('o_fee')
+           AND reo.linkvalue = TO_CHAR(t_feeid);
+
+        RETURN t_feeobjid;
+    END;
+
 END;
 /
 
