@@ -15,7 +15,8 @@ IS
     --  Ver:       Date           Ticket     Comment
     --          06/08/2022 TJL  BIZ-      Initial Function Created
     --          02/17/2023 TJL            Converted to using JSON objects.
-    --   2.0    07/25/2023  TJL  BIZ-12090  Added updationg feerequired field in awf table (new field)
+    --   2.0    07/25/2023  TJL  BIZ-12090  Added updating feerequired field in awf table (new field)
+    --   2.0    07/27/2023  TJL  BIZ-12143  Added updating updateddate field in awf table (new field)
     -- ****************************************************************************
     t_results      CLOB;
     t_licensenumber VARCHAR2(10);
@@ -117,7 +118,8 @@ BEGIN
            a.awffeeamount = t_awffee,
            a.gallonage261 = t_gallonage,
            a.justification = t_justification,
-           a.feerequired = t_feerequired
+           a.feerequired = t_feerequired,
+           a.updateddate = SYSDATE
      WHERE a.renfeeid = t_renfeeid;
 
     COMMIT;
