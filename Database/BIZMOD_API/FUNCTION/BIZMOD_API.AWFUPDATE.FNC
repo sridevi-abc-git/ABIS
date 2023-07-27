@@ -119,7 +119,7 @@ BEGIN
            a.gallonage261 = t_gallonage,
            a.justification = t_justification,
            a.feerequired = t_feerequired,
-           a.updateddate = SYSDATE
+           a.submitteddate = SYSDATE
      WHERE a.renfeeid = t_renfeeid;
 
     COMMIT;
