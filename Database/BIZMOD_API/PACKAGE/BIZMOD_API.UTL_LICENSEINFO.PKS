@@ -9,7 +9,7 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --   VER:      Date           Ticket     Comment
-    --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo 
+    --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo
     -- ****************************************************************************
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
@@ -19,10 +19,10 @@ AS
 
     FUNCTION awfrequired(a_licensetypeobjectid in NUMBER)
         RETURN NUMBER;
-        
+
     FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
         RETURN NUMBER;
-                             
+
 END;
 /
 

@@ -12,6 +12,8 @@ AS
     --          07/20/2023  TJL  BIZ-11991    Added return code 7 for license that have not
     --                                        been renewed for current fiscal year.
     --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo
+    --   2.2    07/27/2023  TJL  BIZ-12070    Added error handling and handling two
+    --                                          renewal fees in same fiscal year in get_awfreninfo
     -- ****************************************************************************
 
 
@@ -300,8 +302,6 @@ AS
         END IF;
 
         RETURN t_msgno;
-    --EXCEPTION
-
     END;
 
     FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
@@ -319,7 +319,7 @@ AS
         t_issuedate := api.pkg_columnquery.datevalue(a_jobid, 'IssueDate');
 
         t_start_date := ADD_MONTHS(a_fiscalend + 1, -36);
-        t_end_date := ADD_MONTHS(a_fiscalend, -24);
+        t_end_date := ADD_MONTHS(a_fiscalend, -12);
 
         -- Older license don't have applications in ABIS
         IF (TRUNC(t_issuedate) >= ADD_MONTHS(a_fiscalend + 1, -36))
@@ -370,7 +370,7 @@ AS
             WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalend + 1, -24)
             THEN
                 -- get renewal fee
-                SELECT f.feeid
+                SELECT MIN(f.feeid)
                   INTO t_feeid
                   FROM api.fees f
                  WHERE f.jobid = a_jobid
@@ -391,7 +391,7 @@ AS
                      'N'))
                 THEN
                     -- get renewal fee
-                    SELECT f.feeid
+                    SELECT MIN(f.feeid)
                       INTO t_feeid
                       FROM api.fees f
                      WHERE f.jobid = t_transferfromobjectid
@@ -421,7 +421,7 @@ AS
                        AND (f.description LIKE '%ANN%');
                 ELSE
                     -- get ren fees from tranfered license
-                    SELECT f.feeid
+                    SELECT MIN(f.feeid)
                       INTO t_feeid
                       FROM api.fees f
                      WHERE f.jobid = t_transferfromobjectid
@@ -439,6 +439,10 @@ AS
                api.pkg_configquery.objectdefidforname('o_fee')
            AND reo.linkvalue = TO_CHAR(t_feeid);
 
+        RETURN t_feeobjid;
+        
+    EXCEPTION when no_data_found then
+        
         RETURN t_feeobjid;
     END;
 
