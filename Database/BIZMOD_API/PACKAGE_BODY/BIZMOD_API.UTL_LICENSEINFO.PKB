@@ -322,6 +322,7 @@ AS
         t_end_date := ADD_MONTHS(a_fiscalend, -12);
 
         -- Older license don't have applications in ABIS
+        --   Applications not need for licenses issued over 3 years ago
         IF (TRUNC(t_issuedate) >= ADD_MONTHS(a_fiscalend + 1, -36))
         THEN
             -- get application for this license
@@ -345,6 +346,9 @@ AS
 
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
+        ELSE
+            -- assume original for applications issued over 3 years ago
+            t_applicationtype  := 'Original';
         END IF;
 
         IF (t_applicationtype = 'Transfer')
@@ -360,9 +364,10 @@ AS
                     api.pkg_columnquery.numericvalue(
                         t_application,
                         'TransferFromLicenseObjectId')
-                AND api.pkg_columnquery.VALUE(lt.toobjectid,
-                                              'LicenseTypeCode') =
-                    '02');
+                AND REGEXP_LIKE(
+                        api.pkg_columnquery.VALUE(lt.toobjectid,
+                                                  'LicenseTypeCode'),
+                        '02|22'));
         END IF;
 
         CASE
@@ -377,30 +382,25 @@ AS
                    AND (f.description LIKE '02 - REN%'
                      OR f.description LIKE '22 - REN%')
                    AND f.transactiondate BETWEEN t_start_date AND t_end_date;
-            -- for licenses issued this year get renewal fees from previous license
+                   
+            -- for licenses issued was a transfer this year get renewal fees
+            --    from the transfer from license
             WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalend + 1, -12)
                                         AND a_fiscalend
             THEN
-                IF ((t_applicationtype = 'Transfer'
-                 AND api.pkg_columnquery.VALUE(t_application,
-                                               'PersonToPerson') =
-                     'N')
-                 OR (t_applicationtype = 'Change'
-                 AND api.pkg_columnquery.VALUE(t_application,
-                                               'AddPrimaryLicenseType') =
-                     'N'))
-                THEN
-                    -- get renewal fee
-                    SELECT MIN(f.feeid)
-                      INTO t_feeid
-                      FROM api.fees f
-                     WHERE f.jobid = t_transferfromobjectid
-                       AND (f.description LIKE '02 - REN%'
-                         OR f.description LIKE '22 - REN%')
-                       AND f.transactiondate BETWEEN t_start_date
-                                                 AND t_end_date;
-                END IF;
+                CASE
+                    WHEN (t_applicationtype = 'Transfer'
+                      AND api.pkg_columnquery.VALUE(t_application,
+                                                    'PersonToPerson') =
+                          'N')
+                    THEN
+                        t_feeid := api.pkg_columnquery.numericvalue(
+                            bizmod_api.utl_licenseinfo.get_awfreninfo(
+                                a_fiscalend => a_fiscalend,
+                                a_jobid     => t_transferfromobjectid), 'FeeId');
+                END CASE;
             ELSE
+
                 -- get renewal fee or ANN fee for licenses issued last fiscal year
                 IF ((t_applicationtype = 'Original')
                  OR (t_applicationtype = 'Transfer'
@@ -420,15 +420,23 @@ AS
                        AND SUBSTR(f.description, 1, 2) IN ('02', '22')
                        AND (f.description LIKE '%ANN%');
                 ELSE
-                    -- get ren fees from tranfered license
-                    SELECT MIN(f.feeid)
-                      INTO t_feeid
-                      FROM api.fees f
-                     WHERE f.jobid = t_transferfromobjectid
-                       AND (f.description LIKE '02 - REN%'
-                         OR f.description LIKE '22 - REN%')
-                       AND f.transactiondate BETWEEN t_start_date
-                                                 AND t_end_date;
+                    IF (t_applicationtype = 'Transfer')
+                    THEN
+                        t_feeid := api.pkg_columnquery.numericvalue(
+                            bizmod_api.utl_licenseinfo.get_awfreninfo(
+                                a_fiscalend => a_fiscalend,
+                                a_jobid     => t_transferfromobjectid), 'FeeId');
+                    ELSE
+                        -- get ren fees from application
+                        SELECT MIN(f.feeid)
+                          INTO t_feeid
+                          FROM api.fees f
+                         WHERE f.jobid = a_jobid
+                           AND (f.description LIKE '02 - REN%'
+                             OR f.description LIKE '22 - REN%')
+                           AND f.transactiondate BETWEEN t_start_date
+                                                     AND t_end_date;
+                    END IF;
                 END IF;
         END CASE;
 
@@ -440,12 +448,11 @@ AS
            AND reo.linkvalue = TO_CHAR(t_feeid);
 
         RETURN t_feeobjid;
-        
-    EXCEPTION when no_data_found then
-        
-        RETURN t_feeobjid;
+    EXCEPTION
+        WHEN NO_DATA_FOUND
+        THEN
+            RETURN t_feeobjid;
     END;
-
 END;
 /
 
