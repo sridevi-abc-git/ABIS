@@ -17,6 +17,7 @@ IS
     --          02/17/2023 TJL            Converted to using JSON objects.
     --   2.0    07/25/2023  TJL  BIZ-12090  Added updating feerequired field in awf table (new field)
     --   2.0    07/27/2023  TJL  BIZ-12143  Added updating updateddate field in awf table (new field)
+    --   2.1    07/31/2023  TJL  BIZ-12090  Added returning 'FEEREQUIRED' in return packet
     -- ****************************************************************************
     t_results      CLOB;
     t_licensenumber VARCHAR2(10);
@@ -130,7 +131,8 @@ BEGIN
             'PACKET_TYPE' VALUE 'AWFUPDATERESULTS',
             'DATA' VALUE
                 json_object('LICENSENUMBER' VALUE t_licensenumber,
-                            'AMOUNTOWED' VALUE t_awffee));
+                            'AMOUNTOWED' VALUE t_awffee,
+                            'FEEREQUIRED' VALUE t_feerequired));
     RETURN t_results;
 EXCEPTION
     WHEN OTHERS
