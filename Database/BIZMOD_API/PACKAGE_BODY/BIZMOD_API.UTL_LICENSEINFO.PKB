@@ -14,6 +14,8 @@ AS
     --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo
     --   2.2    07/27/2023  TJL  BIZ-12070    Added error handling and handling two
     --                                          renewal fees in same fiscal year in get_awfreninfo
+    --   2.3    08/02/2023  TJL  BIZ-12220    Corrected bug in awfrequired function in returning
+    --                                          Y for license type 22 after payment
     -- ****************************************************************************
 
 
@@ -177,8 +179,7 @@ AS
                                     api.pkg_columnquery.VALUE(
                                         a_licensetypeobjectid,
                                         'LicenseNumber')
-                                AND p.licensetypecode = '02'
-                                AND p.description LIKE '%AWF%'
+                                AND p.licensetypecode IN ('02', '22')
                                 AND p.description LIKE '%AWF%'
                                 AND TRUNC(p.createddate) BETWEEN t_start_date
                                                              AND t_end_date));
@@ -258,10 +259,11 @@ AS
                                         api.pkg_columnquery.numericvalue(
                                             t_application,
                                             'TransferFromLicenseObjectId')
-                                    AND api.pkg_columnquery.VALUE(
-                                            lt.toobjectid,
-                                            'LicenseTypeCode') =
-                                        '02');
+                               AND REGEXP_LIKE(
+                                       api.pkg_columnquery.VALUE(
+                                           lt.toobjectid,
+                                           'LicenseTypeCode'),
+                                       '02|22'));
 
                                 --t_transferfromobjectid := api.pkg_columnquery.numericvalue(
                                 --                                    t_application,
@@ -290,7 +292,7 @@ AS
                                                api.pkg_columnquery.VALUE(
                                                    t_transferfromobjectid,
                                                    'LicenseNumber')
-                                           AND p.licensetypecode = '02'
+                                           AND p.licensetypecode IN ('02', '22')
                                            AND TRUNC(p.createddate) BETWEEN t_start_date
                                                                         AND t_end_date
                                            AND p.description LIKE '%AWF%');
