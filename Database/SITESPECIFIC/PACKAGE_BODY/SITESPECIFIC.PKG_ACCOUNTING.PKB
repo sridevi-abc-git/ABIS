@@ -16,7 +16,8 @@ AS
     -- 09/21/2021 PK          WO-25903 - Added EChecks as transmittal type BizMod eCheck: Transmittal Type  
     -- 09/21/2021 PK          WO-25904 -Added eCheck to the Deposit Type  
     -- 10/26/2022 PK          Changed DB name to ABISP1 after upgrade on libne   IF (UPPER(sys_context('USERENV', 'instance_name')) != 'ABCPROD') THEN   
-    -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes       
+    -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes   
+    -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)    
     -- **************************************************************************
 
 
@@ -1773,7 +1774,7 @@ AS
                                            'R64B', lt.objectid,
                                            'PEND', lt.objectid,
                                            'ISSUPD', lt.objectid,
-                                           (SELECT MAX(lt.objectid)
+                                            (SELECT nvl  (lt.objectid ,null) --MAX(lt.objectid)   -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
                                               FROM query.j_licensetype  lt
                                                    JOIN
                                                    query.r_licenselicensetype
@@ -1783,10 +1784,13 @@ AS
                                                    JOIN query.j_license l
                                                        ON l.objectid =
                                                           rllt.licensejobid
+                                                     join api.objects o on o.OBJECTID = lt.OBJECTID       
                                              WHERE l.externalfilenum =
                                                    t_licensenum
                                                AND lt.dup_licensetypecode =
-                                                   t_licensetypecode))
+                                                   t_licensetypecode
+                                                   order by o.logicaltransactionid desc
+                                                    fetch first 1 row only)) --MAX(lt.objectid)   -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
                                            obj_id
                                   FROM query.j_licensetype  lt
                                        JOIN query.r_licenselicensetype rllt
@@ -1866,8 +1870,7 @@ AS
                                                            'R64B', lt2.objectid,
                                                            'PEND', lt2.objectid,
                                                            'ISSUPD', lt2.objectid,
-                                                           (SELECT MAX(
-                                                                       lt2.objectid)
+                                                          (SELECT nvl  (lt2.objectid ,null) --MAX(lt2.objectid)  -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
                                                               FROM query.j_licensetype
                                                                    lt2
                                                                    JOIN
@@ -1890,10 +1893,13 @@ AS
                                                                    l
                                                                        ON l.objectid =
                                                                           rllt.licensejobid
+                                                                    join api.objects o on o.OBJECTID = lt2.OBJECTID
                                                              WHERE l.externalfilenum =
                                                                    t_licensenum
                                                                AND ltc.licensetypecode =
-                                                                   t_licensetypecode))
+                                                                   t_licensetypecode 
+                                                                  order by o.logicaltransactionid desc                                   
+                                                                  fetch first 1 row only)) -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
                                                            obj_id
                                                   FROM query.j_licensetype
                                                        lt2
