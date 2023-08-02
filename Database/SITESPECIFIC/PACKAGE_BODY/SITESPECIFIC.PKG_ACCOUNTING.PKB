@@ -3206,7 +3206,7 @@ AS
         --Find the Max object id of the payment stati on the payment transactions of the voided payment,
         --used to create the new stati on the the new payment transactions
    -- 08/02/2021  PK          Reverted back changes done on 05/05/2023 - modify payment because of refund batch error in prod WO  32802  
-   Begin
+   
           SELECT MAX(pspt.paymentstatusobjectid)      --APatterson: PIP Task 8.5
           INTO t_maxpaymentstatusobjid
           FROM api.paymenttransactions  pt
