@@ -17,7 +17,8 @@ AS
     -- 09/21/2021 PK          WO-25904 -Added eCheck to the Deposit Type  
     -- 10/26/2022 PK          Changed DB name to ABISP1 after upgrade on libne   IF (UPPER(sys_context('USERENV', 'instance_name')) != 'ABCPROD') THEN   
     -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes   
-    -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)    
+    -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid) 
+    -- 08/02/2021  PK          Reverted back changes done on 05/05/2023 - modify payment because of refund batch error in prod WO  32802 
     -- **************************************************************************
 
 
@@ -3204,9 +3205,9 @@ AS
 
         --Find the Max object id of the payment stati on the payment transactions of the voided payment,
         --used to create the new stati on the the new payment transactions
-   -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes  
+   -- 08/02/2021  PK          Reverted back changes done on 05/05/2023 - modify payment because of refund batch error in prod WO  32802  
    Begin
-        SELECT pspt.paymentstatusobjectid     --APatterson: PIP Task 8.5
+          SELECT MAX(pspt.paymentstatusobjectid)      --APatterson: PIP Task 8.5
           INTO t_maxpaymentstatusobjid
           FROM api.paymenttransactions  pt
                JOIN api.registeredexternalobjects reo   --TAyers: PIP Task 8.5
@@ -3214,16 +3215,7 @@ AS
                   AND reo.objectdefid = t_paytransobjectdefid
                JOIN query.r_paymentstatuspaymenttrans pspt
                    ON pspt.paymenttransactionobjectid = reo.objectid
-                   join query.o_Paymentstatus ps
-                 on ps.ObjectId = pspt.PaymentStatusObjectId
-         WHERE pt.paymentid =  t_voidpaymentid
-          order by ps.StatusDate desc
-           fetch first 1 row only ;
-    exception when no_data_found then
-                            pkg_debug.putline('    Payment Status not found, setting to Null');
-                            t_maxpaymentstatusobjid := null;
-                          end;
---              END of changes 05/05/2023 PK         
+         WHERE pt.paymentid = t_voidpaymentid;   
 
 
         -- Set income code to 'V' on payment transactions
