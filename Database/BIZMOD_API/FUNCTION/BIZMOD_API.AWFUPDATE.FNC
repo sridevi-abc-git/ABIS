@@ -87,6 +87,11 @@ BEGIN
             ELSE 0
         END;
 
+    IF (t_additionalmilliongallons > 99)
+    THEN
+        RAISE VALUE_ERROR;
+    END IF;
+
     -- get current fee info
     SELECT a.renactivity,
            a.licensetypecode,
