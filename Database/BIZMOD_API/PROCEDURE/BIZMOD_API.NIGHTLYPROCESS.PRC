@@ -8,8 +8,9 @@ IS
     --
     -- History:
     -------------------------------------------------------------------------------
-    --    Date           Ticket     Comment
-    --  05/31/2023 TJL            Initial Procedure Created
+    --              Date           Ticket     Comment
+    --          05/31/2023  TJL             Initial Procedure Created
+    --   2.0    08/01/2023  TJL             Corrected bug in updating AWF completed flag
     -- ****************************************************************************
     t_refunded     VARCHAR2(1);
     t_feetransfer  NUMBER;
@@ -214,7 +215,7 @@ BEGIN
                    AND f.transactiondate > a.createddate
                    AND f.description LIKE '%AWF%')
      WHERE a.awffeeid IS NULL
-       AND a.awffeeamount <= 0;
+       AND a.awffeeamount >= 0;
 
     IF (SQL%ROWCOUNT > 0)
     THEN
@@ -263,50 +264,50 @@ BEGIN
            WHERE ft.feeid = rec.renfeeid
         GROUP BY ft.feeid;
 
-        IF (t_refunded IS NULL)
-        THEN
-            SELECT MAX(r.fromobjectid)
-              INTO t_feetransfer
-              FROM api.relationships r
-             WHERE r.endpointid =
-                   api.pkg_configquery.endpointidforname('p_paymentTransfer',
-                                                         'Fee')
-               AND r.toobjectid = rec.renfeeobjid;
-
-            -- check if payment was transfer out to another license
-            --  no fee transfer but transfer out
-            IF (t_feetransfer IS NULL)
-            THEN
-                FOR pt IN (SELECT ft.*
-                             FROM api.feetransactions ft
-                            WHERE rec.renfeeid = ft.feeid)
-                LOOP
-                    SELECT MAX(r.fromobjectid)
-                      INTO t_paymenttransfer
-                      FROM api.relationships r
-                     WHERE r.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'p_paymentTransfer',
-                               'PaymentTransaction')
-                       AND r.toobjectid =
-                           api.pkg_simplesearch.objectbyindex(
-                               'o_PaymentTransactions',
-                               'TransactionId',
-                               pt.transactionid);
-
-                    t_refunded :=
-                        CASE
-                            WHEN api.pkg_columnquery.VALUE(t_paymenttransfer,
-                                                           'Outcome') =
-                                 'Transfer'
-                            THEN
-                                'Y'
-                            ELSE
-                                t_refunded
-                        END;
-                END LOOP;
-            END IF;
-        END IF;
+--        IF (t_refunded IS NULL)
+--        THEN
+--            SELECT MAX(r.fromobjectid)
+--              INTO t_feetransfer
+--              FROM api.relationships r
+--             WHERE r.endpointid =
+--                   api.pkg_configquery.endpointidforname('p_paymentTransfer',
+--                                                         'Fee')
+--               AND r.toobjectid = rec.renfeeobjid;
+--
+--            -- check if payment was transfer out to another license
+--            --  no fee transfer but transfer out
+--            IF (t_feetransfer IS NULL)
+--            THEN
+--                FOR pt IN (SELECT ft.*
+--                             FROM api.feetransactions ft
+--                            WHERE rec.renfeeid = ft.feeid)
+--                LOOP
+--                    SELECT MAX(r.fromobjectid)
+--                      INTO t_paymenttransfer
+--                      FROM api.relationships r
+--                     WHERE r.endpointid =
+--                           api.pkg_configquery.endpointidforname(
+--                               'p_paymentTransfer',
+--                               'PaymentTransaction')
+--                       AND r.toobjectid =
+--                           api.pkg_simplesearch.objectbyindex(
+--                               'o_PaymentTransactions',
+--                               'TransactionId',
+--                               pt.transactionid);
+--
+--                    t_refunded :=
+--                        CASE
+--                            WHEN api.pkg_columnquery.VALUE(t_paymenttransfer,
+--                                                           'Outcome') =
+--                                 'Transfer'
+--                            THEN
+--                                'Y'
+--                            ELSE
+--                                t_refunded
+--                        END;
+--                END LOOP;
+--            END IF;
+--        END IF;
 
         IF (NVL(t_refunded, 'N') = 'Y')
         THEN
