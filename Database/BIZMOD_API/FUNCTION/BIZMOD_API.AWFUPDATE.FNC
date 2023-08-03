@@ -21,7 +21,7 @@ IS
     -- ****************************************************************************
     t_results      CLOB;
     t_licensenumber VARCHAR2(10);
-    t_licensetypejobid   number;
+    t_licensetypejobid NUMBER;
     t_renfeeid     NUMBER;
     t_gallonage    NUMBER;
     t_amount       NUMBER;
@@ -36,22 +36,27 @@ IS
     t_additionalmilliongallons NUMBER;
     t_awffee       NUMBER;
     t_justification VARCHAR2(1000);
-    t_adjustedamount number;
+    t_adjustedamount NUMBER;
     t_feerequired  NUMBER;
-    t_paidamount NUMBER;
+    t_paidamount   NUMBER;
 
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000);
-    
 -- ****************************************************************************
 -- ****************************************************************************
 --  Main Function Body
 -- ****************************************************************************
 -- ****************************************************************************
 BEGIN
-    SELECT feeid, gallonage, licensenumber, justification
-      INTO t_renfeeid, t_gallonage, t_licensenumber, t_justification
+    SELECT feeid,
+           gallonage,
+           licensenumber,
+           justification
+      INTO t_renfeeid,
+           t_gallonage,
+           t_licensenumber,
+           t_justification
       FROM JSON_TABLE(
                a_packet,
                '$'
@@ -63,7 +68,8 @@ BEGIN
                            licensenumber VARCHAR2(1000)
                                PATH '$.LICENSENUMBER',
                            gallonage NUMBER PATH '$.GALLONAGE',
-                           justification VARCHAR2(1000) PATH '$.JUSTIFICATION')));
+                           justification VARCHAR2(1000)
+                               PATH '$.JUSTIFICATION')));
 
     -- from gallonage entered figure out codes
     t_gallonagerange :=
@@ -75,7 +81,11 @@ BEGIN
             ELSE '200K TO 1M'
         END;
 
-    t_additionalmilliongallons := FLOOR((t_gallonage - 1) / 1000000);
+    t_additionalmilliongallons :=
+        CASE
+            WHEN t_gallonage > 0 THEN FLOOR((t_gallonage - 1) / 1000000)
+            ELSE 0
+        END;
 
     -- get current fee info
     SELECT a.renactivity,
@@ -95,7 +105,7 @@ BEGIN
     sitespecific."PKG_FEES".getltfeeamount(
         a_jobid     => NULL,
         a_effectivedate => t_awfdate,
-        a_feeactivitytype => substr(t_feeactivitytype, 1, 3),
+        a_feeactivitytype => SUBSTR(t_feeactivitytype, 1, 3),
         a_otherfeecode => NULL,
         a_ltcode    => t_ltcode,
         a_gallonagerange => t_gallonagerange,
