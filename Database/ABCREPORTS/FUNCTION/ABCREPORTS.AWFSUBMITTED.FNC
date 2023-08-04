@@ -4,26 +4,20 @@ CREATE OR REPLACE FUNCTION ABCREPORTS.awfsubmitted(
     RETURN BLOB
 IS
     /**************************************************************************
-        File:
+        File:   ABCREPORTS.AWFSUBMITTED.FNC
 
-        Description:    This file contains the script to load a temporary table
-                        with payment transactions that should have been earned
-                        but were not earned.  This script only load payment
-                        transactions that are type 'I' and 'C'.  Transaction
-                        types 'R' and 'V' are not loaded.
-
-                        From this table customized un-earn reports can be
-                        generated for business to validate which payment should
-                        be earned.
-
+        Description:
+        
+     History:
+    -----------------------------------------------------------------------------
+      Ver:       Date           Ticket        Comment
+       1.0    08/04/2023 TJL  BIZ-12143   Initial Function Created
     **************************************************************************/
     lv_status_msg  VARCHAR2(8096);
     lblob_csv      BLOB;
     ld_start       DATE;
     ld_end         DATE;
 BEGIN
-    DELETE feesnotearned_t;
-
     DBMS_LOB.createtemporary(lblob_csv, TRUE, DBMS_LOB.call);
 
     ld_start := TO_DATE(p_parms.get_value('START_DATE'), 'MM/DD/YYYY');
@@ -37,7 +31,7 @@ BEGIN
                      || CHR(34)
                      || CHR(44)
                      || CHR(34)
-                     || a.licensetypecode
+                     || to_char(a.licensetypecode, '00')
                      || CHR(34)
                      || CHR(44)
                      || CHR(34)
