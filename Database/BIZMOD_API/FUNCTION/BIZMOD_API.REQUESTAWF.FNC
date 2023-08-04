@@ -171,7 +171,7 @@ BEGIN
             CASE t_msgno
                 WHEN 7 THEN 'License has not been renewed for this year.'
                 WHEN 8 THEN 'License is a Branch License.'
-                WHEN 9 THEN 'AFW Fee already paid for this renewal year.'
+                WHEN 9 THEN 'AWF Fee already paid for this renewal year.'
                 WHEN 10 THEN 'License was issued this licensing period.'
                 WHEN 14 THEN 'Renewal/Annual Fee Not found for license number.'
                 WHEN 0 THEN 'Application Annual Fee Not Found'

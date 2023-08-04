@@ -18,6 +18,7 @@ IS
     IS
         t_feetbl       fee_tbl;
     BEGIN
+    
         SELECT fee_rec(
                    licensetypejobid, -- jobid
                    'P', -- primarysecondary
@@ -72,7 +73,7 @@ IS
                LEFT OUTER JOIN e_payments_t p
                    ON (p.licensenumber = a.licensenumber
                    AND p.licensetypecode = a.licensetypecode
-                   AND p.createddate >= a.awfdate
+                   AND p.createddate > add_months(a.expirationdate, -12) -->= a.awfdate
                    AND p.description = a.description)
          WHERE a.licensetypejobid = a_licensetypejobid
            AND a.awffeeamount > 0
@@ -80,12 +81,12 @@ IS
                    (SELECT 1
                       FROM api.fees f
                      WHERE f.jobid = a.licensetypejobid
-                       AND f.transactiondate > a.awfdate
+                       AND f.transactiondate > add_months(a.expirationdate, -12) -- a.awfdate
                        AND f.description LIKE '%AWF%')
            AND p.depositbatchid IS NULL;
 
-        --        DBMS_OUTPUT.put_line('AWF count: ' || t_feetbl.COUNT);
-        --        DBMS_OUTPUT.put_line('awf::totalowing: ' || t_feetbl(1).totalowing);
+                DBMS_OUTPUT.put_line(a_licensetypejobid || '  AWF count: ' || t_feetbl.COUNT);
+--                DBMS_OUTPUT.put_line('awf::totalowing: ' || t_feetbl(1).totalowing);
         RETURN t_feetbl;
     END;
 
