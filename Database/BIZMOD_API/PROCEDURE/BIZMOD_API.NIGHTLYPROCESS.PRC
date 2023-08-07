@@ -218,9 +218,13 @@ BEGIN
                      WHERE f.jobid = a.licensetypejobid
                        AND f.transactiondate > a.createddate
                        AND f.description LIKE '%AWF%'
-                       and rownum = 1)
+                       and ROWNUM = 1)
          WHERE a.awffeeid IS NULL
-           AND a.awffeeamount >= 0;
+           AND ((a.awffeeamount = 0)
+                 OR (a.awffeeamount > 0
+                    AND 
+                     a.paymentbatch is not null)
+                );
 
         IF (SQL%ROWCOUNT > 0)
         THEN
@@ -231,9 +235,24 @@ BEGIN
                 || CHR(13);
         END IF;
 
+        COMMIT;
+        
         -- ********************************************************************
         --  check to see if AWF Refund has been completed
         -- ********************************************************************
+        UPDATE bizmod_api.awf_t a
+           SET a.awffeeid =
+                   (SELECT f.feeid
+                      FROM api.fees f
+                     WHERE f.jobid = a.licensetypejobid
+                       AND f.transactiondate > a.createddate
+                       AND f.description LIKE '%AWF%'
+                       and ROWNUM = 1)
+         WHERE a.awffeeid IS NULL
+           AND a.awffeeamount < 0;
+        
+        COMMIT;
+        
         FOR rec IN (SELECT a.renfeeid, a.renfeeobjid, ROWID id
                       FROM bizmod_api.awf_t a
                      WHERE a.awffeeamount < 0
@@ -269,51 +288,6 @@ BEGIN
                                  'o_Payment'))
                WHERE ft.feeid = rec.renfeeid
             GROUP BY ft.feeid;
-
-            --        IF (t_refunded IS NULL)
-            --        THEN
-            --            SELECT MAX(r.fromobjectid)
-            --              INTO t_feetransfer
-            --              FROM api.relationships r
-            --             WHERE r.endpointid =
-            --                   api.pkg_configquery.endpointidforname('p_paymentTransfer',
-            --                                                         'Fee')
-            --               AND r.toobjectid = rec.renfeeobjid;
-            --
-            --            -- check if payment was transfer out to another license
-            --            --  no fee transfer but transfer out
-            --            IF (t_feetransfer IS NULL)
-            --            THEN
-            --                FOR pt IN (SELECT ft.*
-            --                             FROM api.feetransactions ft
-            --                            WHERE rec.renfeeid = ft.feeid)
-            --                LOOP
-            --                    SELECT MAX(r.fromobjectid)
-            --                      INTO t_paymenttransfer
-            --                      FROM api.relationships r
-            --                     WHERE r.endpointid =
-            --                           api.pkg_configquery.endpointidforname(
-            --                               'p_paymentTransfer',
-            --                               'PaymentTransaction')
-            --                       AND r.toobjectid =
-            --                           api.pkg_simplesearch.objectbyindex(
-            --                               'o_PaymentTransactions',
-            --                               'TransactionId',
-            --                               pt.transactionid);
-            --
-            --                    t_refunded :=
-            --                        CASE
-            --                            WHEN api.pkg_columnquery.VALUE(t_paymenttransfer,
-            --                                                           'Outcome') =
-            --                                 'Transfer'
-            --                            THEN
-            --                                'Y'
-            --                            ELSE
-            --                                t_refunded
-            --                        END;
-            --                END LOOP;
-            --            END IF;
-            --        END IF;
 
             IF (NVL(t_refunded, 'N') = 'Y')
             THEN
