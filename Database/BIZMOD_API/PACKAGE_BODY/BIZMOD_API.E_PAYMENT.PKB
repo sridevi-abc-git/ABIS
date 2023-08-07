@@ -914,17 +914,18 @@ AS
                        ON (a.licensenumber = pp.licensenumber)
              WHERE a.completed IS NULL
                AND a.paymentbatch IS NULL
+               AND a.submitteddate IS NOT NULL
                AND ((t_loop = 2
                  AND a.awffeeamount <= 0) -- AWF batch for no change and refund
                  OR (t_loop = 1
-                 AND a.awffeeamount > 0) -- AWF batch for payments
+                 AND a.awffeeamount > 0 -- AWF batch for payments
                AND EXISTS
                        (SELECT 1
                           FROM bizmod_api.e_payments_t p
                          WHERE pp.licensenumber = p.licensenumber
                            AND pp.confirmationnumber = p.confirmationid
                            AND pp.paymenttype = 'Primary'
-                           AND p.paymentobjectid IS NULL));
+                           AND p.paymentobjectid IS NULL)));
 
             DBMS_OUTPUT.put_line(t_loop || '  to process ' || t_awf.COUNT);
 
