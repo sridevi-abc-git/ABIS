@@ -84,7 +84,7 @@ BEGIN
                          AND a.licensetypecode = p.licensetypecode
                          AND a.description = p.description)
                WHERE a.submitteddate IS NOT NULL
-                 AND a.submitteddate BETWEEN ld_start AND ld_end
+                 AND trunc(a.submitteddate) BETWEEN ld_start AND ld_end
             ORDER BY CASE
                          WHEN a.awffeeamount = 0 THEN 1
                          WHEN a.awffeeamount > 0 THEN 2
