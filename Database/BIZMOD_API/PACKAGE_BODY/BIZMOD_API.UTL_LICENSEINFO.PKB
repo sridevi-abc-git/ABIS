@@ -302,9 +302,9 @@ AS
                         t_feeobjid :=
                             bizmod_api.utl_licenseinfo.get_awfreninfo(
                                 t_end_date,
-                                t_feeobjid);
+                                a_licensetypeobjectid);
 
-                        IF (t_feeobjid IS NOT NULL)
+                       IF (t_feeobjid IS NOT NULL)
                         THEN
                             t_feeid :=
                                 api.pkg_columnquery.numericvalue(t_feeobjid,
