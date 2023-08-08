@@ -24,13 +24,15 @@ IS
     --                                         renewal is returned
     --   2.1    07/25/2023 TJL  BIZ-12090   Added FeeRequired and Justification fields to return packet
     --   2.2    07/27/2023 TJL  BIZ-12070   Added error handling for renewal fee not found
+    --   3.0    08/08/2023 TJL  BIZ-12019   Added checking for 02 and 22 active on same license number
     -- ****************************************************************************
 
     -- ****************************************************************************
     --
     -- ****************************************************************************
     t_objectid     api.pkg_definition.udt_id;
-    t_licensenumber VARCHAR(10);
+    t_licensenumber VARCHAR2(10);
+    t_licensetypecode VARCHAR2(3);
     t_expiration   DATE;
     t_fiscal_end   DATE
         := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
@@ -44,33 +46,66 @@ IS
     t_paidamount   NUMBER;
     l_data         json_object_t;
     l_obj          json_object_t;
+    t_active       NUMBER := 0;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000 BYTE);
 BEGIN
-    -- get license number from request packet
-    SELECT json_value(a_packet, '$.*.LICENSENUMBER')
-      INTO t_licensenumber
-      FROM DUAL;
+    SELECT licensenumber, licensetypecode
+      INTO t_licensenumber, t_licensetypecode
+      FROM JSON_TABLE(
+               a_packet,
+               '$'
+               COLUMNS(
+                   packet_type VARCHAR2(1000) PATH '$.PACKET_TYPE',
+                   NESTED PATH '$.DATA[*]'
+                       COLUMNS(
+                           licensenumber VARCHAR2(1000)
+                               PATH '$.LICENSENUMBER',
+                           licensetypecode VARCHAR2(3)
+                               PATH '$.LICENSETYPECODE')));
 
-    WITH
-        licensetypes
-        AS
-            (SELECT o.objectid,
-                    api.pkg_columnquery.VALUE(o.objectid, 'LicenseTypeCode')    licensetypecode
-               FROM TABLE(
-                        CAST(
-                            api.pkg_simplesearch.castableobjectsbyindex(
-                                a_objectdefname => 'j_LicenseType',
-                                a_columnname => 'dup_LicenseExternalFileNum',
-                                a_value     => t_licensenumber)
-                                AS api.udt_objectlist)) o)
-    SELECT objectid
-      INTO t_objectid
-      FROM licensetypes lt
-     WHERE lt.licensetypecode IN ('02', '22');
+    FOR rec
+        IN (WITH
+                licensetypes
+                AS
+                    (SELECT o.objectid,
+                            api.pkg_columnquery.VALUE(o.objectid,
+                                                      'LicenseTypeCode')    licensetypecode
+                       FROM TABLE(
+                                CAST(
+                                    api.pkg_simplesearch.castableobjectsbyindex(
+                                        a_objectdefname => 'j_LicenseType',
+                                        a_columnname =>
+                                            'dup_LicenseExternalFileNum',
+                                        a_value     => t_licensenumber)
+                                        AS api.udt_objectlist)) o)
+            SELECT objectid
+              FROM licensetypes lt
+             WHERE lt.licensetypecode IN ('02', '22')
+               AND lt.licensetypecode =
+                   NVL(t_licensetypecode, lt.licensetypecode))
+    LOOP
+        t_msgno := bizmod_api.utl_licenseinfo.awfrequired(rec.objectid);
 
-    t_msgno := bizmod_api.utl_licenseinfo.awfrequired(t_objectid);
+        IF (t_msgno IS NULL)
+        THEN
+            IF (t_active = 0)
+            THEN
+                t_objectid := rec.objectid;
+                t_active := 1;
+            ELSE
+                t_msgno := 15; -- two active records found
+            END IF;
+        ELSE
+            IF (t_active = 0)
+            THEN
+                CONTINUE;
+            ELSE
+                t_msgno := NULL; -- allow processing of the first active record
+            END IF;
+        END IF;
+    END LOOP;
 
     IF (t_msgno IS NULL)
     THEN
@@ -82,56 +117,61 @@ BEGIN
                 a_fiscalend => t_fiscal_end,
                 a_jobid     => t_objectid);
 
-        if (t_feeobjid is not null) then
-        t_renfeeid := api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
-        t_awfdate :=
-            api.pkg_columnquery.datevalue(t_feeobjid, 'TransactionDate');
-        t_renfeeactivity :=
-            REGEXP_SUBSTR(
-                api.pkg_columnquery.VALUE(t_feeobjid,
-                                          'FeeScheduleDescription'),
-                '[^ ]+',
-                1,
-                3);
-        t_paidamount :=
-              api.pkg_columnquery.numericvalue(t_feeobjid, 'adjustedamount')
-            + api.pkg_columnquery.numericvalue(t_feeobjid, 'paidamount');
-
-
-        MERGE INTO bizmod_api.awf_t a
-             USING (SELECT t_renfeeid renfeeid FROM DUAL) a2
-                ON (a.renfeeid = a2.renfeeid)
-        WHEN NOT MATCHED
+        IF (t_feeobjid IS NOT NULL)
         THEN
-            INSERT     (renfeeid,
-                        renfeeobjid,
-                        licensenumber,
-                        licensetypejobid,
-                        licensetypecode,
-                        expirationdate,
-                        awfdate,
-                        renactivity,
-                        currgallonage,
-                        curraddionalgallonage,
-                        renewalamountpaid)
-                VALUES (
-                    t_renfeeid,
-                    t_feeobjid,
-                    t_licensenumber,
-                    t_objectid,
-                    api.pkg_columnquery.VALUE(t_objectid, 'LicenseTypeCode'),
-                    t_expiration,
-                    t_awfdate,
-                    t_renfeeactivity,
-                    api.pkg_columnquery.VALUE(t_objectid, 'GallonageRange'),
-                    api.pkg_columnquery.numericvalue(
-                        t_objectid,
-                        'AdditionalMillionGallons'),
-                    t_paidamount);
+            t_renfeeid :=
+                api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
+            t_awfdate :=
+                api.pkg_columnquery.datevalue(t_feeobjid, 'TransactionDate');
+            t_renfeeactivity :=
+                REGEXP_SUBSTR(
+                    api.pkg_columnquery.VALUE(t_feeobjid,
+                                              'FeeScheduleDescription'),
+                    '[^ ]+',
+                    1,
+                    3);
+            t_paidamount :=
+                  api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                   'adjustedamount')
+                + api.pkg_columnquery.numericvalue(t_feeobjid, 'paidamount');
 
-        COMMIT;
-        else
-            t_msgno := 14;
+
+            MERGE INTO bizmod_api.awf_t a
+                 USING (SELECT t_renfeeid renfeeid FROM DUAL) a2
+                    ON (a.renfeeid = a2.renfeeid)
+            WHEN NOT MATCHED
+            THEN
+                INSERT     (renfeeid,
+                            renfeeobjid,
+                            licensenumber,
+                            licensetypejobid,
+                            licensetypecode,
+                            expirationdate,
+                            awfdate,
+                            renactivity,
+                            currgallonage,
+                            curraddionalgallonage,
+                            renewalamountpaid)
+                    VALUES (
+                        t_renfeeid,
+                        t_feeobjid,
+                        t_licensenumber,
+                        t_objectid,
+                        api.pkg_columnquery.VALUE(t_objectid,
+                                                  'LicenseTypeCode'),
+                        t_expiration,
+                        t_awfdate,
+                        t_renfeeactivity,
+                        api.pkg_columnquery.VALUE(t_objectid,
+                                                  'GallonageRange'),
+                        api.pkg_columnquery.numericvalue(
+                            t_objectid,
+                            'AdditionalMillionGallons'),
+                        t_paidamount);
+
+            COMMIT;
+        ELSE
+            t_msgno := 16; -- no renewal/annual payment fee record found
         END IF;
     END IF;
 
@@ -169,13 +209,26 @@ BEGIN
         l_data.put(
             'MSG',
             CASE t_msgno
-                WHEN 7 THEN 'License has not been renewed for this year.'
-                WHEN 8 THEN 'License is a Branch License.'
-                WHEN 9 THEN 'AWF Fee already paid for this renewal year.'
-                WHEN 10 THEN 'License was issued this licensing period.'
-                WHEN 14 THEN 'Renewal/Annual Fee Not found for license number.'
-                WHEN 0 THEN 'Application Annual Fee Not Found'
-                ELSE 'Unknown error'
+                WHEN 7
+                THEN
+                    'License has not been renewed for this year.'
+                WHEN 8
+                THEN
+                    'License is a Branch License.'
+                WHEN 9
+                THEN
+                    'AWF Fee already paid for this renewal year.'
+                WHEN 10
+                THEN
+                    'License was issued this licensing period.'
+                WHEN 16
+                THEN
+                    'Renewal/Annual Fee Not found for license number.'
+                WHEN 15
+                THEN
+                    'Two active license types (02,22) found for license'
+                ELSE
+                    'Unknown error'
             END);
     ELSE
         SELECT json_object(
@@ -202,8 +255,10 @@ BEGIN
         l_data.put('INFO',
                    TREAT(json_object_t.parse(t_awf) AS json_object_t));
     END IF;
-
+    
+    bizmod_api.utl_licenseinfo.clean(l_obj);
     RETURN l_obj.TO_CLOB;
+    
 EXCEPTION
     WHEN NO_DATA_FOUND
     THEN
