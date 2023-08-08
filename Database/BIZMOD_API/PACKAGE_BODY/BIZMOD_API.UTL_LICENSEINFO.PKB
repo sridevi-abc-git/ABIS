@@ -16,6 +16,7 @@ AS
     --                                          renewal fees in same fiscal year in get_awfreninfo
     --   2.3    08/02/2023  TJL  BIZ-12220    Corrected bug in awfrequired function in returning
     --                                          Y for license type 22 after payment
+    --   3.0    08/07/2023  TJL  BIZ-11961    Added checking for CVR payment
     -- ****************************************************************************
 
 
@@ -128,6 +129,8 @@ AS
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
+        t_feeobjid     NUMBER;
+        t_feeid        NUMBER;
         t_msgno        NUMBER;
     BEGIN
         IF (api.pkg_columnquery.VALUE(a_licensetypeobjectid,
@@ -259,19 +262,11 @@ AS
                                         api.pkg_columnquery.numericvalue(
                                             t_application,
                                             'TransferFromLicenseObjectId')
-                               AND REGEXP_LIKE(
-                                       api.pkg_columnquery.VALUE(
-                                           lt.toobjectid,
-                                           'LicenseTypeCode'),
-                                       '02|22'));
-
-                                --t_transferfromobjectid := api.pkg_columnquery.numericvalue(
-                                --                                    t_application,
-                                --                                    'TransferFromLicenseObjectId');
-
-                                --                        DBMS_OUTPUT.put_line(
-                                --                            'transfer: ' || t_transferfromobjectid);
-
+                                    AND REGEXP_LIKE(
+                                            api.pkg_columnquery.VALUE(
+                                                lt.toobjectid,
+                                                'LicenseTypeCode'),
+                                            '02|22'));
 
                                 SELECT CASE
                                            WHEN SUM(cnt) = 0 THEN NULL
@@ -292,13 +287,56 @@ AS
                                                api.pkg_columnquery.VALUE(
                                                    t_transferfromobjectid,
                                                    'LicenseNumber')
-                                           AND p.licensetypecode IN ('02', '22')
+                                           AND p.licensetypecode IN
+                                                   ('02', '22')
                                            AND TRUNC(p.createddate) BETWEEN t_start_date
                                                                         AND t_end_date
                                            AND p.description LIKE '%AWF%');
                             ELSE
                                 NULL;
                         END CASE;
+                    END IF;
+
+                    IF (t_msgno IS NULL)
+                    THEN
+                        t_feeobjid :=
+                            bizmod_api.utl_licenseinfo.get_awfreninfo(
+                                t_end_date,
+                                t_feeobjid);
+
+                        IF (t_feeobjid IS NOT NULL)
+                        THEN
+                            t_feeid :=
+                                api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                                 'FeeId');
+
+                            FOR rec
+                                IN (SELECT api.pkg_columnquery.VALUE(
+                                               reo.objectid,
+                                               'BatchId')    batchid
+                                      FROM api.paymenttransactions  pt
+                                           JOIN api.feetransactions ft
+                                               ON pt.transactionid =
+                                                  ft.transactionid
+                                           JOIN
+                                           api.registeredexternalobjects reo
+                                               ON (reo.linkvalue =
+                                                   TO_CHAR(pt.paymentid)
+                                               AND reo.objectdefid =
+                                                   api.pkg_configquery.objectdefidforname(
+                                                       'o_Payment'))
+                                     WHERE ft.feeid = t_feeid -- rec.renfeeid
+                                                             )
+                            LOOP
+                                -- look for batch id with CVR in it
+                                IF (rec.batchid LIKE '%CVR%')
+                                THEN
+                                    t_msgno := 14;
+                                    EXIT;
+                                END IF;
+
+                            END LOOP;
+                        END IF;
                     END IF;
             END CASE;
         END IF;
@@ -350,7 +388,7 @@ AS
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
         ELSE
             -- assume original for applications issued over 3 years ago
-            t_applicationtype  := 'Original';
+            t_applicationtype := 'Original';
         END IF;
 
         IF (t_applicationtype = 'Transfer')
@@ -384,7 +422,6 @@ AS
                    AND (f.description LIKE '02 - REN%'
                      OR f.description LIKE '22 - REN%')
                    AND f.transactiondate BETWEEN t_start_date AND t_end_date;
-                   
             -- for licenses issued was a transfer this year get renewal fees
             --    from the transfer from license
             WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalend + 1, -12)
@@ -396,13 +433,14 @@ AS
                                                     'PersonToPerson') =
                           'N')
                     THEN
-                        t_feeid := api.pkg_columnquery.numericvalue(
-                            bizmod_api.utl_licenseinfo.get_awfreninfo(
-                                a_fiscalend => a_fiscalend,
-                                a_jobid     => t_transferfromobjectid), 'FeeId');
+                        t_feeid :=
+                            api.pkg_columnquery.numericvalue(
+                                bizmod_api.utl_licenseinfo.get_awfreninfo(
+                                    a_fiscalend => a_fiscalend,
+                                    a_jobid     => t_transferfromobjectid),
+                                'FeeId');
                 END CASE;
             ELSE
-
                 -- get renewal fee or ANN fee for licenses issued last fiscal year
                 IF ((t_applicationtype = 'Original')
                  OR (t_applicationtype = 'Transfer'
@@ -424,10 +462,12 @@ AS
                 ELSE
                     IF (t_applicationtype = 'Transfer')
                     THEN
-                        t_feeid := api.pkg_columnquery.numericvalue(
-                            bizmod_api.utl_licenseinfo.get_awfreninfo(
-                                a_fiscalend => a_fiscalend,
-                                a_jobid     => t_transferfromobjectid), 'FeeId');
+                        t_feeid :=
+                            api.pkg_columnquery.numericvalue(
+                                bizmod_api.utl_licenseinfo.get_awfreninfo(
+                                    a_fiscalend => a_fiscalend,
+                                    a_jobid     => t_transferfromobjectid),
+                                'FeeId');
                     ELSE
                         -- get ren fees from application
                         SELECT MIN(f.feeid)
