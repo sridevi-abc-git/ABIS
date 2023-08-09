@@ -26,6 +26,7 @@ IS
     --   2.2    07/27/2023 TJL  BIZ-12070   Added error handling for renewal fee not found
     --   3.0    08/08/2023 TJL  BIZ-12019   Added checking for 02 and 22 active on same license number
     --   3.0    08/09/2023 TJL  BIZ-12298   Changed how paid amount is calculated
+    --   3.0    08/09/2023 TJL  BIZ-11857   Change code to return licensee names instead of primary licensee
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -192,7 +193,7 @@ BEGIN
                                                           'licensenumber'),
                             'LICENSEENAME' VALUE
                                 api.pkg_columnquery.VALUE(t_objectid,
-                                                          'PrimaryLicensee'), -- PRIMARY OWNER
+                                                          'LicenseeNames'),
                             'BUSINESSNAME' VALUE
                                 api.pkg_columnquery.VALUE(t_objectid,
                                                           'PrimaryDBA'), -- DBA
