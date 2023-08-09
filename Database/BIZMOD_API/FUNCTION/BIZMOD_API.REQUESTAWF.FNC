@@ -25,6 +25,7 @@ IS
     --   2.1    07/25/2023 TJL  BIZ-12090   Added FeeRequired and Justification fields to return packet
     --   2.2    07/27/2023 TJL  BIZ-12070   Added error handling for renewal fee not found
     --   3.0    08/08/2023 TJL  BIZ-12019   Added checking for 02 and 22 active on same license number
+    --   3.0    08/09/2023 TJL  BIZ-12298   Changed how paid amount is calculated
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -130,11 +131,10 @@ BEGIN
                     '[^ ]+',
                     1,
                     3);
-            t_paidamount :=
+            t_paidamount := CASE WHEN t_renfeeactivity in ('REN50', 'REN100') then
                   api.pkg_columnquery.numericvalue(t_feeobjid,
-                                                   'adjustedamount')
+                                                   'adjustedamount') else 0 end
                 + api.pkg_columnquery.numericvalue(t_feeobjid, 'paidamount');
-
 
             MERGE INTO bizmod_api.awf_t a
                  USING (SELECT t_renfeeid renfeeid FROM DUAL) a2
@@ -162,11 +162,16 @@ BEGIN
                         t_expiration,
                         t_awfdate,
                         t_renfeeactivity,
-                        api.pkg_columnquery.VALUE(t_objectid,
-                                                  'GallonageRange'),
+                        CASE api.pkg_columnquery.VALUE(t_feeobjid, 'FeeCode')
+                            WHEN 'GL5K' THEN '0 TO 5K'
+                            WHEN 'GL20K' THEN '5K TO 20K'
+                            WHEN 'GL100K' THEN '20K TO 100K'
+                            WHEN 'GL200K' THEN '100K TO 200K'
+                            ELSE '200K TO 1M'
+                        END,
                         api.pkg_columnquery.numericvalue(
-                            t_objectid,
-                            'AdditionalMillionGallons'),
+                            t_feeobjid,
+                            'SecondaryCount'),
                         t_paidamount);
 
             COMMIT;
@@ -255,10 +260,9 @@ BEGIN
         l_data.put('INFO',
                    TREAT(json_object_t.parse(t_awf) AS json_object_t));
     END IF;
-    
+
     bizmod_api.utl_licenseinfo.clean(l_obj);
     RETURN l_obj.TO_CLOB;
-    
 EXCEPTION
     WHEN NO_DATA_FOUND
     THEN
