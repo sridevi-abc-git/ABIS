@@ -17,6 +17,7 @@ AS
     --   2.3    08/02/2023  TJL  BIZ-12220    Corrected bug in awfrequired function in returning
     --                                          Y for license type 22 after payment
     --   3.0    08/07/2023  TJL  BIZ-11961    Added checking for CVR payment
+    --   3.0    08/09/2023  TJL  BIZ-12302    Added handling exception when an application as two ANN fees
     -- ****************************************************************************
 
 
@@ -453,12 +454,16 @@ AS
                      'Y'))
                 THEN
                     -- get ANN Fees
-                    SELECT f.feeid
-                      INTO t_feeid
+                    for rec in (
+                    SELECT f.feeid, f.paidamount
                       FROM api.fees f
                      WHERE f.jobid = t_application
                        AND SUBSTR(f.description, 1, 2) IN ('02', '22')
-                       AND (f.description LIKE '%ANN%');
+                       AND f.description LIKE '%ANN%')
+                    LOOP
+                        t_feeid := rec.feeid;
+                        exit when rec.paidamount != 0; 
+                    end loop;
                 ELSE
                     IF (t_applicationtype = 'Transfer')
                     THEN
@@ -469,7 +474,7 @@ AS
                                     a_jobid     => t_transferfromobjectid),
                                 'FeeId');
                     ELSE
-                        -- get ren fees from application
+                        -- get ren fees from job
                         SELECT MIN(f.feeid)
                           INTO t_feeid
                           FROM api.fees f
