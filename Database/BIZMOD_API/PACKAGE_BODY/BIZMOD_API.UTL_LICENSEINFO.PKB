@@ -18,6 +18,7 @@ AS
     --                                          Y for license type 22 after payment
     --   3.0    08/07/2023  TJL  BIZ-11961    Added checking for CVR payment
     --   3.0    08/09/2023  TJL  BIZ-12302    Added handling exception when an application as two ANN fees
+    --   3.0    08/10/2023  TJL  BIZ-12319    Added handling when more than one application is found on a License
     -- ****************************************************************************
 
 
@@ -219,7 +220,19 @@ AS
                                    api.pkg_columnquery.VALUE(
                                        a.toobjectid,
                                        'PrimaryLicenseTypeCodes'),
-                                   '02|22');
+                                   '02|22')
+                           AND api.pkg_columnquery.VALUE(a.toobjectid,
+                                                         'Completeddate') =
+                               (SELECT MAX(
+                                           api.pkg_columnquery.VALUE(
+                                               toobjectid,
+                                               'Completeddate'))
+                                  FROM api.relationships a2
+                                 WHERE (a2.endpointid =
+                                        api.pkg_configquery.endpointidforname(
+                                            'j_License',
+                                            'ApplicationLicense')
+                                    AND a2.fromobjectid = a.fromobjectid));
 
                         t_applicationtype :=
                             api.pkg_columnquery.VALUE(t_application,
@@ -305,7 +318,7 @@ AS
                                 t_end_date,
                                 a_licensetypeobjectid);
 
-                       IF (t_feeobjid IS NOT NULL)
+                        IF (t_feeobjid IS NOT NULL)
                         THEN
                             t_feeid :=
                                 api.pkg_columnquery.numericvalue(t_feeobjid,
@@ -335,7 +348,6 @@ AS
                                     t_msgno := 14;
                                     EXIT;
                                 END IF;
-
                             END LOOP;
                         END IF;
                     END IF;
@@ -383,7 +395,17 @@ AS
                AND REGEXP_LIKE(
                        api.pkg_columnquery.VALUE(a.toobjectid,
                                                  'PrimaryLicenseTypeCodes'),
-                       '02|22');
+                       '02|22')
+               AND api.pkg_columnquery.VALUE(a.toobjectid, 'Completeddate') =
+                   (SELECT MAX(
+                               api.pkg_columnquery.VALUE(toobjectid,
+                                                         'Completeddate'))
+                      FROM api.relationships a2
+                     WHERE (a2.endpointid =
+                            api.pkg_configquery.endpointidforname(
+                                'j_License',
+                                'ApplicationLicense')
+                        AND a2.fromobjectid = a.fromobjectid));
 
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
@@ -454,16 +476,17 @@ AS
                      'Y'))
                 THEN
                     -- get ANN Fees
-                    for rec in (
-                    SELECT f.feeid, f.paidamount
-                      FROM api.fees f
-                     WHERE f.jobid = t_application
-                       AND SUBSTR(f.description, 1, 2) IN ('02', '22')
-                       AND f.description LIKE '%ANN%')
+                    FOR rec
+                        IN (SELECT f.feeid, f.paidamount
+                              FROM api.fees f
+                             WHERE f.jobid = t_application
+                               AND SUBSTR(f.description, 1, 2) IN
+                                       ('02', '22')
+                               AND f.description LIKE '%ANN%')
                     LOOP
                         t_feeid := rec.feeid;
-                        exit when rec.paidamount != 0; 
-                    end loop;
+                        EXIT WHEN rec.paidamount != 0;
+                    END LOOP;
                 ELSE
                     IF (t_applicationtype = 'Transfer')
                     THEN
