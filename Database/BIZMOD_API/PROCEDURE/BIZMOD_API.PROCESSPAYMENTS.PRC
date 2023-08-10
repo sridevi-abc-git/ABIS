@@ -198,7 +198,9 @@ BEGIN
         t_body :=
             t_body
             || 'Transmittal Batch External File Number: '
-            || api.pkg_columnquery.VALUE(t_transmittal, 'externalfilenum');
+            || api.pkg_columnquery.VALUE(t_transmittal, 'externalfilenum')
+            || CHR(10) 
+            || CHR(13);
     END IF;
 
     t_body := t_body || 'AWF Refunds to Process:' || CHR(13);
