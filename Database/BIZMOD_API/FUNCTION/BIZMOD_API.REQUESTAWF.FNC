@@ -27,6 +27,7 @@ IS
     --   3.0    08/08/2023 TJL  BIZ-12019   Added checking for 02 and 22 active on same license number
     --   3.0    08/09/2023 TJL  BIZ-12298   Changed how paid amount is calculated
     --   3.0    08/09/2023 TJL  BIZ-11857   Change code to return licensee names instead of primary licensee
+    --   3.0    09/10/2013 TJL  BIZ-12315   Corrected bug in getting paid amount when ren50 and ren100
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -134,8 +135,10 @@ BEGIN
                     3);
             t_paidamount := CASE WHEN t_renfeeactivity in ('REN50', 'REN100') then
                   api.pkg_columnquery.numericvalue(t_feeobjid,
-                                                   'adjustedamount') else 0 end
-                + api.pkg_columnquery.numericvalue(t_feeobjid, 'paidamount');
+                                                   'Amount') else
+                  api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                   'adjustedamount')  
+                + api.pkg_columnquery.numericvalue(t_feeobjid, 'paidamount') end;
 
             MERGE INTO bizmod_api.awf_t a
                  USING (SELECT t_renfeeid renfeeid FROM DUAL) a2
