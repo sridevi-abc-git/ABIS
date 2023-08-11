@@ -1,4 +1,5 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.requestawf(a_packet IN CLOB, a_seq IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestawf(a_packet       IN CLOB,
+                                                 a_seq          IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -133,16 +134,40 @@ BEGIN
                     '[^ ]+',
                     1,
                     3);
-            t_paidamount := CASE WHEN t_renfeeactivity in ('REN50', 'REN100') then
-                  api.pkg_columnquery.numericvalue(t_feeobjid,
-                                                   'Amount') else
-                  api.pkg_columnquery.numericvalue(t_feeobjid,
-                                                   'adjustedamount')  
-                + api.pkg_columnquery.numericvalue(t_feeobjid, 'paidamount') end;
+            t_paidamount :=
+                CASE
+                    WHEN t_renfeeactivity IN ('REN50', 'REN100')
+                    THEN
+                        -(api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                           'Amount'))
+                    ELSE
+                          api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                           'adjustedamount')
+                        + api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                           'paidamount')
+                END;
 
             MERGE INTO bizmod_api.awf_t a
                  USING (SELECT t_renfeeid renfeeid FROM DUAL) a2
                     ON (a.renfeeid = a2.renfeeid)
+            WHEN MATCHED
+            THEN
+                UPDATE SET
+                    expirationdate = t_expiration,
+                    awfdate = t_awfdate,
+                    renactivity = t_renfeeactivity,
+                    currgallonage =
+                        CASE api.pkg_columnquery.VALUE(t_feeobjid, 'FeeCode')
+                            WHEN 'GL5K' THEN '0 TO 5K'
+                            WHEN 'GL20K' THEN '5K TO 20K'
+                            WHEN 'GL100K' THEN '20K TO 100K'
+                            WHEN 'GL200K' THEN '100K TO 200K'
+                            ELSE '200K TO 1M'
+                        END,
+                    curraddionalgallonage =
+                        api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                         'SecondaryCount'),
+                    renewalamountpaid = t_paidamount
             WHEN NOT MATCHED
             THEN
                 INSERT     (renfeeid,
@@ -173,9 +198,8 @@ BEGIN
                             WHEN 'GL200K' THEN '100K TO 200K'
                             ELSE '200K TO 1M'
                         END,
-                        api.pkg_columnquery.numericvalue(
-                            t_feeobjid,
-                            'SecondaryCount'),
+                        api.pkg_columnquery.numericvalue(t_feeobjid,
+                                                         'SecondaryCount'),
                         t_paidamount);
 
             COMMIT;
