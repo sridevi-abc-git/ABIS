@@ -90,6 +90,8 @@ BEGIN
                          AND a.description = p.description)
                WHERE a.submitteddate IS NOT NULL
                  AND nvl(a.completed, 'N') != 'Y'
+                 AND ((a.awffeeamount > 0 and p.amountpaid is not NULL)
+                      or (a.awffeeamount <= 0))
             ORDER BY CASE
                          WHEN a.awffeeamount = 0 THEN 1
                          WHEN a.awffeeamount > 0 THEN 2
