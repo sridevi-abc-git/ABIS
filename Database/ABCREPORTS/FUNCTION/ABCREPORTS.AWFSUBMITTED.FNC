@@ -11,7 +11,8 @@ IS
      History:
     -----------------------------------------------------------------------------
       Ver:       Date           Ticket        Comment
-       1.0    08/04/2023 TJL  BIZ-12143   Initial Function Created
+       1.0   08/04/2023 TJL  BIZ-12143   Initial Function Created
+       1.0   08/11/2023 TJL  BIZ-12327   Added additional fields confirmation # and payment Type
     **************************************************************************/
     lv_status_msg  VARCHAR2(8096);
     lblob_csv      BLOB;
@@ -27,6 +28,10 @@ BEGIN
     FOR rec
         IN (  SELECT --distinct
                      CHR(34)
+                     || p.paymentmethod
+                     || CHR(34)
+                     || CHR(44)
+                     || CHR(34)
                      || a.licensenumber
                      || CHR(34)
                      || CHR(44)
@@ -47,6 +52,10 @@ BEGIN
                      || a.awffeeamount
                      || CHR(44)
                      || p.amountpaid
+                     || CHR(44)
+                     || CHR(34)
+                     || p.confirmationid
+                     || CHR(34)
                      || CHR(44)
                      || CHR(34)
                      || CASE
