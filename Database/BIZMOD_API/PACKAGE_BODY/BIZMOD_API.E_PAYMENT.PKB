@@ -682,10 +682,7 @@ AS
     --      a_TransmittalType       Check, Credit
     -- ************************************************************************
     FUNCTION createtransmittal
-        --    (a_paymentobjectlist IN api.udt_objectlist,
-        --                               a_sqlerrm         OUT VARCHAR2,
-        --                               a_backtrace       OUT VARCHAR2)
-        RETURN NUMBER
+        RETURN api.udt_objectlist
     IS
         --        t_transmittal  api.pkg_definition.udt_id;
         t_objectlist   api.udt_objectlist;
@@ -694,57 +691,46 @@ AS
         t_processid    NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
 
         t_transmittaldefid api.pkg_definition.udt_id;
+        t_transmittals api.udt_objectlist := api.udt_objectlist();
         t_transmittalobjectid api.pkg_definition.udt_id;
-
         t_rel          api.pkg_definition.udt_id;
 
         t_paymentamount NUMBER := 0;
         t_paymentcount NUMBER := 0;
-    --        t_cashiereddate DATE := SYSDATE;
-    --        t_count        NUMBER;
     BEGIN
         api.pkg_logicaltransactionupdate.resettransaction;
         ROLLBACK;
 
-        -- ************************************************************
-        --  Create a list of payment for this transmittal
-        -- ************************************************************
-        SELECT api.udt_object(p.paymentobjectid)     paymentobjectid
-          BULK COLLECT INTO t_objectlist
-          FROM (SELECT DISTINCT p2.paymentobjectid
-                  FROM bizmod_api.e_payments_t  p2
-                       JOIN bizmod_api.e_payments_processed_t fd
-                           ON (p2.confirmationid = fd.confirmationnumber)
-                 WHERE NVL(p2.paymentobjectid, 0) > 0
-                   AND p2.transmittalbatch IS NULL
-                   AND api.pkg_columnquery.VALUE(p2.paymentobjectid,
-                                                 'Objectdefname') =
-                       'o_Payment') p;
+        FOR pm IN (SELECT DISTINCT p.paymentmethod
+                     FROM bizmod_api.e_payments_t p
+                    WHERE p.transmittalbatch IS NULL)
+        LOOP
+            t_paymentamount := 0;
+            t_paymentcount := 0;
 
-        IF (t_objectlist.COUNT > 0)
-        THEN
-            BEGIN
-                -- *****************************************************************
-                -- Create Transmittal job
-                -- *****************************************************************
-                -- check for last opened transmital not completed
-                SELECT MAX(p.transmittalbatch)     transmittalbatch
-                  INTO t_transmittalobjectid
-                  FROM bizmod_api.e_payments_t  p
-                       LEFT OUTER JOIN api.processes pr
-                           ON (pr.jobid = p.transmittalbatch
-                           AND pr.processtypeid =
-                               api.pkg_objectdefquery.idforname(
-                                   'p_PrepareTransmittal'))
-                 WHERE api.pkg_columnquery.VALUE(p.transmittalbatch,
-                                                 'StatusName') =
-                       'PREPAR'
-                   AND api.pkg_columnquery.VALUE(pr.processid, 'Outcome')
-                           IS NULL
-                   AND TRUNC(pr.createddate) = TRUNC(SYSDATE);
+            -- ************************************************************
+            --  Create a list of payment for this transmittal
+            -- ************************************************************
+            SELECT api.udt_object(p.paymentobjectid)     paymentobjectid
+              BULK COLLECT INTO t_objectlist
+              FROM (SELECT DISTINCT p2.paymentobjectid
+                      FROM bizmod_api.e_payments_t  p2
+                           JOIN bizmod_api.e_payments_processed_t fd
+                               ON (p2.confirmationid = fd.confirmationnumber)
+                     WHERE NVL(p2.paymentobjectid, 0) > 0
+                       AND p2.paymentmethod = pm.paymentmethod
+                       AND p2.transmittalbatch IS NULL
+                       AND api.pkg_columnquery.VALUE(p2.paymentobjectid,
+                                                     'Objectdefname') =
+                           'o_Payment') p;
 
-                IF (t_transmittalobjectid IS NULL)
-                THEN
+            IF (t_objectlist.COUNT > 0)
+            THEN
+                BEGIN
+                    -- *****************************************************************
+                    -- Create Transmittal job
+                    -- *****************************************************************
+                    -- check for last opened transmital not completed
                     DBMS_OUTPUT.put_line('new transmittal');
 
                     t_transmittaldefid :=
@@ -752,110 +738,117 @@ AS
                             'j_Transmittal');
                     t_transmittalobjectid :=
                         api.pkg_objectupdate.new(t_transmittaldefid);
-                END IF;
+                    t_transmittals.EXTEND(1);
+                    t_transmittals(t_transmittals.COUNT) :=
+                        api.udt_object(t_transmittalobjectid);
 
-                api.pkg_columnupdate.setvalue(t_transmittalobjectid,
-                                              'TransmittalType',
-                                              'Credit Card');
-                api.pkg_columnupdate.setvalue(t_transmittalobjectid,
-                                              'PaymentCount',
-                                              1);
-                api.pkg_columnupdate.setvalue(t_transmittalobjectid,
-                                              'PaymentTotalAmount',
-                                              1);
+                    api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                                  'TransmittalType',
+                                                  pm.paymentmethod);
+                    api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                                  'PaymentCount',
+                                                  1);
+                    api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                                  'PaymentTotalAmount',
+                                                  1);
 
-                api.pkg_logicaltransactionupdate.endtransaction;
-                COMMIT;
+                    api.pkg_logicaltransactionupdate.endtransaction;
+                    COMMIT;
 
-                -- ******************************************************************
-                --  Add Payments to transmittal
-                -- ******************************************************************
-                FOR rec IN (SELECT objectid FROM TABLE(t_objectlist))
+                    -- ******************************************************************
+                    --  Add Payments to transmittal
+                    -- ******************************************************************
+                    FOR rec IN (SELECT objectid FROM TABLE(t_objectlist))
+                    LOOP
+                        DBMS_OUTPUT.put_line('Pay ID: ' || rec.objectid);
+                        -- add new relationship (endpointid, fromobjectid, toobjectid)
+                        t_rel :=
+                            api.pkg_relationshipupdate.new(
+                                api.pkg_configquery.endpointidforname(
+                                    'j_Transmittal',
+                                    'Payment'),
+                                t_transmittalobjectid,
+                                rec.objectid);
+                    END LOOP;
+
+                    SELECT SUM(
+                               api.pkg_columnquery.numericvalue(
+                                   toobjectid,
+                                   'PaymentAmount')),
+                           COUNT(1)
+                      INTO t_paymentamount, t_paymentcount
+                      FROM api.relationships r
+                     WHERE r.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'j_Transmittal',
+                               'Payment')
+                       AND r.fromobjectid = t_transmittalobjectid;
+
+                    -- *********************************************************************
+                    -- Update transmittal information
+                    -- *********************************************************************
+                    api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                                  'PaymentCount',
+                                                  t_paymentcount);
+                    api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                                  'PaymentTotalAmount',
+                                                  t_paymentamount);
+
+                    api.pkg_logicaltransactionupdate.endtransaction;
+                    COMMIT;
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
+                        t_backtrace :=
+                            SUBSTR(DBMS_UTILITY.format_error_backtrace,
+                                   1,
+                                   3990);
+
+                        api.pkg_logicaltransactionupdate.resettransaction;
+                        ROLLBACK;
+                        DBMS_OUTPUT.put_line(t_sqlerrm);
+                END;
+
+                FOR pm
+                    IN (SELECT r.toobjectid     transmittalobjectid,
+                               t.objectid       paymentobjectid
+                          FROM TABLE(t_objectlist)  t
+                               LEFT OUTER JOIN api.relationships r
+                                   ON r.endpointid =
+                                      api.pkg_configquery.endpointidforname(
+                                          'o_Payment',
+                                          'Transmittal')
+                                  AND r.fromobjectid = t.objectid)
                 LOOP
-                    DBMS_OUTPUT.put_line('Pay ID: ' || rec.objectid);
-                    -- add new relationship (endpointid, fromobjectid, toobjectid)
-                    t_rel :=
-                        api.pkg_relationshipupdate.new(
-                            api.pkg_configquery.endpointidforname(
-                                'j_Transmittal',
-                                'Payment'),
-                            t_transmittalobjectid,
-                            rec.objectid);
+                    UPDATE bizmod_api.e_payments_t p
+                       SET p.transmittalbatch =
+                               NVL(pm.transmittalobjectid, -1),
+                           p.transmittalbatchdate =
+                               api.pkg_columnquery.datevalue(
+                                   pm.transmittalobjectid,
+                                   'CompletedDate')
+                     WHERE p.paymentobjectid = pm.paymentobjectid;
+
+                    IF (t_sqlerrm IS NOT NULL)
+                    THEN
+                        INSERT INTO bizmod_api.err$_e_payments_t ep(
+                                        ep.ora_err_mesg$,
+                                        ep.backtrace,
+                                        ep.transmittalbatch,
+                                        ep.seq)
+                             VALUES (t_sqlerrm,
+                                     t_backtrace,
+                                     -1,
+                                     t_processid);
+                    END IF;
                 END LOOP;
 
-                SELECT SUM(
-                           api.pkg_columnquery.numericvalue(toobjectid,
-                                                            'PaymentAmount')),
-                       COUNT(1)
-                  INTO t_paymentamount, t_paymentcount
-                  FROM api.relationships r
-                 WHERE r.endpointid =
-                       api.pkg_configquery.endpointidforname('j_Transmittal',
-                                                             'Payment')
-                   AND r.fromobjectid = t_transmittalobjectid;
-
-                -- *********************************************************************
-                -- Update transmittal information
-                -- *********************************************************************
-                api.pkg_columnupdate.setvalue(t_transmittalobjectid,
-                                              'PaymentCount',
-                                              t_paymentcount);
-                api.pkg_columnupdate.setvalue(t_transmittalobjectid,
-                                              'PaymentTotalAmount',
-                                              t_paymentamount);
-
-                api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
-            EXCEPTION
-                WHEN OTHERS
-                THEN
-                    t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-                    t_backtrace :=
-                        SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
+            END IF;
+        END LOOP;
 
-                    api.pkg_logicaltransactionupdate.resettransaction;
-                    ROLLBACK;
-                    DBMS_OUTPUT.put_line(t_sqlerrm);
-            --            RETURN -1;
-            END;
-
-            FOR pm
-                IN (SELECT r.toobjectid     transmittalobjectid,
-                           t.objectid       paymentobjectid
-                      FROM TABLE(t_objectlist)  t
-                           LEFT OUTER JOIN api.relationships r
-                               ON r.endpointid =
-                                  api.pkg_configquery.endpointidforname(
-                                      'o_Payment',
-                                      'Transmittal')
-                              AND r.fromobjectid = t.objectid)
-            LOOP
-                UPDATE bizmod_api.e_payments_t p
-                   SET p.transmittalbatch = NVL(pm.transmittalobjectid, -1),
-                       p.transmittalbatchdate =
-                           api.pkg_columnquery.datevalue(
-                               pm.transmittalobjectid,
-                               'CompletedDate')
-                 WHERE p.paymentobjectid = pm.paymentobjectid;
-
-                IF (t_sqlerrm IS NOT NULL)
-                THEN
-                    INSERT INTO bizmod_api.err$_e_payments_t ep(
-                                    ep.ora_err_mesg$,
-                                    ep.backtrace,
-                                    ep.transmittalbatch,
-                                    ep.seq)
-                         VALUES (t_sqlerrm,
-                                 t_backtrace,
-                                 -1,
-                                 t_processid);
-                END IF;
-            END LOOP;
-
-            COMMIT;
-        END IF;
-
-        RETURN t_transmittalobjectid;
+        RETURN t_transmittals;
     END createtransmittal;
 
     PROCEDURE createawfpayments
@@ -919,13 +912,13 @@ AS
                  AND a.awffeeamount <= 0) -- AWF batch for no change and refund
                  OR (t_loop = 1
                  AND a.awffeeamount > 0 -- AWF batch for payments
-               AND EXISTS
-                       (SELECT 1
-                          FROM bizmod_api.e_payments_t p
-                         WHERE pp.licensenumber = p.licensenumber
-                           AND pp.confirmationnumber = p.confirmationid
-                           AND pp.paymenttype = 'Primary'
-                           AND p.paymentobjectid IS NULL)));
+                 AND EXISTS
+                         (SELECT 1
+                            FROM bizmod_api.e_payments_t p
+                           WHERE pp.licensenumber = p.licensenumber
+                             AND pp.confirmationnumber = p.confirmationid
+                             AND pp.paymenttype = 'Primary'
+                             AND p.paymentobjectid IS NULL)));
 
             DBMS_OUTPUT.put_line(t_loop || '  to process ' || t_awf.COUNT);
 
