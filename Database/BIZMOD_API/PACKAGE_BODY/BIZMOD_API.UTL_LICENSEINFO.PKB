@@ -19,6 +19,8 @@ AS
     --   3.0    08/07/2023  TJL  BIZ-11961    Added checking for CVR payment
     --   3.0    08/09/2023  TJL  BIZ-12302    Added handling exception when an application as two ANN fees
     --   3.0    08/10/2023  TJL  BIZ-12319    Added handling when more than one application is found on a License
+    --   3.0    08/14/2023  TJL  BIZ-12340    Change how the process gets license transfers from ABIS
+    --                           BIZ-12331
     -- ****************************************************************************
 
 
@@ -267,20 +269,23 @@ AS
                                 -- find license transfer from
                                 SELECT lt.toobjectid
                                   INTO t_transferfromobjectid
-                                  FROM api.relationships lt
-                                 WHERE (lt.endpointid =
-                                        api.pkg_configquery.endpointidforname(
-                                            'j_License',
-                                            'LicenseType')
-                                    AND lt.fromobjectid =
-                                        api.pkg_columnquery.numericvalue(
-                                            t_application,
-                                            'TransferFromLicenseObjectId')
-                                    AND REGEXP_LIKE(
-                                            api.pkg_columnquery.VALUE(
-                                                lt.toobjectid,
-                                                'LicenseTypeCode'),
-                                            '02|22'));
+                                  FROM api.relationships  r
+                                       JOIN api.relationships lt
+                                           ON (lt.endpointid =
+                                               api.pkg_configquery.endpointidforname(
+                                                   'j_License',
+                                                   'LicenseType')
+                                           AND lt.fromobjectid = r.toobjectid)
+                                 WHERE r.fromobjectid = t_application
+                                   AND r.endpointid =
+                                       api.pkg_configquery.endpointidforname(
+                                           'j_Application',
+                                           'License')
+                                   AND REGEXP_LIKE(
+                                           api.pkg_columnquery.VALUE(
+                                               lt.toobjectid,
+                                               'LicenseTypeCode'),
+                                           '02|22');
 
                                 SELECT CASE
                                            WHEN SUM(cnt) = 0 THEN NULL
@@ -419,23 +424,26 @@ AS
             -- find license transfer from
             SELECT lt.toobjectid
               INTO t_transferfromobjectid
-              FROM api.relationships lt
-             WHERE (lt.endpointid =
-                    api.pkg_configquery.endpointidforname('j_License',
-                                                          'LicenseType')
-                AND lt.fromobjectid =
-                    api.pkg_columnquery.numericvalue(
-                        t_application,
-                        'TransferFromLicenseObjectId')
-                AND REGEXP_LIKE(
-                        api.pkg_columnquery.VALUE(lt.toobjectid,
-                                                  'LicenseTypeCode'),
-                        '02|22'));
+              FROM api.relationships  r
+                   JOIN api.relationships lt
+                       ON (lt.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'j_License',
+                               'LicenseType')
+                       AND lt.fromobjectid = r.toobjectid)
+             WHERE r.fromobjectid = t_application
+               AND r.endpointid =
+                   api.pkg_configquery.endpointidforname('j_Application',
+                                                         'License')
+               AND REGEXP_LIKE(
+                       api.pkg_columnquery.VALUE(lt.toobjectid,
+                                                 'LicenseTypeCode'),
+                       '02|22');
         END IF;
 
         CASE
             -- get renewal fee information for licenses over a couple of years old
-            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalend + 1, -24)
+            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalend + 1, -12)
             THEN
                 -- get renewal fee
                 SELECT MIN(f.feeid)
