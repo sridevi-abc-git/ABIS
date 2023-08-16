@@ -21,6 +21,7 @@ AS
     --   3.0    08/10/2023  TJL  BIZ-12319    Added handling when more than one application is found on a License
     --   3.0    08/14/2023  TJL  BIZ-12340    Change how the process gets license transfers from ABIS
     --                           BIZ-12331
+    --   3.0    08/15/2013  TJL  BIZ-12351    Change how the process gets license transfers for an applications
     -- ****************************************************************************
 
 
@@ -191,39 +192,40 @@ AS
                                 AND TRUNC(p.createddate) BETWEEN t_start_date
                                                              AND t_end_date));
 
-                    --            DBMS_OUTPUT.put_line(
-                    --                'xxx: '
-                    --                || t_awfrequired
-                    --                || CHR(9)
-                    --                || t_issuedate
-                    --                || CHR(9)
-                    --                || ADD_MONTHS(t_expiration, -24));
-
                     -- check if this was liense was just issued or was transfered
                     IF (t_msgno IS NULL
                     AND t_issuedate > ADD_MONTHS(t_expiration, -24))
                     THEN
-                        -- get application for this license
-                        SELECT a.toobjectid
+                        -- get application object id (app.toobjectid) from license type object id
+                        SELECT app.toobjectid     applicationobjectid
                           INTO t_application
-                          FROM api.relationships  l
-                               JOIN api.relationships a
-                                   ON (a.endpointid =
+                          -- point to license (lic.toobjectid) from license type object id
+                          FROM api.relationships  lic
+                               -- point to application (app.toobjectid) from license object id
+                               JOIN api.relationships app
+                                   ON (app.endpointid =
                                        api.pkg_configquery.endpointidforname(
                                            'j_License',
                                            'ApplicationLicense')
-                                   AND a.fromobjectid = l.toobjectid)
-                         WHERE l.endpointid =
+                                   AND app.fromobjectid = lic.toobjectid)
+                               -- point to primary license type (plt.toobjectid) from application object id
+                               JOIN api.relationships plt
+                                   ON (plt.fromobjectid = app.toobjectid
+                                   AND plt.endpointid =
+                                       api.pkg_configquery.endpointidforname(
+                                           'j_application',
+                                           'PrimaryLicenseType'))
+                         WHERE lic.endpointid =
                                api.pkg_configquery.endpointidforname(
                                    'j_LicenseType',
                                    'License')
-                           AND l.fromobjectid = a_licensetypeobjectid
+                           AND lic.fromobjectid = a_licensetypeobjectid
                            AND REGEXP_LIKE(
                                    api.pkg_columnquery.VALUE(
-                                       a.toobjectid,
-                                       'PrimaryLicenseTypeCodes'),
+                                       plt.toobjectid,
+                                       'LicenseTypeCode'),
                                    '02|22')
-                           AND api.pkg_columnquery.VALUE(a.toobjectid,
+                           AND api.pkg_columnquery.VALUE(app.toobjectid,
                                                          'Completeddate') =
                                (SELECT MAX(
                                            api.pkg_columnquery.VALUE(
@@ -234,18 +236,11 @@ AS
                                         api.pkg_configquery.endpointidforname(
                                             'j_License',
                                             'ApplicationLicense')
-                                    AND a2.fromobjectid = a.fromobjectid));
+                                    AND a2.fromobjectid = app.fromobjectid));
 
                         t_applicationtype :=
                             api.pkg_columnquery.VALUE(t_application,
                                                       'ApplicationType');
-
-                        --                DBMS_OUTPUT.put_line(
-                        --                    t_application
-                        --                    || CHR(9)
-                        --                    || t_applicationtype
-                        --                    || CHR(9)
-                        --                    || t_issuedate);
 
                         -- make sure that this license has been renewed in the pass not issued this year
                         CASE
@@ -266,26 +261,58 @@ AS
                                 t_msgno := 10;
                             WHEN t_applicationtype = 'Transfer'
                             THEN
-                                -- find license transfer from
-                                SELECT lt.toobjectid
-                                  INTO t_transferfromobjectid
-                                  FROM api.relationships  r
-                                       JOIN api.relationships lt
-                                           ON (lt.endpointid =
-                                               api.pkg_configquery.endpointidforname(
-                                                   'j_License',
-                                                   'LicenseType')
-                                           AND lt.fromobjectid = r.toobjectid)
-                                 WHERE r.fromobjectid = t_application
-                                   AND r.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'j_Application',
-                                           'License')
-                                   AND REGEXP_LIKE(
-                                           api.pkg_columnquery.VALUE(
-                                               lt.toobjectid,
-                                               'LicenseTypeCode'),
-                                           '02|22');
+                                -- find license transfer from license. can have multiple
+                                --   transfer from's for an application
+                                FOR rec
+                                    IN (  SELECT lt.toobjectid
+                                                     transferfromobjectid,
+                                                 r.toobjectid
+                                                     licenseobjectid,
+                                                 api.pkg_columnquery.VALUE(
+                                                     lt.toobjectid,
+                                                     'issuedate')
+                                                     issuedate
+                                            FROM api.relationships r
+                                                 JOIN api.relationships lt
+                                                     ON (lt.endpointid =
+                                                         api.pkg_configquery.endpointidforname(
+                                                             'j_License',
+                                                             'LicenseType')
+                                                     AND lt.fromobjectid =
+                                                         r.toobjectid)
+                                           WHERE r.fromobjectid = t_application --t_application
+                                             AND r.endpointid IN
+                                                     (api.pkg_configquery.endpointidforname(
+                                                          'j_Application',
+                                                          'LicenseTransfer'),
+                                                      api.pkg_configquery.endpointidforname(
+                                                          'j_Application',
+                                                          'License'))
+                                             AND REGEXP_LIKE(
+                                                     api.pkg_columnquery.VALUE(
+                                                         lt.toobjectid,
+                                                         'LicenseTypeCode'),
+                                                     '02|22')
+                                        ORDER BY issuedate)
+                                LOOP
+                                    IF (t_transferfromobjectid IS NULL)
+                                    THEN
+                                        t_transferfromobjectid :=
+                                            rec.transferfromobjectid;
+                                    ELSE
+                                        -- check to make sure transfer not pointing back to current
+                                        --   license when another transer from license has already 
+                                        --   been selected
+                                        IF (rec.licenseobjectid !=
+                                            api.pkg_columnquery.numericvalue(
+                                                a_licensetypeobjectid,
+                                                'LicenseJobId'))
+                                        THEN
+                                            t_transferfromobjectid :=
+                                                rec.transferfromobjectid;
+                                        END IF;
+                                    END IF;
+                                END LOOP;
 
                                 SELECT CASE
                                            WHEN SUM(cnt) = 0 THEN NULL
@@ -383,25 +410,34 @@ AS
         --   Applications not need for licenses issued over 3 years ago
         IF (TRUNC(t_issuedate) >= ADD_MONTHS(a_fiscalend + 1, -36))
         THEN
-            -- get application for this license
-            SELECT a.toobjectid
+            -- get application object id (app.toobjectid) from license type object id
+            SELECT app.toobjectid     applicationobjectid
               INTO t_application
-              FROM api.relationships  l
-                   JOIN api.relationships a
-                       ON (a.endpointid =
+              -- point to license (lic.toobjectid) from license type object id
+              FROM api.relationships  lic
+                   -- point to application (app.toobjectid) from license object id
+                   JOIN api.relationships app
+                       ON (app.endpointid =
                            api.pkg_configquery.endpointidforname(
                                'j_License',
                                'ApplicationLicense')
-                       AND a.fromobjectid = l.toobjectid)
-             WHERE l.endpointid =
+                       AND app.fromobjectid = lic.toobjectid)
+                   -- point to primary license type (plt.toobjectid) from application object id
+                   JOIN api.relationships plt
+                       ON (plt.fromobjectid = app.toobjectid
+                       AND plt.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'j_application',
+                               'PrimaryLicenseType'))
+             WHERE lic.endpointid =
                    api.pkg_configquery.endpointidforname('j_LicenseType',
                                                          'License')
-               AND l.fromobjectid = a_jobid
+               AND lic.fromobjectid = a_jobid
                AND REGEXP_LIKE(
-                       api.pkg_columnquery.VALUE(a.toobjectid,
-                                                 'PrimaryLicenseTypeCodes'),
+                       api.pkg_columnquery.VALUE(plt.toobjectid,
+                                                 'LicenseTypeCode'),
                        '02|22')
-               AND api.pkg_columnquery.VALUE(a.toobjectid, 'Completeddate') =
+               AND api.pkg_columnquery.VALUE(app.toobjectid, 'Completeddate') =
                    (SELECT MAX(
                                api.pkg_columnquery.VALUE(toobjectid,
                                                          'Completeddate'))
@@ -410,7 +446,7 @@ AS
                             api.pkg_configquery.endpointidforname(
                                 'j_License',
                                 'ApplicationLicense')
-                        AND a2.fromobjectid = a.fromobjectid));
+                        AND a2.fromobjectid = app.fromobjectid));
 
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
@@ -421,29 +457,53 @@ AS
 
         IF (t_applicationtype = 'Transfer')
         THEN
-            -- find license transfer from
-            SELECT lt.toobjectid
-              INTO t_transferfromobjectid
-              FROM api.relationships  r
-                   JOIN api.relationships lt
-                       ON (lt.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'j_License',
-                               'LicenseType')
-                       AND lt.fromobjectid = r.toobjectid)
-             WHERE r.fromobjectid = t_application
-               AND r.endpointid =
-                   api.pkg_configquery.endpointidforname('j_Application',
-                                                         'License')
-               AND REGEXP_LIKE(
-                       api.pkg_columnquery.VALUE(lt.toobjectid,
-                                                 'LicenseTypeCode'),
-                       '02|22');
+            -- find license transfer from license. can have multiple transfer from's
+            --   for an application
+            FOR rec
+                IN (  SELECT lt.toobjectid                             transferfromobjectid,
+                             r.toobjectid                              licenseobjectid,
+                             api.pkg_columnquery.VALUE(lt.toobjectid,
+                                                       'issuedate')    issuedate
+                        FROM api.relationships r
+                             JOIN api.relationships lt
+                                 ON (lt.endpointid =
+                                     api.pkg_configquery.endpointidforname(
+                                         'j_License',
+                                         'LicenseType')
+                                 AND lt.fromobjectid = r.toobjectid)
+                       WHERE r.fromobjectid = t_application --t_application
+                         AND r.endpointid IN
+                                 (api.pkg_configquery.endpointidforname(
+                                      'j_Application',
+                                      'LicenseTransfer'),
+                                  api.pkg_configquery.endpointidforname(
+                                      'j_Application',
+                                      'License'))
+                         AND REGEXP_LIKE(
+                                 api.pkg_columnquery.VALUE(lt.toobjectid,
+                                                           'LicenseTypeCode'),
+                                 '02|22')
+                    ORDER BY issuedate)
+            LOOP
+                IF (t_transferfromobjectid IS NULL)
+                THEN
+                    t_transferfromobjectid := rec.transferfromobjectid;
+                ELSE
+                    -- check to make sure transfer not pointing back to current
+                    --   license when another transer from license has already been selected
+                    IF (rec.licenseobjectid !=
+                        api.pkg_columnquery.numericvalue(a_jobid,
+                                                         'LicenseJobId'))
+                    THEN
+                        t_transferfromobjectid := rec.transferfromobjectid;
+                    END IF;
+                END IF;
+            END LOOP;
         END IF;
 
         CASE
             -- get renewal fee information for licenses over a couple of years old
-            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalend + 1, -12)
+            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalend + 1, -24)
             THEN
                 -- get renewal fee
                 SELECT MIN(f.feeid)
@@ -496,7 +556,8 @@ AS
                         EXIT WHEN rec.paidamount != 0;
                     END LOOP;
                 ELSE
-                    IF (t_applicationtype = 'Transfer')
+                    IF (t_applicationtype = 'Transfer'
+                    AND t_transferfromobjectid != a_jobid)
                     THEN
                         t_feeid :=
                             api.pkg_columnquery.numericvalue(
