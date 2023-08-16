@@ -21,7 +21,8 @@ AS
     --   3.0    08/10/2023  TJL  BIZ-12319    Added handling when more than one application is found on a License
     --   3.0    08/14/2023  TJL  BIZ-12340    Change how the process gets license transfers from ABIS
     --                           BIZ-12331
-    --   3.0    08/15/2013  TJL  BIZ-12351    Change how the process gets license transfers for an applications
+    --   3.0    08/15/2023  TJL  BIZ-12351    Change how the process gets license transfers for an applications
+    --   3.0    08/16/2023  TJL  BIZ-12424    Changed how how 02/22 applications for a license are selected
     -- ****************************************************************************
 
 
@@ -197,46 +198,50 @@ AS
                     AND t_issuedate > ADD_MONTHS(t_expiration, -24))
                     THEN
                         -- get application object id (app.toobjectid) from license type object id
-                        SELECT app.toobjectid     applicationobjectid
-                          INTO t_application
-                          -- point to license (lic.toobjectid) from license type object id
-                          FROM api.relationships  lic
-                               -- point to application (app.toobjectid) from license object id
-                               JOIN api.relationships app
-                                   ON (app.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'j_License',
-                                           'ApplicationLicense')
-                                   AND app.fromobjectid = lic.toobjectid)
-                               -- point to primary license type (plt.toobjectid) from application object id
-                               JOIN api.relationships plt
-                                   ON (plt.fromobjectid = app.toobjectid
-                                   AND plt.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'j_application',
-                                           'PrimaryLicenseType'))
-                         WHERE lic.endpointid =
-                               api.pkg_configquery.endpointidforname(
-                                   'j_LicenseType',
-                                   'License')
-                           AND lic.fromobjectid = a_licensetypeobjectid
-                           AND REGEXP_LIKE(
-                                   api.pkg_columnquery.VALUE(
-                                       plt.toobjectid,
-                                       'LicenseTypeCode'),
-                                   '02|22')
-                           AND api.pkg_columnquery.VALUE(app.toobjectid,
-                                                         'Completeddate') =
-                               (SELECT MAX(
-                                           api.pkg_columnquery.VALUE(
-                                               toobjectid,
-                                               'Completeddate'))
-                                  FROM api.relationships a2
-                                 WHERE (a2.endpointid =
-                                        api.pkg_configquery.endpointidforname(
-                                            'j_License',
-                                            'ApplicationLicense')
-                                    AND a2.fromobjectid = app.fromobjectid));
+                        FOR rec
+                            IN (  SELECT app.toobjectid
+                                             applicationobjectid,
+                                         api.pkg_columnquery.VALUE(
+                                             plt.toobjectid,
+                                             'LicenseTypeCode')
+                                             licensetypecode,
+                                         api.pkg_columnquery.VALUE(
+                                             app.toobjectid,
+                                             'Completeddate')
+                                             completeddate
+                                    -- point to license (lic.toobjectid) from license type object id
+                                    FROM api.relationships lic
+                                         -- point to application (app.toobjectid) from license object id
+                                         JOIN api.relationships app
+                                             ON (app.endpointid =
+                                                 api.pkg_configquery.endpointidforname(
+                                                     'j_License',
+                                                     'ApplicationLicense')
+                                             AND app.fromobjectid =
+                                                 lic.toobjectid)
+                                         -- point to primary license type (plt.toobjectid) from application object id
+                                         JOIN api.relationships plt
+                                             ON (plt.fromobjectid =
+                                                 app.toobjectid
+                                             AND plt.endpointid =
+                                                 api.pkg_configquery.endpointidforname(
+                                                     'j_application',
+                                                     'PrimaryLicenseType'))
+                                   WHERE lic.endpointid =
+                                         api.pkg_configquery.endpointidforname(
+                                             'j_LicenseType',
+                                             'License')
+                                     AND lic.fromobjectid =
+                                         a_licensetypeobjectid
+                                     AND REGEXP_LIKE(
+                                             api.pkg_columnquery.VALUE(
+                                                 plt.toobjectid,
+                                                 'LicenseTypeCode'),
+                                             '02|22')
+                                ORDER BY completeddate)
+                        LOOP
+                            t_application := rec.applicationobjectid;
+                        END LOOP;
 
                         t_applicationtype :=
                             api.pkg_columnquery.VALUE(t_application,
@@ -301,7 +306,7 @@ AS
                                             rec.transferfromobjectid;
                                     ELSE
                                         -- check to make sure transfer not pointing back to current
-                                        --   license when another transer from license has already 
+                                        --   license when another transer from license has already
                                         --   been selected
                                         IF (rec.licenseobjectid !=
                                             api.pkg_columnquery.numericvalue(
@@ -411,42 +416,44 @@ AS
         IF (TRUNC(t_issuedate) >= ADD_MONTHS(a_fiscalend + 1, -36))
         THEN
             -- get application object id (app.toobjectid) from license type object id
-            SELECT app.toobjectid     applicationobjectid
-              INTO t_application
-              -- point to license (lic.toobjectid) from license type object id
-              FROM api.relationships  lic
-                   -- point to application (app.toobjectid) from license object id
-                   JOIN api.relationships app
-                       ON (app.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'j_License',
-                               'ApplicationLicense')
-                       AND app.fromobjectid = lic.toobjectid)
-                   -- point to primary license type (plt.toobjectid) from application object id
-                   JOIN api.relationships plt
-                       ON (plt.fromobjectid = app.toobjectid
-                       AND plt.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'j_application',
-                               'PrimaryLicenseType'))
-             WHERE lic.endpointid =
-                   api.pkg_configquery.endpointidforname('j_LicenseType',
-                                                         'License')
-               AND lic.fromobjectid = a_jobid
-               AND REGEXP_LIKE(
-                       api.pkg_columnquery.VALUE(plt.toobjectid,
-                                                 'LicenseTypeCode'),
-                       '02|22')
-               AND api.pkg_columnquery.VALUE(app.toobjectid, 'Completeddate') =
-                   (SELECT MAX(
-                               api.pkg_columnquery.VALUE(toobjectid,
-                                                         'Completeddate'))
-                      FROM api.relationships a2
-                     WHERE (a2.endpointid =
-                            api.pkg_configquery.endpointidforname(
-                                'j_License',
-                                'ApplicationLicense')
-                        AND a2.fromobjectid = app.fromobjectid));
+            FOR rec
+                IN (  SELECT app.toobjectid
+                                 applicationobjectid,
+                             api.pkg_columnquery.VALUE(plt.toobjectid,
+                                                       'LicenseTypeCode')
+                                 licensetypecode,
+                             api.pkg_columnquery.VALUE(app.toobjectid,
+                                                       'Completeddate')
+                                 completeddate
+                        -- point to license (lic.toobjectid) from license type object id
+                        FROM api.relationships lic
+                             -- point to application (app.toobjectid) from license object id
+                             JOIN api.relationships app
+                                 ON (app.endpointid =
+                                     api.pkg_configquery.endpointidforname(
+                                         'j_License',
+                                         'ApplicationLicense')
+                                 AND app.fromobjectid = lic.toobjectid)
+                             -- point to primary license type (plt.toobjectid) from application object id
+                             JOIN api.relationships plt
+                                 ON (plt.fromobjectid = app.toobjectid
+                                 AND plt.endpointid =
+                                     api.pkg_configquery.endpointidforname(
+                                         'j_application',
+                                         'PrimaryLicenseType'))
+                       WHERE lic.endpointid =
+                             api.pkg_configquery.endpointidforname(
+                                 'j_LicenseType',
+                                 'License')
+                         AND lic.fromobjectid = a_jobid
+                         AND REGEXP_LIKE(
+                                 api.pkg_columnquery.VALUE(plt.toobjectid,
+                                                           'LicenseTypeCode'),
+                                 '02|22')
+                    ORDER BY completeddate)
+            LOOP
+                t_application := rec.applicationobjectid;
+            END LOOP;
 
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
