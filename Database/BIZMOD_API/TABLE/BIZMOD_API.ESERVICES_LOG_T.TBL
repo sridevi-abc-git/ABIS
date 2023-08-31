@@ -3,44 +3,59 @@ DROP TABLE BIZMOD_API.ESERVICES_LOG_T CASCADE CONSTRAINTS;
 CREATE TABLE BIZMOD_API.ESERVICES_LOG_T
 (
   SEQ           NUMBER                          DEFAULT "BIZMOD_API"."BIZMOD_API_S"."NEXTVAL",
-  REQUEST       VARCHAR2(32 BYTE),
-  PACKET        CLOB,
-  RESPONSE      CLOB,
-  ERR           VARCHAR2(4000 BYTE),
+  REQUEST       VARCHAR2(32 BYTE) COLLATE USING_NLS_COMP,
+  PACKET        CLOB COLLATE USING_NLS_COMP,
+  RESPONSE      CLOB COLLATE USING_NLS_COMP,
+  ERR           VARCHAR2(4000 BYTE) COLLATE USING_NLS_COMP,
   REQUESTDATE   TIMESTAMP(3),
-  RESPONSEDATE  TIMESTAMP(3)
+  RESPONSEDATE  TIMESTAMP(3),
+  FILEDATA      BLOB
 )
+DEFAULT COLLATION USING_NLS_COMP
+LOB (FILEDATA) STORE AS SECUREFILE (
+  TABLESPACE  API_ENC_DATA
+  ENABLE      STORAGE IN ROW
+  CHUNK       8192
+  NOCACHE
+  LOGGING
+      STORAGE    (
+                  INITIAL          104K
+                  NEXT             1M
+                  MINEXTENTS       1
+                  MAXEXTENTS       UNLIMITED
+                  PCTINCREASE      0
+                  BUFFER_POOL      DEFAULT
+                 ))
 LOB (PACKET) STORE AS SECUREFILE (
   TABLESPACE  API_ENC_LOB_DATA
   ENABLE      STORAGE IN ROW
   CHUNK       8192
-  RETENTION
-  NOCACHE
+  CACHE
   LOGGING
-  STORAGE    (
-              INITIAL          104K
-              NEXT             1M
-              MINEXTENTS       1
-              MAXEXTENTS       UNLIMITED
-              PCTINCREASE      0
-              BUFFER_POOL      DEFAULT
-             ))
+      STORAGE    (
+                  INITIAL          104K
+                  NEXT             1M
+                  MINEXTENTS       1
+                  MAXEXTENTS       UNLIMITED
+                  PCTINCREASE      0
+                  BUFFER_POOL      DEFAULT
+                 ))
 LOB (RESPONSE) STORE AS SECUREFILE (
   TABLESPACE  API_ENC_LOB_DATA
   ENABLE      STORAGE IN ROW
   CHUNK       8192
-  RETENTION
-  NOCACHE
+  CACHE
   LOGGING
-  STORAGE    (
-              INITIAL          104K
-              NEXT             1M
-              MINEXTENTS       1
-              MAXEXTENTS       UNLIMITED
-              PCTINCREASE      0
-              BUFFER_POOL      DEFAULT
-             ))
+      STORAGE    (
+                  INITIAL          104K
+                  NEXT             1M
+                  MINEXTENTS       1
+                  MAXEXTENTS       UNLIMITED
+                  PCTINCREASE      0
+                  BUFFER_POOL      DEFAULT
+                 ))
 TABLESPACE API_ENC_DATA
+PCTUSED    0
 PCTFREE    10
 INITRANS   1
 MAXTRANS   255
@@ -54,10 +69,19 @@ STORAGE    (
            )
 LOGGING 
 NOCOMPRESS 
-NOCACHE;
+NOCACHE
+MONITORING;
 
 
-GRANT SELECT ON BIZMOD_API.ESERVICES_LOG_T TO ABC;
+ALTER TABLE BIZMOD_API.ESERVICES_LOG_T ADD (
+  CONSTRAINT LOG_PACKET_CK
+  CHECK (packet IS JSON)
+  ENABLE VALIDATE
+,  CONSTRAINT LOG_RESPONSE_CK
+  CHECK (response IS JSON)
+  ENABLE VALIDATE);
+
+GRANT SELECT, UPDATE ON BIZMOD_API.ESERVICES_LOG_T TO ABC;
 
 GRANT DELETE, INSERT, SELECT, UPDATE ON BIZMOD_API.ESERVICES_LOG_T TO BIZMOD_USER;
 
