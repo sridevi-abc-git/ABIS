@@ -1,0 +1,7 @@
+C:\app\ABCUploadService\ABCUploadService\bin\x64\Release\ABCUploadService.exe.config
+C:\app\ABCUploadService\ABCUploadService\bin\x64\Release\ABCUploadService.exe
+C:\app\ABCUploadService\ABCUploadService\bin\x64\Release\ABCUploadService.pdb
+C:\app\ABCUploadService\ABCUploadService\obj\x64\Release\ABCUploadService.exe
+C:\app\ABCUploadService\ABCUploadService\obj\x64\Release\ABCUploadService.pdb
+C:\app\ABCUploadService\ABCUploadService\obj\x64\Release\ABCUploadService.csprojResolveAssemblyReference.cache
+C:\app\ABCUploadService\ABCUploadService\bin\x64\Release\Oracle.DataAccess.dll
