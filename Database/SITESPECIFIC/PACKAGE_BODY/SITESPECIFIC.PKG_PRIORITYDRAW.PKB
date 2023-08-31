@@ -15,6 +15,7 @@ AS
     -----------------------------------------------------------------------------
     --    Date                  Comment
     -- 08/16/2018 TJL         Initial Check-in
+    -- 08/01/2023 Pk          Changed relatepdapplication MAX(mc.managepriorityappsjobid) to address objectid gap fixes.
     -- **************************************************************************
 
     gc_countypreprelendpoint     udt_id
@@ -291,10 +292,14 @@ AS
         END;
 
         BEGIN
-            SELECT MAX(mc.managepriorityappsjobid)
+             SELECT mc.managepriorityappsjobid --MAX(mc.managepriorityappsjobid) -- 08/01/2023 Pk          Changed relatepdapplication MAX(mc.managepriorityappsjobid) to address objectid gap fixes.
               INTO t_managejobid
               FROM query.r_managepriorityappscounty mc
-             WHERE mc.cacountyobjectid = t_countyid;
+               join API.RELATIONSHIPS r on r.RELATIONSHIPID = mc.RELATIONSHIPID
+               join API.LOGICALTRANSACTIONS lt on lt.LOGICALTRANSACTIONID = r.LOGICALTRANSACTIONID
+             WHERE mc.cacountyobjectid = t_countyid
+                 order by lt.CREATEDDATE desc 
+           fetch first 1 row only;-- 08/01/2023 Pk          Changed relatepdapplication MAX(mc.managepriorityappsjobid) to address objectid gap fixes.
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
                 api.pkg_errors.raiseerror(

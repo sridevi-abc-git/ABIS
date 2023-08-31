@@ -11,7 +11,7 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Date                  Comment
-    -- 03/23/2023 PK  31462   Report function created
+    -- 06/15/2023 PK  31462   Report function created
     -- ****************************************************************************
     -- ************************************************************************
     --  Main process
@@ -64,38 +64,6 @@ BEGIN
                || '","'             
                ||ac.arrestinginvestigator 
                || '","'
---               
---               ||api.pkg_columnquery.VALUE((api.pkg_securityquery.effectiveuserid),
---                                         'Name')
---                || '","'
---           ||(
---               SUBSTR(
---                      api.pkg_columnquery.VALUE(
---                          (api.pkg_securityquery.effectiveuserid),
---                          'OfficePhoneNumber'),
---                      1,
---                      3)
---                  ) 
---               || SUBSTR(
---                      api.pkg_columnquery.VALUE(
---                          (api.pkg_securityquery.effectiveuserid),
---                          'OfficePhoneNumber'),
---                      4,
---                      3)
---               || '-'
---               || SUBSTR(
---                      api.pkg_columnquery.VALUE(
---                          (api.pkg_securityquery.effectiveuserid),
---                          'OfficePhoneNumber'),
---                      7,
---                      4)
---                || '","'
---              || ac.lastname
---              || '","'
---               ||ac.firstname
---               || '","'
---               ||ac.middlename
---               || '","'
                || o.ORINUMBER
                || '","'
                || o.DISPLAYFORMAT
