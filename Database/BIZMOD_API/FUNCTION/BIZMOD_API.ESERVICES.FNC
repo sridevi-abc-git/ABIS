@@ -1,16 +1,20 @@
-CREATE OR REPLACE FUNCTION bizmod_api.eservices(a_packet IN CLOB)
+CREATE OR REPLACE FUNCTION BIZMOD_API.eservices(a_packet   IN CLOB,
+                                                a_filedata IN BLOB default NULL)
     RETURN CLOB
 IS
     -- ****************************************************************************
-    -- File:        ESERVICES V2.FNC
+    -- File:        BIZMOD_API.ESERVICES.FNC
     -- Author:      Timothy J. Lord
     --
     -- Purpose :
     --
     -- History:
     -------------------------------------------------------------------------------
-    --    Date              Comment
-    --  12/09/2022 TJL
+    --    Ver:     Date          Ticket          Comment
+    --          12/09/2022 TJL 
+    --    2.0   08/31/2023 TJL  BIZ-12458   Added default parameter to contain file data
+    --                                      to be uploaded into ABIS.  Updated saving
+    --                                      data in log files.
     -- ****************************************************************************
     no_update      EXCEPTION;
     bad_json       EXCEPTION;
@@ -39,7 +43,7 @@ BEGIN
     -- Log the request
     -- ***********************************************************************
     UPDATE eservices_log_t
-       SET request = t_request, packet = a_packet
+       SET request = t_request, packet = a_packet, filedata = a_filedata
      WHERE seq = t_seq
        LOG ERRORS INTO bizmod_api.err$_eservices_log_t
                ('UPDATE')
@@ -47,8 +51,8 @@ BEGIN
 
     IF (SQL%ROWCOUNT = 0)
     THEN
-        INSERT INTO err$_eservices_clob_t(seq, jsondata)
-             VALUES (TO_CHAR(t_seq), a_packet);
+        INSERT INTO err$_eservices_clob_t(seq, jsondata, filedata)
+             VALUES (TO_CHAR(t_seq), a_packet, a_filedata);
 
         COMMIT;
         RAISE bad_json;
@@ -99,7 +103,7 @@ EXCEPTION
            SET err =
                    (SELECT ora_err_mesg$
                       FROM bizmod_api.err$_eservices_log_t
-                     WHERE seq = t_seq)
+                     WHERE seq = t_seq)               
          WHERE seq = t_seq;
 
         RETURN json_object(
@@ -127,3 +131,8 @@ EXCEPTION
                                    'EXCEPTION' VALUE t_sqlerrm));
 END eservices;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.ESERVICES TO ABC;
+
+GRANT EXECUTE ON BIZMOD_API.ESERVICES TO BIZMOD_USER;
