@@ -13,7 +13,7 @@ IS
     --    Ver:     Date                       Comment
     --    1.0   08/31/2023  TJL BIZ-12565   Initial Function Created
     -- ****************************************************************************
-    t_effectivedate DATE;
+    t_effectivedate Timestamp; -- DATE;
     t_object       json_object_t := NEW json_object_t();
     t_data         json_object_t;
     t_eventtypes   json_array_t := NEW json_array_t();
@@ -21,7 +21,7 @@ IS
     t_fees         json_array_t := NEW json_array_t();
     t_tmp          json_object_t;
 BEGIN
-    SELECT json_value(a_packet, '$.DATA.FEEDATE') INTO t_effectivedate FROM DUAL;
+    SELECT json_value(a_packet, '$.DATA.FEEDATE' RETURNING TIMESTAMP) INTO t_effectivedate FROM DUAL;
     
     t_object.put('PACKETYPE', 'CATERINGDROPDOWNS');
     t_object.put('DATA', NEW json_object_t());
@@ -58,7 +58,7 @@ BEGIN
                              NVL(fs.licensetypecode, '0')
                          AND fs2.feeactivity = fs.feeactivity
                          AND fs2.feetier = fs.feetier
-                         AND fs2.effectivedate <= nvl(t_effectivedate, trunc(sysdate)))
+                         AND fs2.effectivedate <= trunc(nvl(cast(t_effectivedate as date), sysdate)))
             ORDER BY fs.feetier)
     LOOP
         t_tmp := NEW json_object_t();
@@ -68,7 +68,7 @@ BEGIN
 
     t_data.put('FEES', t_fees);
 
-    DBMS_OUTPUT.put_line(t_object.TO_CLOB);
+--    DBMS_OUTPUT.put_line(t_object.TO_CLOB);
     
     return t_object.to_clob;
 END;
