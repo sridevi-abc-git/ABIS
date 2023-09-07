@@ -21,16 +21,15 @@ IS
     -- 05/05/2023 PK          Changed searchforexpiredsuspensions to resolve problem after Objectid have been moved to new gap
     -- 05/05/2023 PK          Changed createinvfrompostsusprev to resolve problem after Objectid have been moved to new gap
     -- 05/05/2023 PK          Updated Sitespecific.pkg_Enforcement.activatesuspendedlicense joined with Api statuses and added s.tag in wehere clause to improve performance
-    -- 03/29/2023 PK          WO 31538 'HoldType', 'H '||chr(38)||' L PROTEST'); --'||chr(38)||' An ampersand 
-    -- 07/18/2023 PK          Updated assignconductinv to resolve error exact fetch returns more than requested number of rows WO-32646
-    
-    
+    -- 03/29/2023 PK          WO 31538 'HoldType', 'H '||chr(38)||' L PROTEST'); --'||chr(38)||' An ampersand
+    -- 07/06/2023 NA          Updated ValidateAccRel to no longer require Max Object Id
+    -- 09/07/2023 PK          Updated assignconductinv to resolve error exact fetch returns more than requested number of rows WO-32646
     -- **************************************************************************
 
     ----------------------------------------------------------------------------------------------------
     --  CreateAccusation() -- PUBLIC
     --  Used by Raise Accusation outcome of the Close Investigation process on the Investigation job.
-   
+
     ----------------------------------------------------------------------------------------------------
     PROCEDURE createaccusation(a_objectid udt_id, a_asofdate DATE)
     IS
@@ -363,7 +362,7 @@ IS
                         api.pkg_objectdefquery.idforname (
                             'p_ConductLicenseInvestigation'))
                             order by lt.LOGICALTRANSACTIONID desc
-                            fetch first 1 row only; ---- 07/18/2023 PK   Updated assignconductinv to resolve error exact fetch returns more than requested number of rows WO-32646
+                            fetch first 1 row only; ---- 09/07/2023 PK   Updated assignconductinv to resolve error exact fetch returns more than requested number of rows WO-32646
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
                 api.pkg_errors.raiseerror(
@@ -747,7 +746,7 @@ IS
                  AND s.tag = 'SUSPEN')
                  --  AND j.statusid IN (SELECT s.statusid
                                  --       FROM api.statuses s
-                                --       WHERE s.tag = 'SUSPEN')) 
+                                --       WHERE s.tag = 'SUSPEN'))
         LOOP
             t_fromstat        := NULL;
             t_setbackstat     := NULL;
@@ -1622,7 +1621,7 @@ IS
 
             -- Get the AccusationJobId from the rel
             BEGIN
-                SELECT MAX(il.toobjectid)
+                SELECT il.toobjectid
                   INTO t_acclicensejobid
                   FROM query.r_createdbyinvestaccusation  r
                        JOIN query.r_createdbyinvestaccusation ia
@@ -1636,12 +1635,13 @@ IS
                                    api.pkg_configquery.endpointidforname(
                                        'j_Investigation',
                                        'Application'))
-                 WHERE r.relationshipid = a_objectid;
+                 WHERE r.relationshipid = a_objectid
+                 ORDER BY il.logicaltransactionid DESC, il.toobjectid DESC
+                 FETCH FIRST 1 ROWS ONLY;
             EXCEPTION
                 WHEN NO_DATA_FOUND THEN
                     NULL;
             END;
-
             --   t_AccLicenseJobId := api.pkg_ColumnQuery.NumericValue(t_AccusationJobId, 'dup_LicenseJobId');
 
             IF t_licensejobid != t_acclicensejobid THEN
