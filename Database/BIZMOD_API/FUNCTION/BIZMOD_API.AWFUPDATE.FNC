@@ -2,7 +2,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.awfupdate(a_packet IN CLOB, a_seq IN NUMBE
     RETURN CLOB
 IS
     -- ****************************************************************************
-    -- File:        AWFUPDATE.FNC
+    -- File:        BIZMOD_API.AWFUPDATE.FNC
     -- Author:      Timothy J. Lord
     --
     -- Purpose :    This function is called thru the eservices API to figure out
@@ -18,6 +18,7 @@ IS
     --   2.0    07/25/2023  TJL  BIZ-12090  Added updating feerequired field in awf table (new field)
     --   2.0    07/27/2023  TJL  BIZ-12143  Added updating updateddate field in awf table (new field)
     --   2.1    07/31/2023  TJL  BIZ-12090  Added returning 'FEEREQUIRED' in return packet
+    --   3.0    09/07/2023  TJL  BIZ-12530  Removed additional million gallons limit
     -- ****************************************************************************
     t_results      CLOB;
     t_licensenumber VARCHAR2(10);
@@ -87,10 +88,10 @@ BEGIN
             ELSE 0
         END;
 
-    IF (t_additionalmilliongallons > 99)
-    THEN
-        RAISE VALUE_ERROR;
-    END IF;
+--    IF (t_additionalmilliongallons > 99)
+--    THEN
+--        RAISE VALUE_ERROR;
+--    END IF;
 
     -- get current fee info
     SELECT a.renactivity,
