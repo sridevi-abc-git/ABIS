@@ -1,7 +1,7 @@
 CREATE OR REPLACE PACKAGE BODY BIZMOD_API.e_payment
 AS
     -- **************************************************************************
-    -- File:        E_PAYMENT V4.PKB
+    -- File:        BIZMOD_API.E_PAYMENT.PKB
     -- Author:      Timothy J.Lord
     --
     -- Description:
@@ -9,8 +9,10 @@ AS
     --
     -- History:
     -----------------------------------------------------------------------------
-    --    Date                  Comment
-    -- 03/24/2023 TJL       Package Created from ABC.E_PAYMENT package
+    --    Ver:     Date          Ticket          Comment
+    --          03/24/2023 TJL              Package Created from ABC.E_PAYMENT package
+    --     2.0  09/06/2023 TJL  BIZ-12648   Change transmittal status from Prepared to Cashiered
+    --                                        after transmittal is created.
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -688,7 +690,8 @@ AS
         t_objectlist   api.udt_objectlist;
         t_sqlerrm      VARCHAR2(4000);
         t_backtrace    VARCHAR2(4000);
-        t_processid    NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
+        t_seq          NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
+        t_processid    api.pkg_definition.udt_id;
 
         t_transmittaldefid api.pkg_definition.udt_id;
         t_transmittals api.udt_objectlist := api.udt_objectlist();
@@ -796,6 +799,25 @@ AS
 
                     api.pkg_logicaltransactionupdate.endtransaction;
                     COMMIT;
+                
+                -- 09/06/2023 TJL BIZ-12648  Added
+                -- *****************************************************************
+                -- Find and process Prepare Transmittal  
+                -- *****************************************************************
+                -- get processes
+                SELECT processid
+                  INTO t_processid
+                  FROM api.processes p
+                 WHERE p.jobid = t_transmittalobjectid
+                   AND p.processtypeid = api.pkg_objectdefquery.idforname('p_PrepareTransmittal');
+
+                -- set outcome to Complete (process will complete when COMMIT is executed.
+                api.pkg_logicaltransactionupdate.starttransaction;
+                api.pkg_columnupdate.setvalue(t_processid, 'Outcome', 'Sent to HQ');
+                api.pkg_logicaltransactionupdate.endtransaction;
+                COMMIT;
+                -- end BIZ-12648
+                    
                 EXCEPTION
                     WHEN OTHERS
                     THEN
@@ -840,7 +862,7 @@ AS
                              VALUES (t_sqlerrm,
                                      t_backtrace,
                                      -1,
-                                     t_processid);
+                                     t_seq);
                     END IF;
                 END LOOP;
 
