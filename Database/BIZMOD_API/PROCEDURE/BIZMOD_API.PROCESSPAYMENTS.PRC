@@ -18,7 +18,7 @@ IS
     t_error        VARCHAR2(4000);
     t_paidcount    NUMBER := 0;
     t_results      CLOB;
-    t_transmittal  api.pkg_definition.udt_id;
+    t_transmittal  api.udt_objectlist;
     t_msg          VARCHAR2(4000);
     t_seq          NUMBER;
     t_to           VARCHAR2(4000);
@@ -43,7 +43,8 @@ BEGIN
                              AND fd.confirmationnumber = p.confirmationid)
                    WHERE fd.abispayment = 'N'
                      AND p.transmittalbatch IS NULL
-                     --                         AND p.feeobjid IS NOT NULL
+                     AND p.paymentobjectid IS NULL
+                     AND fd.confirmationnumber != NVL(p.confirmationid, '0')
                      AND NVL(p.description, 'z') NOT LIKE '%AWF%'
                 ORDER BY fd.licensenumber DESC)
     LOOP
@@ -179,7 +180,7 @@ BEGIN
                     || LPAD(rec.licensenumber, 6, ' ')
                     || CHR(9)
                     || CHR(9)
-                    || 'Not Paid (duplicate payment)'
+                    || 'Duplicate Payment'
                     || CHR(13);
             END IF;
         END IF;
@@ -193,17 +194,30 @@ BEGIN
 
     t_body := 'Process Cleared Payments Job Completed' || CHR(10) || CHR(13);
 
-    IF (t_transmittal IS NOT NULL)
+    IF (t_transmittal.COUNT > 0)
     THEN
         t_body :=
             t_body
             || 'Transmittal Batch External File Number: '
-            || api.pkg_columnquery.VALUE(t_transmittal, 'externalfilenum');
+            || CHR(13);
+
+        FOR rec IN (SELECT objectid FROM TABLE(t_transmittal))
+        LOOP
+            t_body :=
+                t_body
+                || CHR(9)
+                || CHR(9)
+                || api.pkg_columnquery.VALUE(rec.objectid, 'externalfilenum')
+                || CHR(13);
+        END LOOP;
     END IF;
 
     t_body := t_body || 'AWF Refunds to Process:' || CHR(13);
 
-    FOR rec IN (SELECT a.licensenumber, a.paymentbatchdate, a.paymentbatch, a.awffeeamount
+    FOR rec IN (SELECT a.licensenumber,
+                       a.paymentbatchdate,
+                       a.paymentbatch,
+                       a.awffeeamount
                   FROM bizmod_api.awf_t a
                  WHERE a.awffeeamount < 0
                    AND NVL(a.completed, 'N') != 'Y')

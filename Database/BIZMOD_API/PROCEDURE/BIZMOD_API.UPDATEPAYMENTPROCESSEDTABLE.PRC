@@ -64,6 +64,7 @@ BEGIN
                  LEFT OUTER JOIN bizmod_api.e_payments_processed_t fd
                      ON (p.licensenumber = fd.licensenumber)
            WHERE p.transmittalbatch IS NULL
+             AND p.Description not like '%AWF%'
              AND fd.licensenumber IS NULL
         GROUP BY p.licensenumber,
                  p.datepaid,
@@ -73,8 +74,8 @@ BEGIN
     COMMIT;
 
     bizmod_api.createjob(
-        a_procedure => 'PROCESSPAYMENTS',
-        a_description => 'Process Payments',
+        a_procedure => 'BIZMOD_API.PROCESSPAYMENTS',
+        a_description => 'E-Service Process Payments',
         a_argument1 => NULL);
 
 EXCEPTION

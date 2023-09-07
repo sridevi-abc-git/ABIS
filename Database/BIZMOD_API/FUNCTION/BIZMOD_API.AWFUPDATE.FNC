@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION awfupdate(a_packet IN CLOB, a_seq IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.awfupdate(a_packet IN CLOB, a_seq IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -12,12 +12,16 @@ IS
     --
     -- History:
     -------------------------------------------------------------------------------
-    --    Date           Ticket     Comment
-    --  06/08/2022 TJL  BIZ-      Initial Function Created
-    --  02/17/2023 TJL            Converted to using JSON objects.
+    --  Ver:       Date           Ticket     Comment
+    --          06/08/2022 TJL  BIZ-      Initial Function Created
+    --          02/17/2023 TJL            Converted to using JSON objects.
+    --   2.0    07/25/2023  TJL  BIZ-12090  Added updating feerequired field in awf table (new field)
+    --   2.0    07/27/2023  TJL  BIZ-12143  Added updating updateddate field in awf table (new field)
+    --   2.1    07/31/2023  TJL  BIZ-12090  Added returning 'FEEREQUIRED' in return packet
     -- ****************************************************************************
     t_results      CLOB;
     t_licensenumber VARCHAR2(10);
+    t_licensetypejobid NUMBER;
     t_renfeeid     NUMBER;
     t_gallonage    NUMBER;
     t_amount       NUMBER;
@@ -32,6 +36,9 @@ IS
     t_additionalmilliongallons NUMBER;
     t_awffee       NUMBER;
     t_justification VARCHAR2(1000);
+    t_adjustedamount NUMBER;
+    t_feerequired  NUMBER;
+    t_paidamount   NUMBER;
 
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
@@ -42,8 +49,14 @@ IS
 -- ****************************************************************************
 -- ****************************************************************************
 BEGIN
-    SELECT feeid, gallonage, licensenumber, justification
-      INTO t_renfeeid, t_gallonage, t_licensenumber, t_justification
+    SELECT feeid,
+           gallonage,
+           licensenumber,
+           justification
+      INTO t_renfeeid,
+           t_gallonage,
+           t_licensenumber,
+           t_justification
       FROM JSON_TABLE(
                a_packet,
                '$'
@@ -55,7 +68,8 @@ BEGIN
                            licensenumber VARCHAR2(1000)
                                PATH '$.LICENSENUMBER',
                            gallonage NUMBER PATH '$.GALLONAGE',
-                           justification VARCHAR2(1000) PATH '$.JUSTIFICATION')));
+                           justification VARCHAR2(1000)
+                               PATH '$.JUSTIFICATION')));
 
     -- from gallonage entered figure out codes
     t_gallonagerange :=
@@ -67,17 +81,28 @@ BEGIN
             ELSE '200K TO 1M'
         END;
 
-    t_additionalmilliongallons := FLOOR(t_gallonage / 1000000);
+    t_additionalmilliongallons :=
+        CASE
+            WHEN t_gallonage > 0 THEN FLOOR((t_gallonage - 1) / 1000000)
+            ELSE 0
+        END;
+
+    IF (t_additionalmilliongallons > 99)
+    THEN
+        RAISE VALUE_ERROR;
+    END IF;
 
     -- get current fee info
     SELECT a.renactivity,
            a.licensetypecode,
            a.renewalamountpaid,
-           a.awfdate
+           a.awfdate,
+           a.licensetypejobid
       INTO t_feeactivitytype,
            t_ltcode,
            t_renamount,
-           t_awfdate
+           t_awfdate,
+           t_licensetypejobid
       FROM awf_t a
      WHERE a.renfeeid = t_renfeeid;
 
@@ -85,7 +110,7 @@ BEGIN
     sitespecific."PKG_FEES".getltfeeamount(
         a_jobid     => NULL,
         a_effectivedate => t_awfdate,
-        a_feeactivitytype => t_feeactivitytype,
+        a_feeactivitytype => SUBSTR(t_feeactivitytype, 1, 3),
         a_otherfeecode => NULL,
         a_ltcode    => t_ltcode,
         a_gallonagerange => t_gallonagerange,
@@ -96,11 +121,11 @@ BEGIN
         a_feetype   => 'P',
         a_ltcount   => 0,
         a_asofdate  => SYSDATE,
-        a_feeamount => t_feeamount,
+        a_feeamount => t_feerequired,
         a_licensefeescheduleid => t_scheduleid);
 
     -- get difference to figure out AWF fee
-    t_awffee := t_feeamount + t_renamount;
+    t_awffee := t_feerequired + t_renamount;
 
     -- update abc261 table to new information
     UPDATE awf_t a
@@ -108,9 +133,10 @@ BEGIN
            a.newaddionalgallonage = t_additionalmilliongallons,
            a.awffeeamount = t_awffee,
            a.gallonage261 = t_gallonage,
-           a.justification = t_justification
+           a.justification = t_justification,
+           a.feerequired = t_feerequired,
+           a.submitteddate = SYSDATE
      WHERE a.renfeeid = t_renfeeid;
---dbms_output.put_line('Updated: ' || sql%rowcount);
 
     COMMIT;
 
@@ -120,7 +146,8 @@ BEGIN
             'PACKET_TYPE' VALUE 'AWFUPDATERESULTS',
             'DATA' VALUE
                 json_object('LICENSENUMBER' VALUE t_licensenumber,
-                            'AMOUNTOWED' VALUE t_awffee));
+                            'AMOUNTOWED' VALUE t_awffee,
+                            'FEEREQUIRED' VALUE t_feerequired));
     RETURN t_results;
 EXCEPTION
     WHEN OTHERS

@@ -1,0 +1,47 @@
+﻿Installing assembly 'C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe'.
+Affected parameters are:
+   logtoconsole = 
+   assemblypath = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
+   logfile = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.InstallLog
+No public installers with the RunInstallerAttribute.Yes attribute could be found in the C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe assembly.
+Committing assembly 'C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe'.
+Affected parameters are:
+   logtoconsole = 
+   assemblypath = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
+   logfile = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.InstallLog
+No public installers with the RunInstallerAttribute.Yes attribute could be found in the C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe assembly.
+Remove InstallState file because there are no installers.
+Installing assembly 'C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe'.
+Affected parameters are:
+   logtoconsole = 
+   assemblypath = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
+   logfile = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.InstallLog
+No public installers with the RunInstallerAttribute.Yes attribute could be found in the C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe assembly.
+Committing assembly 'C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe'.
+Affected parameters are:
+   logtoconsole = 
+   assemblypath = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
+   logfile = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.InstallLog
+No public installers with the RunInstallerAttribute.Yes attribute could be found in the C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe assembly.
+Remove InstallState file because there are no installers.
+Installing assembly 'C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe'.
+Affected parameters are:
+   logtoconsole = 
+   assemblypath = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
+   logfile = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.InstallLog
+Installing service ABCUploadService...
+Service ABCUploadService has been successfully installed.
+Creating EventLog source ABCUploadService in log Application...
+Committing assembly 'C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe'.
+Affected parameters are:
+   logtoconsole = 
+   assemblypath = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
+   logfile = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.InstallLog
+Uninstalling assembly 'C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe'.
+Affected parameters are:
+   logtoconsole = 
+   assemblypath = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
+   logfile = C:\Development\ConsolApplications\ABCUploadService-19C\ABCUploadService\bin\x64\Debug\ABCUploadService.InstallLog
+Removing EventLog source ABCUploadService.
+Service ABCUploadService is being removed from the system...
+Service ABCUploadService was successfully removed from the system.

@@ -22,8 +22,8 @@ IS
     t_err_mesg     VARCHAR2(2000);
     t_licensenumber VARCHAR2(10);
     t_count        NUMBER := 0;
-    t_first        BOOLEAN := TRUE;
-
+--    t_first        BOOLEAN := TRUE;
+    t_paidcount     NUMBER := 0;
     t_amountpaid   NUMBER;
 BEGIN
     FOR paidfees
@@ -171,6 +171,7 @@ BEGIN
                                           paidfees.licensetypecode,
                                           'Y',
                                           NULL);
+                        t_paidcount := t_paidcount + t_count;
                     END IF;
             END CASE;
         EXCEPTION
@@ -191,12 +192,15 @@ BEGIN
         END;
 
         IF (paidfees.feeobjid IS NOT NULL
+        AND t_paidcount > 0
         AND paidfees.licensenumber != paidfees.nextlic)
         THEN
             bizmod_api.createjob(
                 a_procedure => 'E_PAYMENT.MAKEPAYMENT',
                 a_description => 'Pay License Number: ' || t_licensenumber,
                 a_argument1 => t_licensenumber);
+                
+        t_paidcount := 0;
         END IF;
     END LOOP;
 

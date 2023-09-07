@@ -29,11 +29,7 @@ AS
                      a_backtrace       OUT VARCHAR2)
         RETURN NUMBER;
 
---    FUNCTION createtransmittal(a_paymentobjectlist IN api.udt_objectlist,
---                               a_sqlerrm         OUT VARCHAR2,
---                               a_backtrace       OUT VARCHAR2)
---        RETURN NUMBER;
-    FUNCTION createtransmittal RETURN NUMBER;
+    FUNCTION createtransmittal RETURN api.udt_objectlist;
     PROCEDURE createawfpayments;
 
     PROCEDURE makepayment(a_licensenumber VARCHAR2, a_asofdate DATE);
