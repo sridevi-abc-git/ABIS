@@ -622,10 +622,10 @@ IS
     IS
         t_jobid   udt_id;
     BEGIN
-       -- t_jobid := getjobidfordeletedrel (a_relationshipid);
-null;
+        t_jobid := getjobidfordeletedrel (a_relationshipid);
+
         -- Delete the old point. If there is not a point, then the webservice will do nothing, so it is still safe
-      --  deleteaddresspoint (t_jobid, SYSDATE);
+        deleteaddresspoint (t_jobid, SYSDATE);
     END deletegeocodedaddressfromrel;
 END pkg_gis;
 /
