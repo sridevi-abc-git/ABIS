@@ -13,6 +13,9 @@ AS
     --          03/24/2023 TJL              Package Created from ABC.E_PAYMENT package
     --     2.0  09/06/2023 TJL  BIZ-12648   Change transmittal status from Prepared to Cashiered
     --                                        after transmittal is created.
+    --     2.1  09/12/2023 TJL  BIZ-12752   Added updating tmp_jobid table to prevent validation
+    --                                        failure in sitespecific.pkg_accounting package when
+    --                                        adding license number to AWF Payment Branch item.
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -1046,6 +1049,12 @@ AS
                         t_batchpaymententryobjectid,
                         'CheckAmount',
                         t_awf(inx).paymentamount);
+                        
+                    -- 09/12/2023 TJL  BIZ-12752 added code
+                    --      tmp_jobid entry will be deleted on oracle commit.
+                    INSERT INTO abc.tmp_jobid j (objectid)
+                    VALUES (t_batchpaymententryobjectid);
+                    -- end BIZ-12752 
 
                     -- add license and payment amount information
                     api.pkg_columnupdate.setvalue(
