@@ -383,6 +383,9 @@ AS
                     --Add x.feeId and x.Refund Amount to the Array
                     t_feeids(t_feeids.COUNT + 1)                 := x.feeid;
                     t_refundamounts(t_refundamounts.COUNT + 1)   := x.refundamount;
+                    
+                         pkg_debug.putline('****current feeid '||x.feeid);
+                         pkg_debug.putline('****current refund amount '||x.refundamount);
             
                     --If it was previously an Over Payment then track it as an OVR refund.
                     --or if it was previously a Service Charge then track it as a SRV.

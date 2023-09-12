@@ -17,8 +17,9 @@ AS
     -- 09/21/2021 PK          WO-25904 -Added eCheck to the Deposit Type  
     -- 10/26/2022 PK          Changed DB name to ABISP1 after upgrade on libne   IF (UPPER(sys_context('USERENV', 'instance_name')) != 'ABCPROD') THEN   
     -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes   
-    -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid) 
-    -- 08/02/2021  PK          Reverted back changes done on 05/05/2023 - modify payment because of refund batch error in prod WO  32802 
+    -- 06/08/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
+    -- 09/06/2023 PK          AWF Payment Batch and CC/eCheck WO 32944 Changed Winegrowerscompletion and CreateBatchpayments to add confirmation number
+    -- 09/06/2023 PK          AWF Payment Batch and CC/eCheck WO 32944 Changed Deposit batch to split Payment batch by payment type in deposit batch
     -- **************************************************************************
 
 
@@ -79,6 +80,7 @@ AS
                         FROM query.j_paymentbatch p
                        WHERE p.statusname = 'CMPLTE'
                          AND p.objectdeftypeid = 2
+                          AND p.paymenttype = t_deposittype -- PK WO 32944 09/06/2023 Changed Deposit batch to split Payment batch by payment type in deposit batch
                          AND NOT EXISTS
                                  (SELECT 1
                                     FROM query.r_depositpaymentbatch re
@@ -105,6 +107,22 @@ AS
                                                    a_objectid,
                                                    c.jobid);
             END LOOP;
+            ---- added Payment batches to CC and Echecks for AWF payment batches PK WO 32944 09/06/2023 Changed Deposit batch to split Payment batch by payment type in deposit batch
+       FOR c IN (SELECT p.jobid
+                        FROM query.j_paymentbatch p
+                       WHERE p.statusname = 'CMPLTE'
+                         AND p.objectdeftypeid = 2
+                         AND p.paymenttype = t_deposittype -- PK WO 32944 09/06/2023  Changed Deposit batch to split Payment batch by payment type in deposit batch
+                         AND NOT EXISTS
+                                 (SELECT 1
+                                    FROM query.r_depositpaymentbatch re
+                                   WHERE re.paymentbatchjobid = p.jobid))
+            LOOP
+                t_relationshipid   :=
+                    api.pkg_relationshipupdate.new(t_paymentbatchendpointid,
+                                                   a_objectid,
+                                                   c.jobid);
+            END LOOP;
         ELSIF t_deposittype = 'ECheck' THEN   --Added by Pawan on 09/21/2021 for WO-25904 -Added eCheck to the Deposit Type
             FOR c IN (SELECT j.jobid
                         FROM query.j_transmittal j
@@ -118,6 +136,21 @@ AS
             LOOP
                 t_relationshipid   :=
                     api.pkg_relationshipupdate.new(t_transmittalendpointid,
+                                                   a_objectid,
+                                                   c.jobid);
+            END LOOP;
+             FOR c IN (SELECT p.jobid
+                        FROM query.j_paymentbatch p
+                       WHERE p.statusname = 'CMPLTE'
+                         AND p.objectdeftypeid = 2
+                         AND p.paymenttype = t_deposittype -- PK WO 32944 09/06/2023  Changed Deposit batch to split Payment batch by payment type in deposit batch
+                         AND NOT EXISTS
+                                 (SELECT 1
+                                    FROM query.r_depositpaymentbatch re
+                                   WHERE re.paymentbatchjobid = p.jobid))
+            LOOP
+                t_relationshipid   :=
+                    api.pkg_relationshipupdate.new(t_paymentbatchendpointid,
                                                    a_objectid,
                                                    c.jobid);
             END LOOP;
@@ -1294,6 +1327,7 @@ AS
         t_multiple                   VARCHAR2(1);
         t_paidamount                 NUMBER;
         t_newpaymentid               udt_id;
+        t_confirmationnumber         VARCHAR(60); --09/06/2023PK
     BEGIN
         t_jobid   := api.pkg_columnquery.numericvalue(a_objectid, 'JobId');
 
@@ -1309,6 +1343,9 @@ AS
             -- Get the HQ Receipt number
             t_hqreceipt   :=
                 api.pkg_columnquery.VALUE(c.batchobjectid, 'PaymentNumber');
+                
+            t_confirmationnumber := 
+                api.pkg_columnquery.VALUE(c.batchobjectid, 'Confirmationnumber'); -- Added by Pawan WO 32944 09/06/2023
 
             t_multiple   :=
                 api.pkg_columnquery.VALUE(c.batchobjectid, 'MultipleEntry');
@@ -1407,6 +1444,10 @@ AS
                         api.pkg_columnupdate.setvalue(t_feeobjid,
                                                       'HQReceipt',
                                                       t_hqreceipt);
+                                                      
+                        api.pkg_columnupdate.setvalue(t_feeobjid,  --Added by Pawan  09/06/2023  PK WO 32944
+                                                      'Confirmationnumber',
+                                                      t_confirmationnumber);
                     END IF;
                 END LOOP;
 
@@ -1415,7 +1456,8 @@ AS
                                                    t_amountstopay,
                                                    t_jobid,
                                                    t_hqreceipt,
-                                                   t_newpaymentid);
+                                                   t_newpaymentid,
+                                                   a_confirmationnumber => t_confirmationnumber); -- 09/06/2023  PK WO 32944);
 
                 INSERT INTO processesdepositedpayments_t
                      VALUES (t_jobid,
@@ -1523,6 +1565,10 @@ AS
                     api.pkg_columnupdate.setvalue(t_feeobjid,
                                                   'HQReceipt',
                                                   t_hqreceipt);
+                                                  
+                    api.pkg_columnupdate.setvalue(t_feeobjid,  --Added by Pawan  09/06/2023  PK WO 32944
+                                                      'Confirmationnumber',
+                                                      t_confirmationnumber);
                 END IF;
 
                 --Create Payments for Fees greater then 0
@@ -1531,7 +1577,8 @@ AS
                                                    t_jobid,
                                                    t_hqreceipt,
                                                    t_newpaymentid,
-                                                   'N');
+                                                   'N',
+                                                   a_confirmationnumber => t_confirmationnumber); -- 09/06/2023  PK WO 32944 Changed Winegrowerscompletion and CreateBatchpayments to add confirmation number);
 
                 INSERT INTO processesdepositedpayments_t
                      VALUES (t_jobid,
@@ -1775,7 +1822,7 @@ AS
                                            'R64B', lt.objectid,
                                            'PEND', lt.objectid,
                                            'ISSUPD', lt.objectid,
-                                            (SELECT nvl  (lt.objectid ,null) --MAX(lt.objectid)   -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
+                                           (SELECT nvl  (lt.objectid ,null) --MAX(lt.objectid)   -- 06/08/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
                                               FROM query.j_licensetype  lt
                                                    JOIN
                                                    query.r_licenselicensetype
@@ -1791,7 +1838,7 @@ AS
                                                AND lt.dup_licensetypecode =
                                                    t_licensetypecode
                                                    order by o.logicaltransactionid desc
-                                                    fetch first 1 row only)) --MAX(lt.objectid)   -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
+                                                    fetch first 1 row only))
                                            obj_id
                                   FROM query.j_licensetype  lt
                                        JOIN query.r_licenselicensetype rllt
@@ -1871,7 +1918,7 @@ AS
                                                            'R64B', lt2.objectid,
                                                            'PEND', lt2.objectid,
                                                            'ISSUPD', lt2.objectid,
-                                                          (SELECT nvl  (lt2.objectid ,null) --MAX(lt2.objectid)  -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
+                                                           (SELECT nvl  (lt2.objectid ,null) --MAX(lt2.objectid)  -- 06/08/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
                                                               FROM query.j_licensetype
                                                                    lt2
                                                                    JOIN
@@ -1900,7 +1947,7 @@ AS
                                                                AND ltc.licensetypecode =
                                                                    t_licensetypecode 
                                                                   order by o.logicaltransactionid desc                                   
-                                                                  fetch first 1 row only)) -- 08/01/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
+                                                                  fetch first 1 row only))
                                                            obj_id
                                                   FROM query.j_licensetype
                                                        lt2
@@ -1998,7 +2045,8 @@ AS
                                   a_setpaymentstatus VARCHAR DEFAULT 'Y',
                                   a_setpaymentbatchid VARCHAR DEFAULT 'Y',
                                   a_cabinincomeind   VARCHAR2 DEFAULT 'I',
-                                  a_cabinamttype     VARCHAR2 DEFAULT 'I')
+                                  a_cabinamttype     VARCHAR2 DEFAULT 'I',
+                                  a_confirmationnumber VARCHAR2 DEFAULT null)
     IS
         t_earnedamount                  NUMBER;
         t_paytransobjectid              NUMBER;
@@ -2035,6 +2083,7 @@ AS
             api.pkg_configquery.objectdefidforname('o_PaymentStatus');
         t_feeids                    := a_feeids;
         t_amountstopay              := a_amountstopay;
+        t_paymentid                 := a_paymentid; -- added by Pawan -- 08/15/2023  PK WO 32944
 
         /*  for test2 in 1..t_FeeIds.count loop
             dbms_Output.put_Line('pret_FeeIds: ' || t_FeeIds(test2));
@@ -2057,6 +2106,11 @@ AS
         --Create payment
         t_paymentid                 :=
             api.pkg_paymentupdate.new(SYSDATE, t_feeids, t_amountstopay);
+            
+       If  a_confirmationnumber is not null THEN -- 09/06/2023  PK WO 32944
+        api.pkg_paymentupdate.modify(t_paymentid, a_confirmationnumber, a_hqreceipt);   -- By pawan  09/06/2023  PK WO 32944
+       End If;   
+                
         t_paymentobjid              :=
             api.pkg_objectupdate.registerexternalobject('o_Payment',
                                                         t_paymentid);
@@ -3205,9 +3259,8 @@ AS
 
         --Find the Max object id of the payment stati on the payment transactions of the voided payment,
         --used to create the new stati on the the new payment transactions
-   -- 08/02/2021  PK          Reverted back changes done on 05/05/2023 - modify payment because of refund batch error in prod WO  32802  
-   
-          SELECT MAX(pspt.paymentstatusobjectid)      --APatterson: PIP Task 8.5
+   -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes  
+        SELECT pspt.paymentstatusobjectid     --APatterson: PIP Task 8.5
           INTO t_maxpaymentstatusobjid
           FROM api.paymenttransactions  pt
                JOIN api.registeredexternalobjects reo   --TAyers: PIP Task 8.5
@@ -3215,7 +3268,12 @@ AS
                   AND reo.objectdefid = t_paytransobjectdefid
                JOIN query.r_paymentstatuspaymenttrans pspt
                    ON pspt.paymenttransactionobjectid = reo.objectid
-         WHERE pt.paymentid = t_voidpaymentid;   
+                   join query.o_Paymentstatus ps
+                 on ps.ObjectId = pspt.PaymentStatusObjectId
+         WHERE pt.paymentid =  t_voidpaymentid
+          order by ps.StatusDate desc
+           fetch first 1 row only ;
+--              END of changes 05/05/2023 PK         
 
 
         -- Set income code to 'V' on payment transactions

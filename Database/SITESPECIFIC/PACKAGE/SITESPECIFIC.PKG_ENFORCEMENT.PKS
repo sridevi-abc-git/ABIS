@@ -189,6 +189,7 @@ IS
 
     PROCEDURE validateaccrel(a_objectid udt_id, a_asofdate DATE);
 END pkg_enforcement;
+
 /
 
 
