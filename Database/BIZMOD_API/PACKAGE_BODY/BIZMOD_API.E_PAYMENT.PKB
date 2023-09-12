@@ -1159,6 +1159,12 @@ AS
                         api.pkg_columnquery.VALUE(v.toobjectid,
                                                   'PaymentNumber'));
 
+                    -- 09/12/2023 TJL  BIZ-12752 added code
+                    --      tmp_jobid entry will be deleted on oracle commit.
+                    INSERT INTO abc.tmp_jobid j (objectid)
+                    VALUES (t_batchpaymententryobjectid);
+                    -- end BIZ-12752 
+
                     -- add license and payment amount information
                     api.pkg_columnupdate.setvalue(
                         t_batchpaymentverifyobjectid,
