@@ -147,8 +147,7 @@ AS
                                   a_setpaymentstatus VARCHAR DEFAULT 'Y',
                                   a_setpaymentbatchid VARCHAR DEFAULT 'Y',
                                   a_cabinincomeind   VARCHAR2 DEFAULT 'I',
-                                  a_cabinamttype     VARCHAR2 DEFAULT 'I',
-                                  a_confirmationnumber VARCHAR2 DEFAULT null);
+                                  a_cabinamttype     VARCHAR2 DEFAULT 'I');
 
     --------------------------------------------------------
     -- POICCompletion - public

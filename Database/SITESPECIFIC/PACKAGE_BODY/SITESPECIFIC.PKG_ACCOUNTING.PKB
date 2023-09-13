@@ -20,6 +20,8 @@ AS
     -- 06/08/2023 PK          Changed Relatelttoobject to change MAX( (SELECT MAX(lt.objectid)
     -- 09/06/2023 PK          AWF Payment Batch and CC/eCheck WO 32944 Changed Winegrowerscompletion and CreateBatchpayments to add confirmation number
     -- 09/06/2023 PK          AWF Payment Batch and CC/eCheck WO 32944 Changed Deposit batch to split Payment batch by payment type in deposit batch
+    -- 09/12/2023 TJL BIZ-12752  Modified relatelttoobject procedure to disable validation of license number and license type code when a type of payment
+    --                             batch is created by eservices
     -- **************************************************************************
 
 
@@ -1706,6 +1708,7 @@ AS
         t_batchentryverifyendpointid     udt_id
             := api.pkg_configquery.endpointidforname('o_BatchPaymentEntry',
                                                      'PaymentBatchVerify');
+        t_validate                        NUMBER;
     BEGIN
         t_licensetypecode   :=
             api.pkg_columnquery.VALUE(a_objectid, 'LicenseTypeCode');
@@ -1727,19 +1730,24 @@ AS
                     t_batchentryverifyendpointid)
            AND js.statustype IN ('X', 'C');
 
-    -- *************************************************************************
-    -- The following code block to prevent exceptions being thrown when 
-    -- creating and entering license number and license type code in Batch Payment 
-    -- Entry object.  This procedure is called anytime the value is changed
-    -- for license number or license type code.
-    -- *************************************************************************
-    -- ignore if this is production environment
-    IF (UPPER(sys_context('USERENV', 'instance_name')) != 'ABISP1') THEN --  10/26/2022 Changed by Pawan
-        if (t_LicenseNum is null or t_LicenseTypeCode is null) THEN 
-            t_ignoreerrduetostatus := 'Y';
+        -- 09/12/2023 TJL 12752 Added code
+        SELECT MAX(j.objectid)
+          INTO t_validate
+          FROM abc.tmp_jobid j;
+
+        -- *************************************************************************
+        -- The following code block to prevent exceptions being thrown when 
+        -- creating and entering license number and license type code in Batch Payment 
+        -- Entry object.  This procedure is called anytime the value is changed
+        -- for license number or license type code.
+        -- *************************************************************************
+        -- ignore if created by eservices
+        IF (t_validate IS NOT NULL) THEN -- 09/12/2023 TJL 12752 Added code  
+            if (t_LicenseNum is null or t_LicenseTypeCode is null) THEN 
+                t_ignoreerrduetostatus := 'Y';
+            END IF; 
         END IF; 
-    END IF; 
-    -- *************************************************************************	
+        -- *************************************************************************	
 
         --If there is no Entry PaymentBatchType, then get the Verify PaymentBatchType
         IF t_paymentbatchtype IS NULL THEN
