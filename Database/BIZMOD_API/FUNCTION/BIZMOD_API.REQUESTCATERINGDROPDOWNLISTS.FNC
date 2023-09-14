@@ -20,6 +20,7 @@ IS
     t_cities       json_array_t := NEW json_array_t();
     t_fees         json_array_t := NEW json_array_t();
     t_tmp          json_object_t;
+    t_tier         json_object_t;
 BEGIN
     SELECT json_value(a_packet, '$.DATA.FEEDATE' RETURNING TIMESTAMP) INTO t_effectivedate FROM DUAL;
     
@@ -48,21 +49,58 @@ BEGIN
     t_data.put('CITIES', t_cities);
 
     FOR rec
-        IN (  SELECT fs.feetier, fs.secondaryamount
-                FROM sitespecific.feeschedule_t fs
-               WHERE fs.feeactivity = 'CATA'
-                 AND fs.effectivedate =
-                     (SELECT MAX(fs2.effectivedate)
-                        FROM sitespecific.feeschedule_t fs2
-                       WHERE NVL(fs2.licensetypecode, '0') =
-                             NVL(fs.licensetypecode, '0')
-                         AND fs2.feeactivity = fs.feeactivity
-                         AND fs2.feetier = fs.feetier
-                         AND fs2.effectivedate <= trunc(nvl(cast(t_effectivedate as date), sysdate)))
-            ORDER BY fs.feetier)
+        IN (  
+        
+  SELECT fs.*, t.VALUE
+    FROM (  SELECT fs.feetier, fs.secondaryamount, ROWNUM line
+              FROM sitespecific.feeschedule_t fs
+             WHERE fs.feeactivity = 'CATA'
+               AND fs.effectivedate =
+                   (SELECT MAX(fs2.effectivedate)
+                      FROM sitespecific.feeschedule_t fs2
+                     WHERE NVL(fs2.licensetypecode, '0') =
+                           NVL(fs.licensetypecode, '0')
+                       AND fs2.feeactivity = fs.feeactivity
+                       AND fs2.feetier = fs.feetier
+                       AND fs2.effectivedate <= TRUNC(SYSDATE))
+          ORDER BY fs.feetier) fs
+         JOIN (  SELECT VALUE, lv
+                   FROM (    SELECT TRIM(REGEXP_SUBSTR(ltc.maxtiercount,
+                                                       '[^,]+',
+                                                       1,
+                                                       LEVEL))    VALUE,
+                                    LEVEL                         lv
+                               FROM query.o_licensetypecategory ltc
+                              WHERE ltc.licensetypecode = '58'
+                         CONNECT BY REGEXP_SUBSTR(ltc.maxtiercount,
+                                                  '[^,]+',
+                                                  1,
+                                                  LEVEL)
+                                        IS NOT NULL)
+               GROUP BY VALUE, lv) t
+             ON lv = fs.line
+ORDER BY line
+        
+--        SELECT fs.feetier, fs.secondaryamount
+--                FROM sitespecific.feeschedule_t fs
+--               WHERE fs.feeactivity = 'CATA'
+--                 AND fs.effectivedate =
+--                     (SELECT MAX(fs2.effectivedate)
+--                        FROM sitespecific.feeschedule_t fs2
+--                       WHERE NVL(fs2.licensetypecode, '0') =
+--                             NVL(fs.licensetypecode, '0')
+--                         AND fs2.feeactivity = fs.feeactivity
+--                         AND fs2.feetier = fs.feetier
+--                         AND fs2.effectivedate <= trunc(nvl(cast(t_effectivedate as date), sysdate)))
+--            ORDER BY fs.feetier
+            
+            )
     LOOP
+        t_tier := NEW json_object_t();
+        t_tier.put('AMOUNT', rec.secondaryamount);
+        t_tier.put('MINATTENDENCE', rec.value);
         t_tmp := NEW json_object_t();
-        t_tmp.put(rec.feetier, rec.secondaryamount);
+        t_tmp.put(rec.feetier, t_tier);
         t_fees.append(t_tmp);
     END LOOP;
 
