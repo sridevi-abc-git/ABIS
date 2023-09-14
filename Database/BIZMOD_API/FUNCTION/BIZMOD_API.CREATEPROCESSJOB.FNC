@@ -16,7 +16,7 @@ IS
     -- ****************************************************************************
     t_process      VARCHAR2(40);
 BEGIN
-    SELECT json_value(a_packet, '$.PACKET_TYPE') INTO t_process FROM DUAL;
+    SELECT json_value(a_packet, '$.PROCESS') INTO t_process FROM DUAL;
 
 
     bizmod_api.createjob(a_procedure => t_process,
@@ -28,6 +28,6 @@ BEGIN
                'DATA' VALUE
                    json_object(
                        'MSGNO' VALUE '0',
-                       'MSG' VALUE 'E-Services ' || t_process || 'Scheduled'));
+                       'MSG' VALUE 'E-Services ' || t_process || ' Scheduled'));
 END;
 /
