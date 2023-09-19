@@ -195,6 +195,8 @@ BEGIN
         --            dbms_output.put_line(t_headings(inx));
         END LOOP;
 
+dbms_output.put_line(t_headings.count);
+
         FOR inx IN 2 .. t_var.COUNT
         LOOP
             FOR rec
@@ -216,7 +218,7 @@ BEGIN
                     CONNECT BY LEVEL <=
                                  LENGTH(
                                      REGEXP_REPLACE(t_var(inx),
-                                                    '".*?"|[^,]*'))
+                                                    '(".*?"|.*?)(,|$)'))
                                + 1)
             LOOP
                 DBMS_OUTPUT.put_line(
