@@ -20,7 +20,7 @@ BEGIN
 
 
     bizmod_api.createjob(a_procedure => t_process,
-                         a_description => 'E-Services ' || t_process,
+                         a_description => t_process,
                          a_argument1 => a_seq);
 
     RETURN json_object(
