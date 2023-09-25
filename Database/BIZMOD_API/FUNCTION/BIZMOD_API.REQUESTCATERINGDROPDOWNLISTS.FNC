@@ -27,7 +27,7 @@ BEGIN
       INTO t_effectivedate
       FROM DUAL;
 
-    t_object.put('PACKETYPE', 'CATERINGDROPDOWNS');
+    t_object.put('PACKET_TYPE', 'CATERINGDROPDOWNS');
     t_object.put('DATA', NEW json_object_t());
     t_data := t_object.get_object('DATA');
 
