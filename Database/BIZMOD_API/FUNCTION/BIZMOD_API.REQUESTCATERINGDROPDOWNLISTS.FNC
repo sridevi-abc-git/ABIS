@@ -84,7 +84,7 @@ BEGIN
     LOOP
         t_tier := NEW json_object_t();
         t_tier.put('AMOUNT', rec.secondaryamount);
-        t_tier.put('MINATTENDENCE', rec.VALUE);
+        t_tier.put('MINATTENDANCE', rec.VALUE);
         t_tmp := NEW json_object_t();
         t_tmp.put(rec.feetier, t_tier);
         t_fees.append(t_tmp);
