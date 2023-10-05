@@ -3268,6 +3268,7 @@ AS
         --Find the Max object id of the payment stati on the payment transactions of the voided payment,
         --used to create the new stati on the the new payment transactions
    -- 05/05/2023 PK          Changed Modify Payment to address MAX(pspt.paymentstatusobjectid) after objectif gap fixes  
+   Begin
         SELECT pspt.paymentstatusobjectid     --APatterson: PIP Task 8.5
           INTO t_maxpaymentstatusobjid
           FROM api.paymenttransactions  pt
@@ -3280,7 +3281,11 @@ AS
                  on ps.ObjectId = pspt.PaymentStatusObjectId
          WHERE pt.paymentid =  t_voidpaymentid
           order by ps.StatusDate desc
-           fetch first 1 row only ;
+          fetch first 1 row only ;
+  exception when no_data_found then  -- Added to resolve no data found error
+          pkg_debug.putline('    Payment Status not found, setting to Null');
+          t_maxpaymentstatusobjid := null;
+     end;
 --              END of changes 05/05/2023 PK         
 
 
