@@ -16,6 +16,8 @@ AS
     --     2.1  09/12/2023 TJL  BIZ-12752   Added updating tmp_jobid table to prevent validation
     --                                        failure in sitespecific.pkg_accounting package when
     --                                        adding license number to AWF Payment Branch item.
+    --     2.1  10/06/2023 TJL  BIZ-13129   Added filter to only select AWF payments from e_payments
+    --                                        in createawfpayments procedure
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -918,7 +920,8 @@ AS
         LOOP
             SELECT (SELECT seq
                       FROM bizmod_api.e_payments_t p
-                     WHERE pp.licensenumber = p.licensenumber
+                     WHERE p.description = 'AWF'
+                       AND pp.licensenumber = p.licensenumber
                        AND pp.confirmationnumber = p.confirmationid
                        AND pp.paymenttype = 'Primary')    seq,
                    a.licensenumber,
