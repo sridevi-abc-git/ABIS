@@ -1,4 +1,5 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.fileuploadjob(a_seq NUMBER, a_asofdate DATE)
+CREATE OR REPLACE PROCEDURE BIZMOD_API.fileuploadjob(a_seq          NUMBER,
+                                                     a_asofdate     DATE)
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.FILEUPLOADJOB.PRC
@@ -21,12 +22,8 @@ IS
     t_basefilename VARCHAR2(256);
     t_extension    VARCHAR2(32);
     t_description  VARCHAR2(256);
-
-    t_body         VARCHAR2(32000);
-    t_to           VARCHAR2(4000);
-    t_from         VARCHAR2(4000);
-    t_cc           VARCHAR2(4000);
-    t_bcc          VARCHAR2(4000);
+    t_sqlerrm      VARCHAR2(4000);
+    t_trace        VARCHAR2(4000);
 BEGIN
     SELECT e.packet, e.filedata
       INTO t_packet, t_data
@@ -57,6 +54,19 @@ BEGIN
                            extension VARCHAR2(32) PATH '$.EXTENSION',
                            description VARCHAR2(256) PATH '$.DESCRIPTION')));
 
+    IF (t_abisid IS NULL)
+    THEN
+        t_abisid :=
+            api.pkg_simplesearch.objectbyindex('p_IssueCatererEventAuth',
+                                               'LSPId',
+                                               t_lsp_applicationid);
+
+        IF (t_abisid IS NULL)
+        THEN
+            RAISE NO_DATA_FOUND;
+        END IF;
+    END IF;
+
     t_doc :=
         api.pkg_documentupdate.new(
             a_documenttypeid => 3210082,
@@ -79,40 +89,43 @@ BEGIN
             a_fromobject => t_abisid,
             a_toobject  => t_doc);
 
-    DBMS_OUTPUT.put_line('Doc: ' || t_doc);
+    INSERT INTO bizmod_api.e_process_log_t(seq, processjob, info)
+             VALUES (
+                 a_seq,
+                 'FILEUPLOADJOB',
+                 'LSP Id: '
+                 || t_lsp_applicationid
+                 || CHR(13)
+                 || 'Catering Id: '
+                 || t_abisid
+                 || CHR(13)
+                 || 'File: '
+                 || t_basefilename
+                 || '.'
+                 || t_extension);
 EXCEPTION
     WHEN OTHERS
     THEN
-        t_body := SQLERRM || CHR(13) || DBMS_UTILITY.format_error_backtrace;
+        t_sqlerrm := SQLERRM;
+        t_trace := DBMS_UTILITY.format_error_backtrace;
 
-        SELECT pto,
-               pfrom,
-               pcc,
-               pbcc
-          INTO t_to,
-               t_from,
-               t_cc,
-               t_bcc
-          FROM (SELECT m.parametername, m.parametervalue
-                  FROM abc.email_parameters m
-                 WHERE app = 'EPAYMENT')
-               PIVOT (MAX(parametervalue)
-                     FOR parametername
-                     IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
+        api.pkg_logicaltransactionupdate.resettransaction;
+        ROLLBACK;
 
-        IF (t_from IS NOT NULL)
-        THEN
-            sitespecific.pkg_tlemail.sendemail(
-                p_fromaddress => t_from,
-                p_toaddress => t_to,
-                p_cc        => t_cc,
-                p_bcc       => t_bcc,
-                p_subject   => 'Error: File Upload Job',
-                p_body      => t_body,
-                p_mimetype  => 'text/plain');
-        END IF;
 
-        DBMS_OUTPUT.put_line('ERROR');
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+             VALUES (a_seq,
+                     'FILEUPLOADJOB',
+                     NULL,
+                     t_sqlerrm,
+                     t_trace);
+
+        COMMIT;
+
         RAISE;
 END;
 /
