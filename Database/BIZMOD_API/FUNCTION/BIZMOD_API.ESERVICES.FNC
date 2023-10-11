@@ -1,5 +1,6 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.eservices(a_packet   IN CLOB,
-                                                a_filedata IN BLOB default NULL)
+CREATE OR REPLACE FUNCTION BIZMOD_API.eservices(
+    a_packet       IN CLOB,
+    a_filedata     IN BLOB DEFAULT NULL)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -11,10 +12,12 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Ver:     Date          Ticket          Comment
-    --          12/09/2022 TJL 
+    --          12/09/2022 TJL
     --    2.0   08/31/2023 TJL  BIZ-12458   Added default parameter to contain file data
     --                                      to be uploaded into ABIS.  Updated saving
     --                                      data in log files.
+    --    3.0   09/21/2023 TJL  BIZ-12883   Change loging to log Process for requests when 
+    --                                        request is CREATEPROCESSJOB
     -- ****************************************************************************
     no_update      EXCEPTION;
     bad_json       EXCEPTION;
@@ -43,7 +46,16 @@ BEGIN
     -- Log the request
     -- ***********************************************************************
     UPDATE eservices_log_t
-       SET request = t_request, packet = a_packet, filedata = a_filedata
+       SET request =
+               CASE t_request
+                   WHEN 'CREATEPROCESSJOB'
+                   THEN
+                       json_value(a_packet, '$.PROCESS')
+                   ELSE
+                       t_request
+               END,
+           packet = a_packet,
+           filedata = a_filedata
      WHERE seq = t_seq
        LOG ERRORS INTO bizmod_api.err$_eservices_log_t
                ('UPDATE')
@@ -103,7 +115,7 @@ EXCEPTION
            SET err =
                    (SELECT ora_err_mesg$
                       FROM bizmod_api.err$_eservices_log_t
-                     WHERE seq = t_seq)               
+                     WHERE seq = t_seq)
          WHERE seq = t_seq;
 
         RETURN json_object(
