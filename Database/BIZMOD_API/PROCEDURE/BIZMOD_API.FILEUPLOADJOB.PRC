@@ -1,5 +1,5 @@
 CREATE OR REPLACE PROCEDURE BIZMOD_API.fileuploadjob(a_seq          NUMBER,
-                                                     a_asofdate     DATE)
+                                          a_asofdate     DATE)
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.FILEUPLOADJOB.PRC
@@ -69,7 +69,7 @@ BEGIN
 
     t_doc :=
         api.pkg_documentupdate.new(
-            a_documenttypeid => 3210082,
+            a_documenttypeid => 321008,
             a_data      => t_data,
             a_uncompressedlength => DBMS_LOB.getlength(t_data),
             a_basename  => t_basefilename,
@@ -129,3 +129,6 @@ EXCEPTION
         RAISE;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.FILEUPLOADJOB TO POSSEEXTENSIONS;
