@@ -22,6 +22,7 @@ AS
     -- 09/06/2023 PK          AWF Payment Batch and CC/eCheck WO 32944 Changed Deposit batch to split Payment batch by payment type in deposit batch
     -- 09/12/2023 TJL BIZ-12752  Modified relatelttoobject procedure to disable validation of license number and license type code when a type of payment
     --                             batch is created by eservices
+    -- 10/17/2023  PK          WO- 33491 - fixed AWF Online Payment Batches Calculated as Checks on POSSE Deposit Report 
     -- **************************************************************************
 
 
@@ -1225,6 +1226,7 @@ AS
                          JOIN api.feetransactions ft
                              ON pt.transactionid = ft.transactionid
                    WHERE p.paymentmethodcode = 'HQB'
+                     AND pb.paymenttype not In ('Credit Card', 'ECheck')  -- 10/17/2023  PK          33491 - fixed AWF Online Payment Batches Calculated as Checks on POSSE Deposit Report 
                      AND p.isvoidedflag != 'Y')
                    checks,
                (SELECT NVL(-SUM(t.amount), 0)
