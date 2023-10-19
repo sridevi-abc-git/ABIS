@@ -15,6 +15,17 @@ IS
     --    1.0   09/12/2023  TJL BIZ-12467   Initial Function Created
     -- ****************************************************************************
     t_process      VARCHAR2(40);
+    t_json_obj     json_object_t := json_object_t();
+    t_json_arr     json_array_t := json_array_t();
+    t_json_failure json_object_t := json_object_t();
+    t_json_data    json_object_t := json_object_t();
+    t_sqlerrm      VARCHAR2(4000);
+    t_trace        VARCHAR2(4000);
+    t_msg          VARCHAR2(4000 BYTE);
+    t_starttime    NUMBER;
+    t_endtime      NUMBER;
+    t_count        NUMBER;
+    t_packet       CLOB;
 BEGIN
     FOR rec
         IN (SELECT *
@@ -23,7 +34,7 @@ BEGIN
                        '$'
                        COLUMNS(
                            packet_type VARCHAR2(1000) PATH '$.PACKET_TYPE',
-                           NESTED PATH '$.DATA[*]'
+                           NESTED PATH '$.DATA.APPLICATION[*]'
                                COLUMNS(
                                    applicationtype VARCHAR2(4000)
                                        PATH '$.APPLICATIONTYPE',
@@ -36,9 +47,10 @@ BEGIN
                                    eventstartdate DATE
                                        PATH '$.EVENTSTARTDATE',
                                    eventenddate DATE PATH '$.EVENTENDDATE',
-                                   eventstarttime NUMBER
+                                   eventstarttime VARCHAR2(8)
                                        PATH '$.EVENTSTARTTIME',
-                                   eventendtime NUMBER PATH '$.EVENTENDTIME',
+                                   eventendtime VARCHAR2(8)
+                                       PATH '$.EVENTENDTIME',
                                    expectedattendance NUMBER
                                        PATH '$.EXPECTEDATTENDANCE',
                                    publicevent VARCHAR2(4000)
@@ -69,22 +81,236 @@ BEGIN
                                        PATH '$.EVENTLOCATIONZIP',
                                    specificlocation VARCHAR2(4000)
                                        PATH '$.SPECIFICLOCATION',
+                                   contactname VARCHAR2(4000)
+                                       PATH '$.CONTACTNAME',
+                                   contactphone VARCHAR2(4000)
+                                       PATH '$.CONTACTPHONE',
+                                   contactemail VARCHAR2(4000)
+                                       PATH '$.CONTACTEMAIL',
+                                   withincitylimits VARCHAR2(4000)
+                                       PATH '$.WITHINCITYLIMITS',
+                                   annualeventscount NUMBER
+                                       PATH '$.ANNUALEVENTSCOUNT',
+                                   disclaimerattested VARCHAR2(4000)
+                                       PATH '$.DISCLAIMERATTESTED',
                                    totalamountdue NUMBER
                                        PATH '$.TOTALAMOUNTDUE',
                                    submitteddate DATE PATH '$.SUBMITTEDDATE'))))
     LOOP
-        NULL;
+        -- validate fields
+        IF (TRUNC(rec.eventstartdate) NOT BETWEEN TRUNC(SYSDATE + 6)
+                                              AND TRUNC(SYSDATE + 60)
+         OR rec.eventstartdate IS NULL)
+        THEN
+            t_json_arr.append('EVENTSTARTDATE');
+        END IF;
+
+        IF (TRUNC(rec.eventenddate) NOT BETWEEN (TRUNC(rec.eventstartdate))
+                                            AND (TRUNC(
+                                                     rec.eventstartdate + 2))
+         OR rec.eventenddate IS NULL)
+        THEN
+            t_json_arr.append('EVENTSTARTDATE');
+        END IF;
+
+        t_starttime :=
+              TO_NUMBER(
+                  REPLACE(NVL(rec.eventstarttime, '02:00:00'), ':', ''))
+            / 100;
+        t_endtime :=
+              TO_NUMBER(REPLACE(NVL(rec.eventendtime, '02:00:00'), ':', ''))
+            / 100;
+
+        IF (t_starttime BETWEEN 200 AND 559) -- between 2 and 6 am
+        THEN
+            t_json_arr.append('EVENTSTARTTIME');
+        END IF;
+
+        IF (t_endtime BETWEEN 200 AND 559) -- between 2 and 6 am
+        THEN
+            t_json_arr.append('EVENTENDTIME');
+        ELSE
+            IF ((t_starttime < 200
+             AND t_endtime > 200)
+             OR (t_starttime > 559
+             AND t_endtime BETWEEN 200 AND 559)
+             OR (t_starttime > 559
+             AND t_endtime > 200
+             AND t_endtime < t_starttime))
+            THEN
+                t_json_arr.append('EVENTENDTIME');
+            END IF;
+        END IF;
+
+        IF (NVL(rec.expectedattendance, 0) <= 0
+         OR rec.expectedattendance > 999999)
+        THEN
+            t_json_arr.append('EXPECTEDATTENDANCE');
+        END IF;
+
+        IF (CASE UPPER(NVL(rec.publicevent, 'x'))
+                WHEN 'YES' THEN 0
+                WHEN 'NO' THEN 0
+                ELSE 1
+            END =
+            1)
+        THEN
+            t_json_arr.append('PUBLICEVENT');
+        END IF;
+
+        -- check for valid event type
+        SELECT COUNT(attributevalue)
+          INTO t_count
+          FROM api.domainlistofvalues
+         WHERE domainid = 305110
+           AND attributevalue = rec.eventtype;
+
+        IF (t_count = 0)
+        THEN
+            t_json_arr.append('EVENTTYPE');
+        END IF;
+
+        IF (rec.sponsoringorganizationcity IS NULL)
+        THEN
+            t_json_arr.append('SPONSORINGORGANIZATIONCITY');
+        END IF;
+
+        IF (NOT REGEXP_LIKE(rec.sponsoringorganizationzip,
+                            '([[:digit:]]{5})(-[[:digit:]]{4})?$')
+         OR rec.sponsoringorganizationzip IS NULL)
+        THEN
+            t_json_arr.append('SPONSORINGORGANIZATIONZIP');
+        END IF;
+
+        IF (NOT REGEXP_LIKE(rec.personinchargeofevent, '^[A-za-z ,.''-]+$')
+         OR rec.personinchargeofevent IS NULL)
+        THEN
+            t_json_arr.append('PERSONINCHARGEOFEVENT');
+        END IF;
+
+        IF (NOT REGEXP_LIKE(rec.personinchargephonenumber,
+                            '^[() [:digit:]xX-]+$')
+         OR rec.personinchargephonenumber IS NULL
+         OR LENGTH(rec.personinchargephonenumber) NOT BETWEEN 10 AND 15)
+        THEN
+            t_json_arr.append('PERSONINCHARGEPHONENUMBER');
+        END IF;
+
+        IF (rec.eventlocationaddress1 IS NULL)
+        THEN
+            t_json_arr.append('EVENTLOCATIONADDRESS1');
+        END IF;
+
+        SELECT COUNT(attributevalue)
+          INTO t_count
+          FROM possedata.objectcolumndata d
+         WHERE columndefid = 328470
+           AND attributevalue = UPPER(rec.eventlocationcity);
+
+        IF (t_count = 0)
+        THEN
+            t_json_arr.append('EVENTLOCATIONCITY');
+        END IF;
+
+
+        IF (NOT REGEXP_LIKE(rec.eventlocationzip,
+                            '([[:digit:]]{5})(-[[:digit:]]{4})?$')
+         OR rec.eventlocationzip IS NULL)
+        THEN
+            t_json_arr.append('EVENTLOCATIONZIP');
+        END IF;
+
+
+        IF (NOT REGEXP_LIKE(rec.contactname, '^[A-za-z ,.''-]+$')
+         OR rec.contactname IS NULL)
+        THEN
+            t_json_arr.append('CONTACTNAME');
+        END IF;
+
+        IF (NOT REGEXP_LIKE(rec.contactphone, '^[() [:digit:]xX-]+$')
+         OR rec.contactphone IS NULL
+         OR LENGTH(rec.contactphone) NOT BETWEEN 10 AND 15)
+        THEN
+            t_json_arr.append('CONTACTPHONE');
+        END IF;
+
+        IF (NOT REGEXP_LIKE(
+                    rec.contactemail,
+                    '^\w([a-zA-Z0-9_.+-]{0,63})@(([a-zA-Z0-9-]+.)+)([a-zA-Z]{2,63}|\d{2,4})(]?)$')
+         OR rec.contactemail IS NULL)
+        THEN
+            t_json_arr.append('CONTACTEMAIL');
+        END IF;
+
+        IF (CASE UPPER(NVL(rec.withincitylimits, 'x'))
+                WHEN 'YES' THEN 0
+                WHEN 'NO' THEN 0
+                ELSE 1
+            END =
+            1)
+        THEN
+            t_json_arr.append('WITHINCITYLIMITS');
+        END IF;
+
+        IF (NVL(rec.annualeventscount, 0) > 36)
+        THEN
+            t_json_arr.append('ANNUALEVENTSCOUNT');
+        END IF;
+
+        IF (CASE UPPER(NVL(rec.disclaimerattested, 'x'))
+                WHEN 'YES' THEN 0
+                WHEN 'NO' THEN 0
+                ELSE 1
+            END =
+            1)
+        THEN
+            t_json_arr.append('DISCLAIMERATTESTED');
+        END IF;
+
+        IF (t_json_arr.get_size() > 0)
+        THEN
+            t_json_failure.put('APPLICATIONID', rec.applicationid);
+            t_json_failure.put('INVALIDFIELDS', t_json_arr);
+            t_json_data.put('ERRORS', t_json_failure);
+        END IF;
     END LOOP;
 
-    bizmod_api.createjob(a_procedure => t_process,
-                         a_description => t_process,
-                         a_argument1 => a_seq);
+    IF (t_json_arr.get_size() = 0)
+    THEN
+        bizmod_api.createjob(a_procedure => 'CREATECATERINGAPPJOB',
+                             a_description => 'Create Catering Application',
+                             a_argument1 => a_seq);
 
-    RETURN json_object(
-               'PACKET_TYPE' VALUE 'MESSAGE',
-               'DATA' VALUE
-                   json_object(
-                       'MSGNO' VALUE '0',
-                       'MSG' VALUE 'E-Services ' || t_process || ' Scheduled'));
+        t_json_data.put('MSGNO', '0');
+        t_json_data.put('MSG', 'E-Services ' || t_process || ' Scheduled');
+    END IF;
+
+    t_json_obj.put('PACKET_TYPE', 'MESSAGE');
+    t_json_obj.put('DATA', t_json_data);
+    utl_licenseinfo.clean(a_json => t_json_obj);
+
+    RETURN t_json_obj.TO_CLOB;
+EXCEPTION
+    WHEN OTHERS
+    THEN
+        t_sqlerrm := SQLERRM;
+        t_trace := DBMS_UTILITY.format_error_backtrace;
+        t_msg := SUBSTR(t_sqlerrm || CHR(13) || t_trace, 1, 3990);
+
+        UPDATE bizmod_api.eservices_log_t
+           SET err = t_msg
+         WHERE seq = a_seq;
+
+        COMMIT;
+
+        t_packet :=
+            json_object(
+                'PACKET_TYPE' VALUE 'MESSAGE',
+                'DATA' VALUE
+                    json_object('MSGNO' VALUE 5,
+                                'MSG' VALUE 'Oracle Exception',
+                                'EXCEPTION' VALUE t_sqlerrm));
+
+        RETURN t_packet;
 END;
 /
