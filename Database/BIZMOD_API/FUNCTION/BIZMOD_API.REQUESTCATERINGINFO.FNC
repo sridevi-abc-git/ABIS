@@ -12,14 +12,14 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Ver:     Date                       Comment
-    --          10/11/2022  TJL BIZ-12463  Initial Package Created for 19C Database
+    --          10/11/2022  TJL BIZ-12463  Initial Package Created
     -- ****************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN var_tbl
     IS
         t_address      var_tbl := var_tbl();
         t_parse        var_tbl;
-        t_count        NUMBER := 4;
+        t_count        NUMBER := 1;
     BEGIN
         t_address.EXTEND(5);
 
@@ -35,28 +35,10 @@ IS
                                  LEVEL)
                        IS NOT NULL;
 
-        FOR inx IN REVERSE t_parse.FIRST .. t_parse.LAST
+        FOR inx IN t_parse.FIRST .. t_parse.LAST
         LOOP
---            IF (t_count = 2
---            AND t_parse.COUNT != 4)
---            THEN
---                -- skip when second address was not entered
---                t_count := t_count - 1;
---            END IF;
---
---         t_address(t_count) := 
---                CASE inx
---                    WHEN t_parse.LAST
---                    THEN
---                        REGEXP_SUBSTR(t_parse(inx),
---                                      '[^ ]+',
---                                      1,
---                                      2)
---                    ELSE
---                        t_parse(inx)
---                END;
             t_address(t_count) := t_parse(inx);
-            t_count := t_count - 1;
+            t_count := t_count + 1;
         END LOOP;
 
         RETURN t_address;
@@ -89,18 +71,20 @@ BEGIN
                                startdate DATE PATH '$.DATA.STARTDATE',
                                enddate DATE PATH '$.DATA.ENDDATE')))
         LOOP
-dbms_output.put_line(lic.objectid || ' ' || lic.startdate || ' ' || lic.enddate);
             FOR c
                 IN (WITH
                         cat
                         AS
-                            (SELECT /*+ materialize */ p.processid,
+                            (SELECT /*+ materialize */
+                                    p.processid,
                                     api.pkg_columnquery.datevalue(
                                         p.processid,
-                                        'DateOfEventFrom')    dateofeventFrom,
+                                        'DateOfEventFrom')
+                                        dateofeventfrom,
                                     api.pkg_columnquery.datevalue(
                                         p.processid,
-                                        'DateOfEventTo')    dateofeventto
+                                        'DateOfEventTo')
+                                        dateofeventto
                                FROM api.relationships  r
                                     JOIN api.relationships lt
                                         ON (lt.endpointid =
@@ -124,14 +108,15 @@ dbms_output.put_line(lic.objectid || ' ' || lic.startdate || ' ' || lic.enddate)
                                     api.pkg_configquery.endpointidforname(
                                         'j_License',
                                         'LicenseType')
-                                AND r.fromobjectid = lic.objectid)
+                                AND r.fromobjectid = lic.objectid
+                                AND lt.fromobjectid = r.toobjectid)
                     SELECT cat.processid
                       FROM cat
-                     WHERE cat.dateofeventfrom BETWEEN lic.startdate AND lic.enddate
---                       OR cat.dateofeventto BETWEEN lic.startdate AND lic.enddate
-                       )
+                     WHERE cat.dateofeventfrom BETWEEN lic.startdate
+                                                   AND lic.enddate
+                        OR cat.dateofeventto BETWEEN lic.startdate
+                                                 AND lic.enddate)
             LOOP
-dbms_output.put_line('loop');
                 t_address :=
                     parseaddress(
                         api.pkg_columnquery.VALUE(
@@ -142,7 +127,8 @@ dbms_output.put_line('loop');
                                               'EventLocAddressObjectId');
 
                 t_json_app := NEW json_object_t();
-                t_json_app.put('APPLICATIONTYPE',
+                t_json_app.put(
+                    'APPLICATIONTYPE',
                     TRIM(
                         REGEXP_SUBSTR(
                             api.pkg_columnquery.VALUE(c.processid,
@@ -152,26 +138,34 @@ dbms_output.put_line('loop');
                             2)));
                 t_json_app.put('LSPPAYMENTID',
                                api.pkg_columnquery.VALUE(c.processid, ''));
-                t_json_app.put('LICENSENUMBER',
+                t_json_app.put(
+                    'LICENSENUMBER',
                     api.pkg_columnquery.VALUE(c.processid, 'LicenseNumber'));
-                t_json_app.put('APPLICATIONID',
+                t_json_app.put(
+                    'APPLICATIONID',
                     api.pkg_columnquery.VALUE(c.processid, 'LSPId'));
-                t_json_app.put('EVENTSTARTDATE',
+                t_json_app.put(
+                    'EVENTSTARTDATE',
                     api.pkg_columnquery.VALUE(c.processid, 'DateOfEventFrom'));
-                t_json_app.put('EVENTENDDATE',
+                t_json_app.put(
+                    'EVENTENDDATE',
                     api.pkg_columnquery.VALUE(c.processid, 'dateofeventto'));
                 t_json_app.put('EVENTSTARTTIME',
                                api.pkg_columnquery.VALUE(c.processid, ''));
                 t_json_app.put('EVENTENDTIME',
                                api.pkg_columnquery.VALUE(c.processid, ''));
-                t_json_app.put('EXPECTEDATTENDANCE',
+                t_json_app.put(
+                    'EXPECTEDATTENDANCE',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'EstimatedAttendance'));
-                t_json_app.put('PUBLICEVENT',
+                t_json_app.put(
+                    'PUBLICEVENT',
                     api.pkg_columnquery.VALUE(c.processid, 'PublicEvent'));
-                t_json_app.put('EVENTTYPE',
+                t_json_app.put(
+                    'EVENTTYPE',
                     api.pkg_columnquery.VALUE(c.processid, 'EventType'));
-                t_json_app.put('SPONSORINGORGANIZATION',
+                t_json_app.put(
+                    'SPONSORINGORGANIZATION',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'SponsoringOrganization'));
                 t_json_app.put('SPONSORINGORGANIZATIONADDRESS1',
@@ -181,35 +175,47 @@ dbms_output.put_line('loop');
                 t_json_app.put('SPONSORINGORGANIZATIONCITY', t_address(3));
                 t_json_app.put('SPONSORINGORGANIZATIONSTATE', t_address(4));
                 t_json_app.put('SPONSORINGORGANIZATIONZIP', t_address(5));
-                t_json_app.put('PERSONINCHARGEOFEVENT',
+                t_json_app.put(
+                    'PERSONINCHARGEOFEVENT',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'PersonInChargeOfEvent'));
-                t_json_app.put('PERSONINCHARGEPHONENUMBER',
+                t_json_app.put(
+                    'PERSONINCHARGEPHONENUMBER',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'PersonInChargePhoneNumber'));
-                t_json_app.put('EVENTLOCATIONADDRESS1',
+                t_json_app.put(
+                    'EVENTLOCATIONADDRESS1',
                     api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1'));
-                t_json_app.put('EVENTLOCATIONADDRESS2',
+                t_json_app.put(
+                    'EVENTLOCATIONADDRESS2',
                     api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2'));
-                t_json_app.put('EVENTLOCATIONCITY',
+                t_json_app.put(
+                    'EVENTLOCATIONCITY',
                     api.pkg_columnquery.VALUE(t_addressid, 'CACity'));
-                t_json_app.put('EVENTLOCATIONZIP',
+                t_json_app.put(
+                    'EVENTLOCATIONZIP',
                     api.pkg_columnquery.VALUE(t_addressid, 'ZipCode'));
-                t_json_app.put('SPECIFICLOCATION',
+                t_json_app.put(
+                    'SPECIFICLOCATION',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'SpecificLocation'));
                 t_json_app.put('TOTALAMOUNTDUE',
                                api.pkg_columnquery.VALUE(c.processid, ''));
-                t_json_app.put('SUBMITTEDDATE',
+                t_json_app.put(
+                    'SUBMITTEDDATE',
                     api.pkg_columnquery.VALUE(c.processid, 'CreatedDate'));
-                t_json_app.put('CONTACTNAME',
+                t_json_app.put(
+                    'CONTACTNAME',
                     api.pkg_columnquery.VALUE(c.processid, 'ContactName'));
-                t_json_app.put('CONTACTPHONE',
+                t_json_app.put(
+                    'CONTACTPHONE',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'ContactPhoneNumber'));
-                t_json_app.put('CONTACTEMAIL',
+                t_json_app.put(
+                    'CONTACTEMAIL',
                     api.pkg_columnquery.VALUE(c.processid, 'ContactEmail'));
-                t_json_app.put('WITHINCITYLIMITS',
+                t_json_app.put(
+                    'WITHINCITYLIMITS',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'WithinCityLimits'));
                 t_json_app.put('ANNUALEVENTSCOUNT',
@@ -217,120 +223,23 @@ dbms_output.put_line('loop');
                 t_json_app.put('DISCLAIMERATTESTED',
                                api.pkg_columnquery.VALUE(c.processid, ''));
 
-
-                /*
-                                t_packet :=
-                                    json_object(
-                                        'APPLICATIONTYPE' VALUE
-                                            TRIM(
-                                                REGEXP_SUBSTR(
-                                                    api.pkg_columnquery.VALUE(
-                                                        c.processid,
-                                                        'CateringOrEvent'),
-                                                    '[^-]+',
-                                                    1,
-                                                    2)),
-                                        'LSPPAYMENTID' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'LICENSENUMBER' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'LicenseNumber'),
-                                        'APPLICATIONID' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, 'LSPId'),
-                                        'EVENTSTARTDATE' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'DateOfEventFrom'),
-                                        'EVENTENDDATE' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'dateofeventto'),
-                                        'EVENTSTARTTIME' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'EVENTENDTIME' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'EXPECTEDATTENDANCE' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'EstimatedAttendance'),
-                                        'PUBLICEVENT' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'PublicEvent'),
-                                        'EVENTTYPE' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'EventType'),
-                                        'SPONSORINGORGANIZATION' VALUE
-                                            api.pkg_columnquery.VALUE(
-                                                c.processid,
-                                                'SponsoringOrganization'),
-                                        'SPONSORINGORGANIZATIONADDRESS1' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'SPONSORINGORGANIZATIONADDRESS2' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'SPONSORINGORGANIZATIONCITY' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'SPONSORINGORGANIZATIONZIP' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'PERSONINCHARGEOFEVENT' VALUE
-                                            api.pkg_columnquery.VALUE(
-                                                c.processid,
-                                                'PersonInChargeOfEvent'),
-                                        'PERSONINCHARGEPHONENUMBER' VALUE
-                                            api.pkg_columnquery.VALUE(
-                                                c.processid,
-                                                'PersonInChargePhoneNumber'),
-                                        'EVENTLOCATIONADDRESS1' VALUE
-                                            api.pkg_columnquery.VALUE(t_addressid,
-                                                                      'AddressLine1'),
-                                        'EVENTLOCATIONADDRESS2' VALUE
-                                            api.pkg_columnquery.VALUE(t_addressid,
-                                                                      'AddressLine2'),
-                                        'EVENTLOCATIONCITY' VALUE
-                                            api.pkg_columnquery.VALUE(t_addressid, 'CACity'),
-                                        'EVENTLOCATIONZIP' VALUE
-                                            api.pkg_columnquery.VALUE(t_addressid, 'ZipCode'),
-                                        'SPECIFICLOCATION' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'SpecificLocation'),
-                                        'TOTALAMOUNTDUE' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'SUBMITTEDDATE' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'CreatedDate'),
-                                        'CONTACTNAME' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'ContactName'),
-                                        'CONTACTPHONE' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'ContactPhoneNumber'),
-                                        'CONTACTEMAIL' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'ContactEmail'),
-                                        'WITHINCITYLIMITS' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid,
-                                                                      'WithinCityLimits'),
-                                        'ANNUALEVENTSCOUNT' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''),
-                                        'DISCLAIMERATTESTED' VALUE
-                                            api.pkg_columnquery.VALUE(c.processid, ''));
-                */
                 t_json_arr.append(t_json_app);
             END LOOP;
         END LOOP;
 
---if (t_json_arr.size() > 0) then
-        t_json_data.put('APPLICATION', t_json_arr);
+        IF (t_json_arr.get_size() > 0)
+        THEN
+            t_json_data.put('APPLICATION', t_json_arr);
+        ELSE
+            t_json_data.put('MSGNO', '0');
+            t_json_data.put('MSG', 'No Catering Applications Found');
+        END IF;
+
         t_json_obj.put('PACKET_TYPE', 'LICENSELISTINFO');
         t_json_obj.put('DATA', t_json_data);
-        
---        t_packet :=
---            json_object('PACKET_TYPE' VALUE 'LICENSELISTINFO',
---                        'DATA' VALUE t_json_arr.TO_CLOB FORMAT JSON);
---
---        t_json_obj := NEW json_object_t(t_packet);
         utl_licenseinfo.clean(a_json => t_json_obj);
---else
---null;
---end if;
+
         RETURN t_json_obj.TO_CLOB;
-        
     EXCEPTION
         WHEN OTHERS
         THEN
