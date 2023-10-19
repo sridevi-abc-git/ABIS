@@ -23,9 +23,60 @@ AS
     --                           BIZ-12331
     --   3.0    08/15/2023  TJL  BIZ-12351    Change how the process gets license transfers for an applications
     --   3.0    08/16/2023  TJL  BIZ-12424    Changed how how 02/22 applications for a license are selected
+    --   4.0    10/18/2023  TJL  BIZ-12887    Added new function to allow ABIS to send information to LSP
+    --                                          HTTPS endpoints. Function CALLLSP
     -- ****************************************************************************
 
+    FUNCTION calllsp(a_seq IN NUMBER, a_url IN VARCHAR2, a_content IN CLOB) 
+        RETURN CLOB
+    IS
+    t_response      CLOB;
+    
+    BEGIN
+/*
+  l_http_request   utl_http.req;
+  l_http_response  utl_http.resp;
+  l_text           varchar2(32767);
+begin
 
+    utl_http.set_wallet('file:/orabin1/admin/abissb/walletSSL/', null);
+
+  -- Make a HTTP request and get the response.
+  l_http_request  := utl_http.begin_request(url => p_url,
+                                            method => 'PATCH');
+  
+UTL_HTTP.set_header (l_http_request, 'X-Internal-Request', 'True');
+utl_http.set_header(l_http_request, 'content-type', 'application/json'); 
+utl_http.set_header(l_http_request, 'Content-Length', length(a_content));
+
+            UTL_HTTP.write_text(l_http_request, a_content);
+                             
+  l_http_response := utl_http.get_response(l_http_request);
+
+  -- Loop through the response.
+  begin
+    loop
+
+      utl_http.read_text(l_http_response, l_text, 32766);
+      dbms_output.put_line ('Response: ' || l_text);
+    end loop;
+    
+  exception
+    when utl_http.end_of_body then
+      utl_http.end_response(l_http_response);
+  end;
+  return t_response;
+exception
+  when others then
+    utl_http.end_response(l_http_response);
+    raise;
+
+
+*/    
+        RETURN t_response;
+    END;    
+     
+    
     FUNCTION statusmatrix(a_status IN VARCHAR2)
         RETURN VARCHAR2
     IS

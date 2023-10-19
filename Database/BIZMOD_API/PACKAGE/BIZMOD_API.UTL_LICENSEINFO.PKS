@@ -10,7 +10,12 @@ AS
     -------------------------------------------------------------------------------
     --   VER:      Date           Ticket     Comment
     --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo 
+    --   4.0    10/18/2023  TJL  BIZ-12887    Added new function to allow ABIS to send information to LSP
+    --                                          HTTPS endpoints. Function CALLLSP
     -- ****************************************************************************
+
+    FUNCTION calllsp(a_seq IN NUMBER, a_url IN VARCHAR2, a_content IN CLOB) 
+        RETURN CLOB;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
         RETURN VARCHAR2;
