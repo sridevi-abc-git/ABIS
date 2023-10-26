@@ -164,7 +164,7 @@ BEGIN
             t_json_arr.append('EXPECTEDATTENDANCE');
         END IF;
 
-        IF (CASE UPPER(NVL(rec.publicevent, 'x'))
+        IF (CASE NVL(rec.publicevent, 'x')
                 WHEN 'Yes' THEN 0
                 WHEN 'No' THEN 0
                 ELSE 1
@@ -261,7 +261,7 @@ BEGIN
             t_json_arr.append('CONTACTEMAIL');
         END IF;
 
-        IF (CASE UPPER(NVL(rec.withincitylimits, 'x'))
+        IF (CASE NVL(rec.withincitylimits, 'x')
                 WHEN 'Yes' THEN 0
                 WHEN 'No' THEN 0
                 ELSE 1
@@ -276,7 +276,7 @@ BEGIN
             t_json_arr.append('ANNUALEVENTSCOUNT');
         END IF;
 
-        IF (CASE UPPER(NVL(rec.disclaimerattested, 'x'))
+        IF (CASE NVL(rec.disclaimerattested, 'x')
                 WHEN 'Yes' THEN 0
                 WHEN 'No' THEN 0
                 ELSE 1
