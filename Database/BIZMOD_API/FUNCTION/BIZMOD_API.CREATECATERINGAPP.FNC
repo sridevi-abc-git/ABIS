@@ -202,10 +202,7 @@ BEGIN
         IF (rec.personinchargephonenumber IS NOT NULL
         AND (NOT REGEXP_LIKE(
                      rec.personinchargephonenumber,
-                     '^(\([[:digit:]]{3}\))([[:blank:]])([[:digit:]]{3})(-[[:digit:]xX]{4,5})|'
-                     || '^([[:digit:]]{3})(-)([[:digit:]]{3})(-)([[:digit:]xX]{4,5})|'
-                     || '^([0-9xX]{10,11})'
-                     || '+$')
+                     '^\(\d{3}\)\d{3}-\d{4}$')
           OR LENGTH(rec.personinchargephonenumber) NOT BETWEEN 10 AND 15))
         THEN
             t_json_arr.append('PERSONINCHARGEPHONENUMBER');
@@ -243,10 +240,7 @@ BEGIN
 
         IF (NOT REGEXP_LIKE(
                     rec.contactphone,
-                    '^(\([[:digit:]]{3}\))([[:blank:]])([[:digit:]]{3})(-[[:digit:]xX]{4,5})|'
-                    || '^([[:digit:]]{3})(-)([[:digit:]]{3})(-)([[:digit:]xX]{4,5})|'
-                    || '^([0-9xX]{10,11})'
-                    || '+$')
+                    '^\(\d{3}\)\d{3}-\d{4}$')
          OR rec.contactphone IS NULL
          OR LENGTH(rec.contactphone) NOT BETWEEN 10 AND 15)
         THEN
