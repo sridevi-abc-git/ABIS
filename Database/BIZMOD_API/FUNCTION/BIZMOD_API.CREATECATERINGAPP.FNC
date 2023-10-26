@@ -296,13 +296,14 @@ BEGIN
         t_json_data.put('MSGNO', '0');
         t_json_data.put('MSG', 'E-Services ' || t_process || ' Scheduled');
     ELSE
-        t_json_data.put('MSGNO', '17');
-        t_json_data.put(
-            'MSG',
+        t_msg :=
             'Catering Application Validation Failed: ('
             || a_seq
             || ') '
-            || REPLACE(t_json_arr.TO_CLOB, '"', ''));
+            || REPLACE(t_json_arr.TO_CLOB, '"', '');
+
+        t_json_data.put('MSGNO', '17');
+        t_json_data.put('MSG', t_msg);
     END IF;
 
     t_json_obj.put('PACKET_TYPE', 'MESSAGE');
