@@ -13,6 +13,7 @@ IS
     -------------------------------------------------------------------------------
     --    Ver:     Date                       Comment
     --    1.0   09/12/2023  TJL BIZ-12467   Initial Function Created
+    --                          BIZ-12643   Validation Rules
     -- ****************************************************************************
     t_process      VARCHAR2(40);
     t_json_obj     json_object_t := json_object_t();
@@ -98,6 +99,21 @@ BEGIN
                                    submitteddate DATE PATH '$.SUBMITTEDDATE'))))
     LOOP
         -- validate fields
+        IF (rec.licensenumber IS NULL)
+        THEN
+            t_json_arr.append('LICENSENUMBER');
+        END IF;
+
+        IF (rec.applicationid IS NULL)
+        THEN
+            t_json_arr.append('APPLICATIONID');
+        END IF;
+
+        IF (rec.lsppaymentid IS NULL)
+        THEN
+            t_json_arr.append('LSPPAYMENTID');
+        END IF;
+
         IF (TRUNC(rec.eventstartdate) NOT BETWEEN TRUNC(SYSDATE + 6)
                                               AND TRUNC(SYSDATE + 60)
          OR rec.eventstartdate IS NULL)
@@ -149,8 +165,8 @@ BEGIN
         END IF;
 
         IF (CASE UPPER(NVL(rec.publicevent, 'x'))
-                WHEN 'YES' THEN 0
-                WHEN 'NO' THEN 0
+                WHEN 'Yes' THEN 0
+                WHEN 'No' THEN 0
                 ELSE 1
             END =
             1)
@@ -170,28 +186,27 @@ BEGIN
             t_json_arr.append('EVENTTYPE');
         END IF;
 
-        IF (rec.sponsoringorganizationcity IS NULL)
-        THEN
-            t_json_arr.append('SPONSORINGORGANIZATIONCITY');
-        END IF;
-
         IF (NOT REGEXP_LIKE(rec.sponsoringorganizationzip,
                             '([[:digit:]]{5})(-[[:digit:]]{4})?$')
-         OR rec.sponsoringorganizationzip IS NULL)
+        AND rec.sponsoringorganizationzip IS NOT NULL)
         THEN
             t_json_arr.append('SPONSORINGORGANIZATIONZIP');
         END IF;
 
         IF (NOT REGEXP_LIKE(rec.personinchargeofevent, '^[A-za-z ,.''-]+$')
-         OR rec.personinchargeofevent IS NULL)
+        AND rec.personinchargeofevent IS NOT NULL)
         THEN
             t_json_arr.append('PERSONINCHARGEOFEVENT');
         END IF;
 
-        IF (NOT REGEXP_LIKE(rec.personinchargephonenumber,
-                            '^[() [:digit:]xX-]+$')
-         OR rec.personinchargephonenumber IS NULL
-         OR LENGTH(rec.personinchargephonenumber) NOT BETWEEN 10 AND 15)
+        IF (rec.personinchargephonenumber IS NOT NULL
+        AND (NOT REGEXP_LIKE(
+                     rec.personinchargephonenumber,
+                     '^(\([[:digit:]]{3}\))([[:blank:]])([[:digit:]]{3})(-[[:digit:]xX]{4,5})|'
+                     || '^([[:digit:]]{3})(-)([[:digit:]]{3})(-)([[:digit:]xX]{4,5})|'
+                     || '^([0-9xX]{10,11})'
+                     || '+$')
+          OR LENGTH(rec.personinchargephonenumber) NOT BETWEEN 10 AND 15))
         THEN
             t_json_arr.append('PERSONINCHARGEPHONENUMBER');
         END IF;
@@ -215,11 +230,10 @@ BEGIN
 
         IF (NOT REGEXP_LIKE(rec.eventlocationzip,
                             '([[:digit:]]{5})(-[[:digit:]]{4})?$')
-         OR rec.eventlocationzip IS NULL)
+        AND rec.eventlocationzip IS NOT NULL)
         THEN
             t_json_arr.append('EVENTLOCATIONZIP');
         END IF;
-
 
         IF (NOT REGEXP_LIKE(rec.contactname, '^[A-za-z ,.''-]+$')
          OR rec.contactname IS NULL)
@@ -227,7 +241,12 @@ BEGIN
             t_json_arr.append('CONTACTNAME');
         END IF;
 
-        IF (NOT REGEXP_LIKE(rec.contactphone, '^[() [:digit:]xX-]+$')
+        IF (NOT REGEXP_LIKE(
+                    rec.contactphone,
+                    '^(\([[:digit:]]{3}\))([[:blank:]])([[:digit:]]{3})(-[[:digit:]xX]{4,5})|'
+                    || '^([[:digit:]]{3})(-)([[:digit:]]{3})(-)([[:digit:]xX]{4,5})|'
+                    || '^([0-9xX]{10,11})'
+                    || '+$')
          OR rec.contactphone IS NULL
          OR LENGTH(rec.contactphone) NOT BETWEEN 10 AND 15)
         THEN
@@ -243,8 +262,8 @@ BEGIN
         END IF;
 
         IF (CASE UPPER(NVL(rec.withincitylimits, 'x'))
-                WHEN 'YES' THEN 0
-                WHEN 'NO' THEN 0
+                WHEN 'Yes' THEN 0
+                WHEN 'No' THEN 0
                 ELSE 1
             END =
             1)
@@ -258,20 +277,13 @@ BEGIN
         END IF;
 
         IF (CASE UPPER(NVL(rec.disclaimerattested, 'x'))
-                WHEN 'YES' THEN 0
-                WHEN 'NO' THEN 0
+                WHEN 'Yes' THEN 0
+                WHEN 'No' THEN 0
                 ELSE 1
             END =
             1)
         THEN
             t_json_arr.append('DISCLAIMERATTESTED');
-        END IF;
-
-        IF (t_json_arr.get_size() > 0)
-        THEN
-            t_json_failure.put('APPLICATIONID', rec.applicationid);
-            t_json_failure.put('INVALIDFIELDS', t_json_arr);
-            t_json_data.put('ERRORS', t_json_failure);
         END IF;
     END LOOP;
 
@@ -283,6 +295,14 @@ BEGIN
 
         t_json_data.put('MSGNO', '0');
         t_json_data.put('MSG', 'E-Services ' || t_process || ' Scheduled');
+    ELSE
+        t_json_data.put('MSGNO', '17');
+        t_json_data.put(
+            'MSG',
+            'Catering Application Validation Failed: ('
+            || a_seq
+            || ') '
+            || REPLACE(t_json_arr.TO_CLOB, '"', ''));
     END IF;
 
     t_json_obj.put('PACKET_TYPE', 'MESSAGE');

@@ -52,6 +52,7 @@ BEGIN
         t_address      var_tbl;
 
         t_addressid    NUMBER;
+        t_phone        VARCHAR2(20);
         t_packet       CLOB;
         t_results      CLOB;
         t_sqlerrm      VARCHAR2(4000);
@@ -136,8 +137,8 @@ BEGIN
                             '[^-]+',
                             1,
                             2)));
-                t_json_app.put('LSPPAYMENTID',
-                               api.pkg_columnquery.VALUE(c.processid, ''));
+                --                t_json_app.put('LSPPAYMENTID',
+                --                               api.pkg_columnquery.VALUE(c.processid, ''));
                 t_json_app.put(
                     'LICENSENUMBER',
                     api.pkg_columnquery.VALUE(c.processid, 'LicenseNumber'));
@@ -146,18 +147,60 @@ BEGIN
                     api.pkg_columnquery.VALUE(c.processid, 'LSPId'));
                 t_json_app.put(
                     'EVENTSTARTDATE',
-                    api.pkg_columnquery.VALUE(c.processid, 'DateOfEventFrom'));
+                    api.pkg_columnquery.datevalue(c.processid,
+                                                  'DateOfEventFrom'));
                 t_json_app.put(
                     'EVENTENDDATE',
-                    api.pkg_columnquery.VALUE(c.processid, 'dateofeventto'));
-                t_json_app.put('EVENTSTARTTIME',
-                               api.pkg_columnquery.VALUE(c.processid, ''));
-                t_json_app.put('EVENTENDTIME',
-                               api.pkg_columnquery.VALUE(c.processid, ''));
+                    api.pkg_columnquery.datevalue(c.processid,
+                                                  'dateofeventto'));
+                t_json_app.put(
+                    'EVENTSTARTTIME',
+                    TO_CHAR(
+                        TO_TIMESTAMP(
+                            CASE api.pkg_columnquery.VALUE(
+                                     c.processid,
+                                     'BeginServingAlcoholAMPMTime')
+                                WHEN 'PM'
+                                THEN
+                                    TO_CHAR(
+                                          api.pkg_columnquery.numericvalue(
+                                              c.processid,
+                                              'Timeyouwillbeginservingalcohol')
+                                        + 1200)
+                                ELSE
+                                    TO_CHAR(
+                                        api.pkg_columnquery.numericvalue(
+                                            c.processid,
+                                            'Timeyouwillbeginservingalcohol'))
+                            END,
+                            'HH24MI'),
+                        'HH24:MI:SS'));
+                t_json_app.put(
+                    'EVENTENDTIME',
+                    TO_CHAR(
+                        TO_TIMESTAMP(
+                            CASE api.pkg_columnquery.VALUE(
+                                     c.processid,
+                                     'StopServingAlcoholAMPMTime')
+                                WHEN 'PM'
+                                THEN
+                                    TO_CHAR(
+                                          api.pkg_columnquery.numericvalue(
+                                              c.processid,
+                                              'TimeYouWillStopServingAlcohol')
+                                        + 1200)
+                                ELSE
+                                    TO_CHAR(
+                                        api.pkg_columnquery.numericvalue(
+                                            c.processid,
+                                            'TimeYouWillStopServingAlcohol'))
+                            END,
+                            'HH24MI'),
+                        'HH24:MI:SS'));
                 t_json_app.put(
                     'EXPECTEDATTENDANCE',
-                    api.pkg_columnquery.VALUE(c.processid,
-                                              'EstimatedAttendance'));
+                    api.pkg_columnquery.numericvalue(c.processid,
+                                                     'EstimatedAttendance'));
                 t_json_app.put(
                     'PUBLICEVENT',
                     api.pkg_columnquery.VALUE(c.processid, 'PublicEvent'));
@@ -179,10 +222,23 @@ BEGIN
                     'PERSONINCHARGEOFEVENT',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'PersonInChargeOfEvent'));
-                t_json_app.put(
-                    'PERSONINCHARGEPHONENUMBER',
+
+                t_phone :=
                     api.pkg_columnquery.VALUE(c.processid,
-                                              'PersonInChargePhoneNumber'));
+                                              'PersonInChargePhoneNumber');
+
+                IF (t_phone IS NOT NULL AND length(t_phone) > 9)
+                THEN
+                    t_json_app.put(
+                        'PERSONINCHARGEPHONENUMBER',
+                        '('
+                        || SUBSTR(t_phone, 1, 3)
+                        || ') '
+                        || SUBSTR(t_phone, 4, 3)
+                        || '-'
+                        || SUBSTR(t_phone, 7, 4));
+                END IF;
+
                 t_json_app.put(
                     'EVENTLOCATIONADDRESS1',
                     api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1'));
@@ -203,14 +259,26 @@ BEGIN
                                api.pkg_columnquery.VALUE(c.processid, ''));
                 t_json_app.put(
                     'SUBMITTEDDATE',
-                    api.pkg_columnquery.VALUE(c.processid, 'CreatedDate'));
+                    api.pkg_columnquery.datevalue(c.processid, 'CreatedDate'));
                 t_json_app.put(
                     'CONTACTNAME',
                     api.pkg_columnquery.VALUE(c.processid, 'ContactName'));
-                t_json_app.put(
-                    'CONTACTPHONE',
+
+                t_phone :=
                     api.pkg_columnquery.VALUE(c.processid,
-                                              'ContactPhoneNumber'));
+                                              'ContactPhoneNumber');
+                IF (t_phone IS NOT NULL AND length(t_phone) > 9)
+                THEN
+                    t_json_app.put(
+                        'CONTACTPHONE',
+                        '('
+                        || SUBSTR(t_phone, 1, 3)
+                        || ') '
+                        || SUBSTR(t_phone, 4, 3)
+                        || '-'
+                        || SUBSTR(t_phone, 7, 4));
+                END IF;
+
                 t_json_app.put(
                     'CONTACTEMAIL',
                     api.pkg_columnquery.VALUE(c.processid, 'ContactEmail'));
@@ -218,10 +286,13 @@ BEGIN
                     'WITHINCITYLIMITS',
                     api.pkg_columnquery.VALUE(c.processid,
                                               'WithinCityLimits'));
-                t_json_app.put('ANNUALEVENTSCOUNT',
-                               api.pkg_columnquery.VALUE(c.processid, ''));
-                t_json_app.put('DISCLAIMERATTESTED',
-                               api.pkg_columnquery.VALUE(c.processid, ''));
+                t_json_app.put(
+                    'STATUS',
+                    api.pkg_columnquery.VALUE(c.processid, 'Outcome'));
+                --                t_json_app.put('ANNUALEVENTSCOUNT',
+                --                               api.pkg_columnquery.VALUE(c.processid, ''));
+                --                t_json_app.put('DISCLAIMERATTESTED',
+                --                               api.pkg_columnquery.VALUE(c.processid, ''));
 
                 t_json_arr.append(t_json_app);
             END LOOP;
@@ -235,7 +306,7 @@ BEGIN
             t_json_data.put('MSG', 'No Catering Applications Found');
         END IF;
 
-        t_json_obj.put('PACKET_TYPE', 'LICENSELISTINFO');
+        t_json_obj.put('PACKET_TYPE', 'CATERINGLIST');
         t_json_obj.put('DATA', t_json_data);
         utl_licenseinfo.clean(a_json => t_json_obj);
 
