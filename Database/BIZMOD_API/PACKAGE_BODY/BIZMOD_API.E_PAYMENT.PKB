@@ -18,6 +18,8 @@ AS
     --                                        adding license number to AWF Payment Branch item.
     --     2.1  10/06/2023 TJL  BIZ-13129   Added filter to only select AWF payments from e_payments
     --                                        in createawfpayments procedure
+    --     3.0  10/30/2023 TJL  TRK-33861   Corrected bug of incorrect payment amount being found
+    --                                        AWF Payment Batches for zero payments (no fee due)
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -932,7 +934,8 @@ AS
               BULK COLLECT INTO t_awf
               FROM bizmod_api.awf_t  a
                    LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
-                       ON (a.licensenumber = pp.licensenumber)
+                       ON (a.licensenumber = pp.licensenumber
+                          AND t_loop = 1) -- 10/30/2023 TJL  TRK-33861
              WHERE a.completed IS NULL
                AND a.paymentbatch IS NULL
                AND a.submitteddate IS NOT NULL
