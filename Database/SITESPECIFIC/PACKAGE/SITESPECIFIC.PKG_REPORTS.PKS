@@ -63,7 +63,7 @@ AS
     ----------------------------
 
     PROCEDURE allocationreport(a_startdate DATE, a_enddate DATE);
-    
+
     PROCEDURE allocationreport2(a_startdate DATE, a_enddate DATE);
 
     /*--------------------------
@@ -138,6 +138,7 @@ AS
 
     PROCEDURE dailyintakevoids(a_startdate DATE, a_enddate DATE);
 END pkg_reports;
+
 /
 
 
