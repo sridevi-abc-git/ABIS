@@ -25,7 +25,91 @@ AS
     --   3.0    08/16/2023  TJL  BIZ-12424    Changed how how 02/22 applications for a license are selected
     --   4.0    10/18/2023  TJL  BIZ-12887    Added new function to allow ABIS to send information to LSP
     --                                          HTTPS endpoints. Function CALLLSP
+    --   4.1    10/31/2023  TJL  BIZ-12802    Added new function to allow ABIS to send files to LSP. Function
+    --                                          CALLLSP (different parameters)
     -- ****************************************************************************
+
+    FUNCTION calllsp(a_url           IN VARCHAR2,
+                     a_method        IN VARCHAR2,
+                     a_content       IN CLOB,
+                     a_file          IN BLOB)
+        RETURN CLOB
+    IS
+        t_response     CLOB;
+        t_buffer       RAW(32767);
+        t_bufferlength INTEGER := 32767;
+        t_pos          INTEGER := 1;
+        t_bloblen      PLS_INTEGER;
+
+        t_http_request UTL_HTTP.req;
+        t_http_response UTL_HTTP.resp;
+        t_text         VARCHAR2(32767);
+    BEGIN
+        DBMS_LOB.CREATETEMPORARY(t_response, TRUE, DBMS_LOB.SESSION);
+        t_bloblen := DBMS_LOB.getlength(a_content);
+        UTL_HTTP.set_wallet('file:/orabin1/admin/' || lower(ora_database_name) || '/walletSSL/', NULL);
+
+        -- Make a HTTP request and get the response.
+        t_http_request :=
+            UTL_HTTP.begin_request(url => a_url, method => a_method);
+
+        UTL_HTTP.set_header(t_http_request, 'X-Internal-Request', 'True');
+        if (a_file is null)
+        then
+        UTL_HTTP.set_header(t_http_request,
+                            'content-type',
+                            'application/json');
+        UTL_HTTP.set_header(t_http_request,
+                            'Content-Length',
+                            Length(a_content));
+
+        UTL_HTTP.write_text(t_http_request, a_content);
+        
+        else
+        
+        UTL_HTTP.set_header(t_http_request,
+                            'content-type',
+                            'application/octet-stream');
+        UTL_HTTP.set_header(t_http_request,
+                            'Content-Length',
+                            DBMS_LOB.getlength(a_content));
+
+        WHILE t_pos < t_bloblen
+        LOOP
+            DBMS_LOB.read(a_content,
+                          t_bufferlength,
+                          t_pos,
+                          t_buffer);
+            UTL_HTTP.write_raw(t_http_request, t_buffer);
+            t_pos := t_pos + t_bufferlength;
+        END LOOP;
+
+    end if;
+        -- Loop through the response.
+        BEGIN
+        t_http_response := UTL_HTTP.get_response(t_http_request);
+            LOOP
+                UTL_HTTP.read_text(t_http_response, t_text, 32766);
+                DBMS_LOB.WRITEAPPEND(t_response, length(t_text), t_text);
+            END LOOP;
+        EXCEPTION
+            WHEN UTL_HTTP.end_of_body
+            THEN
+                UTL_HTTP.end_response(t_http_response);
+        END;
+
+        RETURN t_response;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+        t_response := UTL_HTTP.get_detailed_sqlerrm;
+        
+dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);        
+            UTL_HTTP.end_response(t_http_response);
+            RAISE;
+
+            RETURN t_response;
+    END;
 
     FUNCTION calllsp(a_seq IN NUMBER, a_url IN VARCHAR2, a_content IN CLOB)
         RETURN CLOB
@@ -33,50 +117,51 @@ AS
         t_response     CLOB;
 
 
-        l_http_request UTL_HTTP.req;
-        l_http_response UTL_HTTP.resp;
-        l_text         VARCHAR2(32767);
+        t_http_request UTL_HTTP.req;
+        t_http_response UTL_HTTP.resp;
+        t_text         VARCHAR2(32767);
     BEGIN
-        UTL_HTTP.set_wallet('file:/orabin1/admin/abissb/walletSSL/', NULL);
+        UTL_HTTP.set_wallet('file:/orabin1/admin/' || ora_database_name || '/walletSSL/', NULL);
 
         -- Make a HTTP request and get the response.
-        l_http_request :=
+        t_http_request :=
             UTL_HTTP.begin_request(url => a_url, method => 'PATCH');
 
-        UTL_HTTP.set_header(l_http_request, 'X-Internal-Request', 'True');
-        UTL_HTTP.set_header(l_http_request,
+        UTL_HTTP.set_header(t_http_request, 'X-Internal-Request', 'True');
+        UTL_HTTP.set_header(t_http_request,
                             'content-type',
                             'application/json');
-        UTL_HTTP.set_header(l_http_request,
+        UTL_HTTP.set_header(t_http_request,
                             'Content-Length',
                             LENGTH(a_content));
 
-        UTL_HTTP.write_text(l_http_request, a_content);
+        UTL_HTTP.write_text(t_http_request, a_content);
 
-        l_http_response := UTL_HTTP.get_response(l_http_request);
+        t_http_response := UTL_HTTP.get_response(t_http_request);
 
         -- Loop through the response.
         BEGIN
             LOOP
-                UTL_HTTP.read_text(l_http_response, l_text, 32766);
-                t_response := l_text;
-                
-                DBMS_OUTPUT.put_line('Response: ' || l_text);
+                UTL_HTTP.read_text(t_http_response, t_text, 32766);
+                DBMS_LOB.WRITEAPPEND(t_response, t_text,length(t_text));
+
+                DBMS_OUTPUT.put_line('Response: ' || t_text);
             END LOOP;
         EXCEPTION
             WHEN UTL_HTTP.end_of_body
             THEN
-                UTL_HTTP.end_response(l_http_response);
+                UTL_HTTP.end_response(t_http_response);
+dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);        
         END;
 
         RETURN t_response;
     EXCEPTION
         WHEN OTHERS
         THEN
-            UTL_HTTP.end_response(l_http_response);
-            RAISE;
-
-
+        
+dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);        
+            UTL_HTTP.end_response(t_http_response);
+--            RAISE;
 
             RETURN t_response;
     END;
@@ -662,3 +747,5 @@ END;
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;

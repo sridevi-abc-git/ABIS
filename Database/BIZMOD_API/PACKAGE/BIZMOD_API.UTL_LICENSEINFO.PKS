@@ -9,12 +9,18 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --   VER:      Date           Ticket     Comment
-    --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo 
+    --   2.1    07/25/2023  TJL  BIZ-12102    Added procedure get_awfreninfo
     --   4.0    10/18/2023  TJL  BIZ-12887    Added new function to allow ABIS to send information to LSP
     --                                          HTTPS endpoints. Function CALLLSP
     -- ****************************************************************************
 
-    FUNCTION calllsp(a_seq IN NUMBER, a_url IN VARCHAR2, a_content IN CLOB) 
+    FUNCTION calllsp(a_url           IN VARCHAR2,
+                     a_method        IN VARCHAR2,
+                     a_content       IN CLOB,
+                     a_file          IN BLOB)
+        RETURN CLOB;
+
+    FUNCTION calllsp(a_seq IN NUMBER, a_url IN VARCHAR2, a_content IN CLOB)
         RETURN CLOB;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
@@ -22,12 +28,11 @@ AS
 
     PROCEDURE clean(a_json IN OUT json_object_t);
 
-    FUNCTION awfrequired(a_licensetypeobjectid in NUMBER)
+    FUNCTION awfrequired(a_licensetypeobjectid IN NUMBER)
         RETURN NUMBER;
-        
+
     FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
         RETURN NUMBER;
-                             
 END;
 /
 
@@ -35,3 +40,5 @@ END;
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;
