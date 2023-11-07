@@ -98,6 +98,16 @@ BEGIN
                                        PATH '$.TOTALAMOUNTDUE',
                                    submitteddate DATE PATH '$.SUBMITTEDDATE'))))
     LOOP
+        -- check if duplicate application
+        IF (api.pkg_simplesearch.objectbyindex(
+                a_objectdefname => 'p_IssueCatererEventAuth',
+                a_columnname => 'LSPId',
+                a_lowvalue  => rec.applicationid)
+                IS NOT NULL)
+        THEN
+            t_json_arr.append('Duplicate Application Id');
+        END IF;
+
         -- validate fields
         IF (rec.licensenumber IS NULL)
         THEN
@@ -200,9 +210,8 @@ BEGIN
         END IF;
 
         IF (rec.personinchargephonenumber IS NOT NULL
-        AND (NOT REGEXP_LIKE(
-                     rec.personinchargephonenumber,
-                     '^\(\d{3}\)\d{3}-\d{4}$')
+        AND (NOT REGEXP_LIKE(rec.personinchargephonenumber,
+                             '^\(\d{3}\)\d{3}-\d{4}$')
           OR LENGTH(rec.personinchargephonenumber) NOT BETWEEN 10 AND 15))
         THEN
             t_json_arr.append('PERSONINCHARGEPHONENUMBER');
@@ -238,9 +247,7 @@ BEGIN
             t_json_arr.append('CONTACTNAME');
         END IF;
 
-        IF (NOT REGEXP_LIKE(
-                    rec.contactphone,
-                    '^\(\d{3}\)\d{3}-\d{4}$')
+        IF (NOT REGEXP_LIKE(rec.contactphone, '^\(\d{3}\)\d{3}-\d{4}$')
          OR rec.contactphone IS NULL
          OR LENGTH(rec.contactphone) NOT BETWEEN 10 AND 15)
         THEN
