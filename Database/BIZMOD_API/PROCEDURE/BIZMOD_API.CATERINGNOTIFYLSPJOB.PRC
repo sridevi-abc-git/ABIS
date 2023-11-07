@@ -34,6 +34,7 @@ AS
     t_msg          VARCHAR2(4000 BYTE);
 BEGIN
     t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
+    t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
     t_sponsoringorganizationaddr :=
         api.pkg_columnquery.VALUE(a_objectid,
                                   'SponsoringOrganizationMailing');
@@ -62,24 +63,13 @@ BEGIN
 
     t_json_app := NEW json_object_t();
     t_json_app.put(
-        'APPLICATIONTYPE',
-        TRIM(
-            REGEXP_SUBSTR(
-                api.pkg_columnquery.VALUE(a_objectid, 'CateringOrEvent'),
-                '[^-]+',
-                1,
-                2)));
-    t_json_app.put('LICENSENUMBER',
-                   api.pkg_columnquery.VALUE(a_objectid, 'LicenseNumber'));
-    t_json_app.put('APPLICATIONID', t_applicationid);
-    t_json_app.put(
-        'EVENTSTARTDATE',
+        'eventStartDate',
         api.pkg_columnquery.datevalue(a_objectid, 'DateOfEventFrom'));
     t_json_app.put(
-        'EVENTENDDATE',
+        'eventEndDate',
         api.pkg_columnquery.datevalue(a_objectid, 'dateofeventto'));
     t_json_app.put(
-        'EVENTSTARTTIME',
+        'eventStartTime',
         TO_CHAR(
             TO_TIMESTAMP(
                 LPAD(
@@ -108,7 +98,7 @@ BEGIN
                 'HH24MI'),
             'HH24:MI:SS'));
     t_json_app.put(
-        'EVENTENDTIME',
+        'eventEndTime',
         TO_CHAR(
             TO_TIMESTAMP(
                 LPAD(
@@ -137,22 +127,42 @@ BEGIN
                 'HH24MI'),
             'HH24:MI:SS'));
     t_json_app.put(
-        'EXPECTEDATTENDANCE',
+        'expectedAttendance',
         api.pkg_columnquery.numericvalue(a_objectid, 'EstimatedAttendance'));
-    t_json_app.put('PUBLICEVENT',
+    t_json_app.put('publicEvent',
                    api.pkg_columnquery.VALUE(a_objectid, 'PublicEvent'));
-    t_json_app.put('EVENTTYPE',
+    t_json_app.put('contactName',
+                   api.pkg_columnquery.VALUE(a_objectid, 'ContactName'));
+
+    t_phone := api.pkg_columnquery.VALUE(a_objectid, 'ContactPhoneNumber');
+
+    IF (t_phone IS NOT NULL
+    AND LENGTH(t_phone) > 9)
+    THEN
+        t_json_app.put(
+            'contactPhone',
+            '('
+            || SUBSTR(t_phone, 1, 3)
+            || ')'
+            || SUBSTR(t_phone, 4, 3)
+            || '-'
+            || SUBSTR(t_phone, 7, 4));
+    END IF;
+
+    t_json_app.put('contactEmail',
+                   api.pkg_columnquery.VALUE(a_objectid, 'ContactEmail'));
+    t_json_app.put('eventType',
                    api.pkg_columnquery.VALUE(a_objectid, 'EventType'));
     t_json_app.put(
-        'SPONSORINGORGANIZATION',
+        'sponsoringOrganization',
         api.pkg_columnquery.VALUE(a_objectid, 'SponsoringOrganization'));
-    t_json_app.put('SPONSORINGORGANIZATIONADDRESS1', t_address(1));
-    t_json_app.put('SPONSORINGORGANIZATIONADDRESS2', t_address(2));
-    t_json_app.put('SPONSORINGORGANIZATIONCITY', t_address(3));
-    t_json_app.put('SPONSORINGORGANIZATIONSTATE', t_address(4));
-    t_json_app.put('SPONSORINGORGANIZATIONZIP', t_address(5));
+    t_json_app.put('sponsoringOrganizationAddress1', t_address(1));
+    t_json_app.put('sponsoringOrganizationAddress2', t_address(2));
+    t_json_app.put('sponsoringOrganizationCity', t_address(3));
+    t_json_app.put('sponsoringOrganizationState', t_address(4));
+    t_json_app.put('sponsoringOrganizationZip', t_address(5));
     t_json_app.put(
-        'PERSONINCHARGEOFEVENT',
+        'personInCharge',
         api.pkg_columnquery.VALUE(a_objectid, 'PersonInChargeOfEvent'));
 
     t_phone :=
@@ -162,7 +172,7 @@ BEGIN
     AND LENGTH(t_phone) > 9)
     THEN
         t_json_app.put(
-            'PERSONINCHARGEPHONENUMBER',
+            'personInChargePhone',
             '('
             || SUBSTR(t_phone, 1, 3)
             || ')'
@@ -171,57 +181,39 @@ BEGIN
             || SUBSTR(t_phone, 7, 4));
     END IF;
 
-    t_json_app.put('EVENTLOCATIONADDRESS1',
+    t_json_app.put('eventLocationAddress1',
                    api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1'));
-    t_json_app.put('EVENTLOCATIONADDRESS2',
+    t_json_app.put('eventLocationAddress2',
                    api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2'));
-    t_json_app.put('EVENTLOCATIONCITY',
+    t_json_app.put('eventLocationCity',
                    api.pkg_columnquery.VALUE(t_addressid, 'CACity'));
-    t_json_app.put('EVENTLOCATIONZIP',
+    t_json_app.put('eventLocationZip',
                    api.pkg_columnquery.VALUE(t_addressid, 'ZipCode'));
-    t_json_app.put('SPECIFICLOCATION',
-                   api.pkg_columnquery.VALUE(a_objectid, 'SpecificLocation'));
-    t_json_app.put('TOTALAMOUNTDUE',
-                   api.pkg_columnquery.VALUE(a_objectid, ''));
-    t_json_app.put('SUBMITTEDDATE',
-                   api.pkg_columnquery.datevalue(a_objectid, 'CreatedDate'));
-    t_json_app.put('CONTACTNAME',
-                   api.pkg_columnquery.VALUE(a_objectid, 'ContactName'));
-
-    t_phone := api.pkg_columnquery.VALUE(a_objectid, 'ContactPhoneNumber');
-
-    IF (t_phone IS NOT NULL
-    AND LENGTH(t_phone) > 9)
-    THEN
-        t_json_app.put(
-            'CONTACTPHONE',
-            '('
-            || SUBSTR(t_phone, 1, 3)
-            || ')'
-            || SUBSTR(t_phone, 4, 3)
-            || '-'
-            || SUBSTR(t_phone, 7, 4));
-    END IF;
-
-    t_json_app.put('CONTACTEMAIL',
-                   api.pkg_columnquery.VALUE(a_objectid, 'ContactEmail'));
-    t_json_app.put('WITHINCITYLIMITS',
+    t_json_app.put('withinCityLimits',
                    api.pkg_columnquery.VALUE(a_objectid, 'WithinCityLimits'));
-    t_json_app.put('STATUS',
-                   api.pkg_columnquery.VALUE(a_objectid, 'Outcome'));
+    t_json_app.put('annualEventsCount',
+                   api.pkg_columnquery.VALUE(a_objectid, ''));
+    t_json_app.put('specificLocation',
+                   api.pkg_columnquery.VALUE(a_objectid, 'SpecificLocation'));
 
     t_json_arr.append(t_json_app);
     t_json_data.put('APPLICATION', t_json_arr);
-    DBMS_OUTPUT.put_line(t_json_app.TO_CLOB);
+    bizmod_api.utl_licenseinfo.clean(a_json => t_json_data);
+    t_json_arr := t_json_data.get_array('APPLICATION');
 
-    SELECT d.VALUE
-      INTO t_data
-      FROM api.relationships  r
-           LEFT OUTER JOIN doc.documentblobs d ON d.documentid = r.toobjectid
-     WHERE r.endpointid =
-           api.pkg_configquery.endpointidforname('p_IssueCatererEventAuth',
-                                                 'Document')
-       AND r.fromobjectid = a_objectid;
+    IF (t_outcome = 'Approved')
+    THEN
+        SELECT d.VALUE
+          INTO t_data
+          FROM api.relationships  r
+               LEFT OUTER JOIN doc.documentblobs d
+                   ON d.documentid = r.toobjectid
+         WHERE r.endpointid =
+               api.pkg_configquery.endpointidforname(
+                   'p_IssueCatererEventAuth',
+                   'Document')
+           AND r.fromobjectid = a_objectid;
+    END IF;
 
     t_url :=
         REPLACE(
@@ -229,36 +221,47 @@ BEGIN
                 t_url,
                 '<<path>>',
                 CASE ora_database_name
-                    WHEN 'ABISST1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
-                    WHEN 'ABISP1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
-                    ELSE 'https://qa-02.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISST1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISP1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    ELSE 'https://qa-01.abcbiz-qa.abc.ca.gov'
                 END),
             '<<applicationId>>',
             t_applicationid);
 
-    bizmod_api.utl_licenseinfo.clean(a_json => t_json_app);
-    DBMS_OUTPUT.put_line(t_json_app.TO_CLOB);
-
-    --        t_response :=
-    --            bizmod_api.utl_licenseinfo.calllsp(NULL,
-    --                                               t_url,
-    --                                               t_json_arr.TO_CLOB);
-    --dbms_output.put_line(t_response);
-
-    t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
-    DBMS_OUTPUT.put_line(t_outcome || ' : ' || t_url);
+    t_response :=
+        bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
+                                           a_method    => 'PUT',
+                                           a_content   => t_json_arr.TO_CLOB,
+                                           a_file      => t_data);
+    DBMS_OUTPUT.put_line('Response: ' || t_response);
 
     IF (t_outcome IS NOT NULL)
     THEN
+        t_url := t_url || CHR(63) || 'Status=' || t_outcome;
+
         IF (t_outcome = 'Approved')
         THEN
+            t_url :=
+                t_url
+                || CHR(38)
+                || 'file=test.pdf'
+                || CHR(38)
+                || 'metadata=test.pdf';
             t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(t_url, t_outcome, t_data);
+                bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
+                                                   a_method    => 'PATCH', --put
+                                                   a_content   => NULL,
+                                                   a_file      => t_data);
         ELSE
             t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(NULL, t_url, t_outcome);
+                bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
+                                                   a_method    => 'PUT',
+                                                   a_content   => NULL,
+                                                   a_file      => NULL);
         END IF;
     END IF;
+
+    DBMS_OUTPUT.put_line('Response: ' || t_response);
 
     INSERT INTO bizmod_api.e_process_log_t(seq, processjob, info)
              VALUES (
@@ -273,7 +276,10 @@ BEGIN
                     END
                  || CHR(13)
                  || 'URL: '
-                 || t_url);
+                 || t_url
+                 || CHR(13)
+                 || 'URL: '
+                 || t_response);
 EXCEPTION
     WHEN OTHERS
     THEN
@@ -296,7 +302,9 @@ EXCEPTION
         --
         --        COMMIT;
         DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || t_trace);
-
-        RAISE;
+--        RAISE;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.CATERINGNOTIFYLSPJOB TO POSSEEXTENSIONS;
