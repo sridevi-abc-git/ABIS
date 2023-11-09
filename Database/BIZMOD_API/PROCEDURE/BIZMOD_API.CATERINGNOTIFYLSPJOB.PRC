@@ -201,7 +201,7 @@ BEGIN
     bizmod_api.utl_licenseinfo.clean(a_json => t_json_data);
     t_json_arr := t_json_data.get_array('APPLICATION');
 
-    IF (t_outcome = 'Approved')
+    IF (t_outcome = 'Approvedx')
     THEN
         SELECT d.VALUE
           INTO t_data
@@ -212,6 +212,7 @@ BEGIN
                api.pkg_configquery.endpointidforname(
                    'p_IssueCatererEventAuth',
                    'Document')
+           and rownum = 1
            AND r.fromobjectid = a_objectid;
     END IF;
 
@@ -244,9 +245,9 @@ BEGIN
             t_url :=
                 t_url
                 || CHR(38)
-                || 'file=test.pdf'
+                || 'file=abc-218.pdf'
                 || CHR(38)
-                || 'metadata=test.pdf';
+                || 'metadata=abc-218.pdf';
             t_response :=
                 bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
                                                    a_method    => 'PATCH', --put
