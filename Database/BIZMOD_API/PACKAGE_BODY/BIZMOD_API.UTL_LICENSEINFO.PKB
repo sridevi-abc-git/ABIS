@@ -29,10 +29,10 @@ AS
     --                                          CALLLSP (different parameters)
     -- ****************************************************************************
 
-    FUNCTION calllsp(a_url           IN VARCHAR2,
-                     a_method        IN VARCHAR2,
-                     a_content       IN CLOB,
-                     a_file          IN BLOB)
+    FUNCTION calllsp(a_url          IN VARCHAR2,
+                     a_method       IN VARCHAR2,
+                     a_content      IN CLOB,
+                     a_file         IN BLOB)
         RETURN CLOB
     IS
         t_response     CLOB;
@@ -45,52 +45,60 @@ AS
         t_http_response UTL_HTTP.resp;
         t_text         VARCHAR2(32767);
     BEGIN
-        DBMS_LOB.CREATETEMPORARY(t_response, TRUE, DBMS_LOB.SESSION);
-        t_bloblen := DBMS_LOB.getlength(a_content);
-        UTL_HTTP.set_wallet('file:/orabin1/admin/' || lower(ora_database_name) || '/walletSSL/', NULL);
+        DBMS_LOB.createtemporary(t_response, TRUE, DBMS_LOB.session);
+        t_bloblen := DBMS_LOB.getlength(a_file);
+
+        UTL_HTTP.set_wallet(
+            'file:/orabin1/admin/'
+            || LOWER(ora_database_name)
+            || '/walletSSL/',
+            NULL);
 
         -- Make a HTTP request and get the response.
         t_http_request :=
             UTL_HTTP.begin_request(url => a_url, method => a_method);
 
         UTL_HTTP.set_header(t_http_request, 'X-Internal-Request', 'True');
-        if (a_file is null)
-        then
-        UTL_HTTP.set_header(t_http_request,
-                            'content-type',
-                            'application/json');
-        UTL_HTTP.set_header(t_http_request,
-                            'Content-Length',
-                            Length(a_content));
 
-        UTL_HTTP.write_text(t_http_request, a_content);
+        IF (a_file IS NULL)
+        THEN
+            DBMS_OUTPUT.put_line('NOT a FILE: ');
         
-        else
-        
-        UTL_HTTP.set_header(t_http_request,
-                            'content-type',
-                            'application/octet-stream');
-        UTL_HTTP.set_header(t_http_request,
-                            'Content-Length',
-                            DBMS_LOB.getlength(a_content));
+            UTL_HTTP.set_header(t_http_request,
+                                'content-type',
+                                'application/json');
+            UTL_HTTP.set_header(t_http_request,
+                                'Content-Length',
+                                LENGTH(a_content));
 
-        WHILE t_pos < t_bloblen
-        LOOP
-            DBMS_LOB.read(a_content,
-                          t_bufferlength,
-                          t_pos,
-                          t_buffer);
-            UTL_HTTP.write_raw(t_http_request, t_buffer);
-            t_pos := t_pos + t_bufferlength;
-        END LOOP;
+            UTL_HTTP.write_text(t_http_request, a_content);
+        ELSE
+             DBMS_OUTPUT.put_line('FILE: ');
+           UTL_HTTP.set_header(t_http_request,
+                                'content-type',
+                                'application/octet-stream');
+            UTL_HTTP.set_header(t_http_request,
+                                'Content-Length',
+                                DBMS_LOB.getlength(a_file));
 
-    end if;
+            WHILE t_pos < t_bloblen
+            LOOP
+                DBMS_LOB.read(a_file,
+                              t_bufferlength,
+                              t_pos,
+                              t_buffer);
+                UTL_HTTP.write_raw(t_http_request, t_buffer);
+                t_pos := t_pos + t_bufferlength;
+            END LOOP;
+        END IF;
+
         -- Loop through the response.
         BEGIN
-        t_http_response := UTL_HTTP.get_response(t_http_request);
+            t_http_response := UTL_HTTP.get_response(t_http_request);
+
             LOOP
                 UTL_HTTP.read_text(t_http_response, t_text, 32766);
-                DBMS_LOB.WRITEAPPEND(t_response, length(t_text), t_text);
+                DBMS_LOB.writeappend(t_response, LENGTH(t_text), t_text);
             END LOOP;
         EXCEPTION
             WHEN UTL_HTTP.end_of_body
@@ -102,9 +110,10 @@ AS
     EXCEPTION
         WHEN OTHERS
         THEN
-        t_response := UTL_HTTP.get_detailed_sqlerrm;
-        
-dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);        
+            t_response := UTL_HTTP.get_detailed_sqlerrm;
+
+            DBMS_OUTPUT.put_line(
+                'detail error:' || UTL_HTTP.get_detailed_sqlerrm);
             UTL_HTTP.end_response(t_http_response);
             RAISE;
 
@@ -121,7 +130,9 @@ dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);
         t_http_response UTL_HTTP.resp;
         t_text         VARCHAR2(32767);
     BEGIN
-        UTL_HTTP.set_wallet('file:/orabin1/admin/' || ora_database_name || '/walletSSL/', NULL);
+        UTL_HTTP.set_wallet(
+            'file:/orabin1/admin/' || ora_database_name || '/walletSSL/',
+            NULL);
 
         -- Make a HTTP request and get the response.
         t_http_request :=
@@ -143,7 +154,7 @@ dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);
         BEGIN
             LOOP
                 UTL_HTTP.read_text(t_http_response, t_text, 32766);
-                DBMS_LOB.WRITEAPPEND(t_response, t_text,length(t_text));
+                DBMS_LOB.writeappend(t_response, t_text, LENGTH(t_text));
 
                 DBMS_OUTPUT.put_line('Response: ' || t_text);
             END LOOP;
@@ -151,17 +162,18 @@ dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);
             WHEN UTL_HTTP.end_of_body
             THEN
                 UTL_HTTP.end_response(t_http_response);
-dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);        
+                DBMS_OUTPUT.put_line(
+                    'detail error:' || UTL_HTTP.get_detailed_sqlerrm);
         END;
 
         RETURN t_response;
     EXCEPTION
         WHEN OTHERS
         THEN
-        
-dbms_output.put_line('detail error:' || UTL_HTTP.get_detailed_sqlerrm);        
+            DBMS_OUTPUT.put_line(
+                'detail error:' || UTL_HTTP.get_detailed_sqlerrm);
             UTL_HTTP.end_response(t_http_response);
---            RAISE;
+            --            RAISE;
 
             RETURN t_response;
     END;
