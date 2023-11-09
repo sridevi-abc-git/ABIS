@@ -43,7 +43,7 @@ AS
 
         t_http_request UTL_HTTP.req;
         t_http_response UTL_HTTP.resp;
-        t_text         VARCHAR2(32767);
+        t_text         VARCHAR2(32767); 
     BEGIN
         DBMS_LOB.createtemporary(t_response, TRUE, DBMS_LOB.session);
         t_bloblen := DBMS_LOB.getlength(a_file);
