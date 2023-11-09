@@ -1,6 +1,6 @@
-CREATE OR REPLACE PROCEDURE ABC.applicationfeecalc(a_objectid      udt_id,
+CREATE OR REPLACE PROCEDURE ABC.applicationfeecalc(a_objectid      api.pkg_definition.udt_id,
                                                    --                               a_AsOfDate date,
-                                                   a_jobid         udt_id)
+                                                   a_jobid         api.pkg_definition.udt_id)
 IS
     -- **************************************************************************
     -- File:        APPLICATIONFEECALC.PRC

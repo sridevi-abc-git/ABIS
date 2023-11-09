@@ -628,7 +628,6 @@ IS
         deleteaddresspoint (t_jobid, SYSDATE);
     END deletegeocodedaddressfromrel;
 END pkg_gis;
-
 /
 
 
