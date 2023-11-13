@@ -201,8 +201,9 @@ BEGIN
     bizmod_api.utl_licenseinfo.clean(a_json => t_json_data);
     t_json_arr := t_json_data.get_array('APPLICATION');
 
-    IF (t_outcome = 'Approvedx')
+    IF (t_outcome = 'Approved')
     THEN
+    BEGIN
         SELECT d.VALUE
           INTO t_data
           FROM api.relationships  r
@@ -214,6 +215,14 @@ BEGIN
                    'Document')
            and rownum = 1
            AND r.fromobjectid = a_objectid;
+
+----------------------------------           
+-- this for testing only -------           
+    exception when no_data_found
+    then
+    t_data := utl_raw.cast_to_raw('File Not Found');
+--------------------------------    
+    END;
     END IF;
 
     t_url :=
@@ -222,8 +231,8 @@ BEGIN
                 t_url,
                 '<<path>>',
                 CASE ora_database_name
-                    WHEN 'ABISST1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
-                    WHEN 'ABISP1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
+                    WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
                     ELSE 'https://qa-01.abcbiz-qa.abc.ca.gov'
                 END),
             '<<applicationId>>',
