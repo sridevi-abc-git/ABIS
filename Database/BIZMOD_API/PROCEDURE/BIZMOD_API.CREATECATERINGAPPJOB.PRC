@@ -55,7 +55,7 @@ IS
   t_eventlocationaddressline1      VARCHAR2(50);
   t_eventlocationaddressline2      VARCHAR2(50);
   t_eventlocationcity              VARCHAR2(50);
-  t_eventlocationzip               VARCHAR2(5);
+  t_eventlocationzip               VARCHAR2(10);
   t_specificLocation               VARCHAR2(80);
 --*********
 --Fee Data
