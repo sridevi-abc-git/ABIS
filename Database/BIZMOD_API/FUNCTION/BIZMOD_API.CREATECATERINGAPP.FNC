@@ -20,13 +20,14 @@ IS
     t_json_arr     json_array_t := json_array_t();
     t_json_failure json_object_t := json_object_t();
     t_json_data    json_object_t := json_object_t();
-    t_sqlerrm      VARCHAR2(4000);
-    t_trace        VARCHAR2(4000);
-    t_msg          VARCHAR2(4000 BYTE);
+    t_licensetypecode VARCHAR2(3);
     t_starttime    NUMBER;
     t_endtime      NUMBER;
     t_count        NUMBER;
     t_packet       CLOB;
+    t_sqlerrm      VARCHAR2(4000);
+    t_trace        VARCHAR2(4000);
+    t_msg          VARCHAR2(4000 BYTE);
 BEGIN
     FOR rec
         IN (SELECT *
@@ -98,6 +99,32 @@ BEGIN
                                        PATH '$.TOTALAMOUNTDUE',
                                    submitteddate DATE PATH '$.SUBMITTEDDATE'))))
     LOOP
+        BEGIN
+            SELECT api.pkg_columnquery.VALUE(o.objectid, 'LicenseTypeCode')    licensetypecode
+              INTO t_licensetypecode
+              FROM TABLE(
+                       CAST(
+                           api.pkg_simplesearch.castableobjectsbyindex(
+                               a_objectdefname => 'j_LicenseType',
+                               a_columnname => 'dup_LicenseExternalFileNum',
+                               a_value     => rec.licensenumber)
+                               AS api.udt_objectlist)) o
+                   JOIN api.relationships slt
+                       ON (slt.fromobjectid = o.objectid
+                       AND slt.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'j_LicenseType',
+                               'LicTypeCatSecondary'))
+             WHERE api.pkg_columnquery.VALUE(slt.toobjectid,
+                                             'LicenseTypeCode') IN
+                       ('58', '77');
+        EXCEPTION
+            WHEN NO_DATA_FOUND
+            THEN
+                t_json_arr.append(
+                    'Invalid License Type for Catering Application');
+        END;
+
         -- check if duplicate application
         IF (api.pkg_simplesearch.objectbyindex(
                 a_objectdefname => 'p_IssueCatererEventAuth',
@@ -272,7 +299,8 @@ BEGIN
             t_json_arr.append('WITHINCITYLIMITS');
         END IF;
 
-        IF (NVL(rec.annualeventscount, 0) > 36)
+        IF (NVL(rec.annualeventscount, 0) > 36
+        AND t_licensetypecode NOT IN ('50', '51', '52'))
         THEN
             t_json_arr.append('ANNUALEVENTSCOUNT');
         END IF;
