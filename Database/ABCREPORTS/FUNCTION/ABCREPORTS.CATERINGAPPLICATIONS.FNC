@@ -18,16 +18,19 @@ IS
     -- ****************************************************************************
     CURSOR query(p_start_date IN DATE, p_end_date IN DATE)
     IS
-        SELECT api.pkg_columnquery.VALUE(o.objectid, 'DateOfEventFrom')
+        SELECT api.pkg_columnquery.datevalue(o.objectid, 'DateOfEventFrom')
                    eventstartdate,
-               api.pkg_columnquery.VALUE(o.objectid, 'DateOfEventTo')
+               api.pkg_columnquery.datevalue(o.objectid, 'DateOfEventTo')
                    eventenddate,
-               api.pkg_columnquery.value(o.objectid, 'EventLocAddressObjectId') Address,
+               api.pkg_columnquery.VALUE(o.objectid,
+                                         'EventLocAddressObjectId')
+                   address,
                api.pkg_columnquery.VALUE(o.objectid, 'ContactName')
                    contactperson,
-               api.pkg_columnquery.VALUE(o.objectid, 'EstimatedAttendance')
+               api.pkg_columnquery.numericvalue(o.objectid,
+                                                'EstimatedAttendance')
                    attendance,
-               api.pkg_columnquery.VALUE(o.objectid, 'Days')
+               api.pkg_columnquery.numericvalue(o.objectid, 'Days')
                    numberofdays,
                api.pkg_columnquery.VALUE(o.objectid, 'PublicEvent')
                    publicorprivate,
@@ -35,18 +38,20 @@ IS
                    assignedto,
                o.objectid
                    processapplicationid,
-               api.pkg_columnquery.VALUE(o.objectid, 'CreatedDate')
-                   cateringauthorizationapplicationcreatedate,
-               api.pkg_columnquery.VALUE(o.objectid, 'LicenseNumber')
-                   licensenumber
+               api.pkg_columnquery.datevalue(o.objectid, 'CreatedDate')
+                   cateringauthorizationapplicationcreatedate
+--               api.pkg_columnquery.VALUE(o.objectid, 'LicenseNumber')
+--                   licensenumber
           FROM TABLE(
                    CAST(
                        api.pkg_simplesearch.castableobjectsbyindexrange(
                            a_objectdefname => 'p_IssueCatererEventAuth',
-                           a_columnname => 'DateOfEventFrom', --'CreatedDate',
-                           a_lowvalue  => '2023-11-01',
-                           a_highvalue => '2023-11-30') AS api.udt_objectlist))
-               o;
+                           a_columnname => 'dup_CreatedDate', 
+                           a_lowvalue  =>
+                               TO_CHAR(p_start_date, 'yyyy-mm-dd'),
+                           a_highvalue =>
+                               TO_CHAR(p_end_date, 'yyyy-mm-dd'))
+                           AS api.udt_objectlist)) o;
 
 
     lv_status_msg  VARCHAR2(8096);
@@ -61,55 +66,48 @@ BEGIN
     ld_end := TO_DATE(p_parms.get_value('END_DATE'), 'MM/DD/YYYY');
     p_parms.upd_value('REPORT_DATE', TO_CHAR(SYSDATE, 'MM/DD/YYYY HH:MI PM'));
 
-
     FOR rec IN query(ld_start, ld_end)
     LOOP
         lv_csv_row :=
             TRANSLATE(
                 '"'
-                || eventstartdate
+                || rec.eventstartdate
                 || '","'
-                || eventenddate
+                || rec.eventenddate
                 || '","'
-                || api.pkg_columnquery.VALUE(rec.Address,
-                                             'AddressLine1')
+                || api.pkg_columnquery.VALUE(rec.address, 'AddressLine1')
                 || ', '
-                || api.pkg_columnquery.VALUE(rec.Address,
-                                             'AddressLine2')
+                || api.pkg_columnquery.VALUE(rec.address, 'AddressLine2')
                 || CASE
-                       WHEN api.pkg_columnquery.VALUE(
-                                rec.Address,
-                                'AddressLine2')
+                       WHEN api.pkg_columnquery.VALUE(rec.address,
+                                                      'AddressLine2')
                                 IS NULL
                        THEN
                            ' '
                        ELSE
                            ', '
                    END
-                || api.pkg_columnquery.VALUE(rec.Address,
-                                             'CACity')
+                || api.pkg_columnquery.VALUE(rec.address, 'CACity')
                 || ', '
-                || api.pkg_columnquery.VALUE(rec.Address,
-                                             'USAState')
+                || api.pkg_columnquery.VALUE(rec.address, 'USAState')
                 || ', '
-                || api.pkg_columnquery.VALUE(rec.Address,
-                                             'ZipCode')
+                || api.pkg_columnquery.VALUE(rec.address, 'ZipCode')
                 || '","'
-                || contactperson
+                || rec.contactperson
                 || '",'
-                || attendance
+                || rec.attendance
                 || ','
-                || numberofdays
+                || rec.numberofdays
                 || ',"'
-                || publicorprivate
+                || rec.publicorprivate
                 || '","'
-                || assignedto
+                || rec.assignedto
                 || '",'
-                || processapplicationid
+                || rec.processapplicationid
                 || ',"'
-                || cateringauthorizationapplicationcreatedate
-                || '","'
-                || licensenumber
+                || rec.cateringauthorizationapplicationcreatedate
+--                || '","'
+--                || rec.licensenumber
                 || '",',
                 CHR(9) || CHR(10) || CHR(13),
                 '   ')
@@ -140,5 +138,5 @@ EXCEPTION
                    || CHR(13)
                    || 'TRACE: '
                    || DBMS_UTILITY.format_error_backtrace);
-END abc220;
+END cateringapplications;
 /
