@@ -18,7 +18,9 @@ IS
     -- ****************************************************************************
     CURSOR query(p_start_date IN DATE, p_end_date IN DATE)
     IS
-        SELECT api.pkg_columnquery.datevalue(o.objectid, 'DateOfEventFrom')
+        SELECT api.pkg_columnquery.VALUE(o.objectid, 'LicenseNumber')
+                   licensenumber,
+               api.pkg_columnquery.datevalue(o.objectid, 'DateOfEventFrom')
                    eventstartdate,
                api.pkg_columnquery.datevalue(o.objectid, 'DateOfEventTo')
                    eventenddate,
@@ -34,15 +36,13 @@ IS
                    numberofdays,
                api.pkg_columnquery.VALUE(o.objectid, 'PublicEvent')
                    publicorprivate,
-               api.pkg_columnquery.VALUE(o.objectid, 'AssignedTo')
-                   assignedto,
-               o.objectid
-                   processapplicationid,
+               workflow.pkg_processquery.staffidlist(objectid) 
+                   assignedstaff,    
+               api.pkg_columnquery.VALUE(o.objectid, 'LSPId')
+                   lspapplicationid,
                api.pkg_columnquery.datevalue(o.objectid, 'CreatedDate')
                    cateringauthorizationapplicationcreatedate
---               api.pkg_columnquery.VALUE(o.objectid, 'LicenseNumber')
---                   licensenumber
-          FROM TABLE(
+                         FROM TABLE(
                    CAST(
                        api.pkg_simplesearch.castableobjectsbyindexrange(
                            a_objectdefname => 'p_IssueCatererEventAuth',
@@ -71,6 +71,8 @@ BEGIN
         lv_csv_row :=
             TRANSLATE(
                 '"'
+                || rec.licensenumber
+                || '","'
                 || rec.eventstartdate
                 || '","'
                 || rec.eventenddate
@@ -101,13 +103,11 @@ BEGIN
                 || ',"'
                 || rec.publicorprivate
                 || '","'
-                || rec.assignedto
+                || rec.assignedstaff 
                 || '",'
-                || rec.processapplicationid
+                || rec.lspapplicationid
                 || ',"'
                 || rec.cateringauthorizationapplicationcreatedate
---                || '","'
---                || rec.licensenumber
                 || '",',
                 CHR(9) || CHR(10) || CHR(13),
                 '   ')
