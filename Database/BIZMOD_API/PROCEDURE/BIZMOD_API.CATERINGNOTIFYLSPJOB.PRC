@@ -247,7 +247,7 @@ BEGIN
 
     IF (t_outcome IS NOT NULL)
     THEN
-        t_url := t_url || CHR(63) || 'Status=' || t_outcome;
+        t_url := t_url || CHR(63) || 'status=' || t_outcome;
 
         IF (t_outcome = 'Approved')
         THEN
@@ -288,7 +288,7 @@ BEGIN
                  || 'URL: '
                  || t_url
                  || CHR(13)
-                 || 'URL: '
+                 || 'Response: '
                  || t_response);
 EXCEPTION
     WHEN OTHERS
@@ -296,21 +296,21 @@ EXCEPTION
         t_sqlerrm := SQLERRM;
         t_trace := DBMS_UTILITY.format_error_backtrace;
 
-        --        INSERT INTO bizmod_api.e_process_log_t(seq,
-        --                                               processjob,
-        --                                               info,
-        --                                               errmsg,
-        --                                               bktrace)
-        --             VALUES (0,
-        --                     'CATERINGNOTIFYLSPJOB',
-        --                     'Application Id: ' || t_applicationid || chr(13) ||
-        --                     case when t_outcome is null then 'Application Update'
-        --                          else 'Outcome: ' || t_outcome end || chr(13) ||
-        --                     'URL: ' || t_url
-        --                     t_sqlerrm,
-        --                     t_trace);
-        --
-        --        COMMIT;
+                INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                       processjob,
+                                                       info,
+                                                       errmsg,
+                                                       bktrace)
+                     VALUES (0,
+                             'CATERINGNOTIFYLSPJOB',
+                             'Application Id: ' || t_applicationid || chr(13) ||
+                             case when t_outcome is null then 'Application Update'
+                                  else 'Outcome: ' || t_outcome end || chr(13) ||
+                             'URL: ' || t_url,
+                             t_sqlerrm,
+                             t_trace);
+        
+                COMMIT;
         DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || t_trace);
 --        RAISE;
 END;
