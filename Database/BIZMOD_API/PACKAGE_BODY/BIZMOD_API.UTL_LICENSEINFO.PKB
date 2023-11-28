@@ -35,6 +35,153 @@ AS
                      a_file         IN BLOB)
         RETURN CLOB
     IS
+        --    l_url           VARCHAR2(4000) := 'https://qa-01.abcbiz-qa.abc.ca.gov/api/licensing/internal/catering/applications/216?status=Approved';
+        t_boundary     VARCHAR2(100)
+                           := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
+        t_request      UTL_HTTP.req;
+        t_response     UTL_HTTP.resp;
+        t_response_text         CLOB;
+        --    t_blob          BLOB;
+        t_blob_len     NUMBER;
+        t_chunk_size   NUMBER := 32767;
+        t_offset       NUMBER := 1;
+        t_chunk        RAW(32767);
+        t_content_type VARCHAR2(100)
+                           := 'multipart/form-data; boundary=' || t_boundary;
+        t_body_start   VARCHAR2(1000)
+            := '--'
+               || t_boundary
+               || UTL_TCP.crlf
+               || 'Content-Disposition: form-data; name="file"; filename="report.pdf"'
+               || UTL_TCP.crlf
+               || 'Content-Type: application/pdf'
+               || UTL_TCP.crlf
+               || UTL_TCP.crlf;
+        t_body_end     VARCHAR2(100)
+            := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
+        t_response_header_name VARCHAR2(256);
+        t_response_header_value VARCHAR2(1024);
+        t_response_body VARCHAR2(32767);
+        t_text         VARCHAR2(32767);
+    BEGIN
+        --        SELECT d.VALUE
+        --          INTO t_blob
+        --          FROM api.relationships  r
+        --               LEFT OUTER JOIN doc.documentblobs d
+        --                   ON d.documentid = r.toobjectid
+        --         WHERE r.endpointid =
+        --               api.pkg_configquery.endpointidforname(
+        --                   'p_IssueCatererEventAuth',
+        --                   'Document')
+        --           and rownum = 1
+        --           AND r.fromobjectid = '114061010';
+        -- Open the HTTP request
+
+        UTL_HTTP.set_wallet(
+            'file:/orabin1/admin/'
+            || LOWER(ora_database_name)
+            || '/walletSSL/',
+            NULL);
+
+        t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
+
+        -- Set the request headers
+        UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
+        UTL_HTTP.set_header(t_request, 'Content-Type', t_content_type);
+        UTL_HTTP.set_header(
+            t_request,
+            'Content-Length',
+            TO_CHAR(
+                  DBMS_LOB.getlength(t_body_start)
+                + DBMS_LOB.getlength(a_file)
+                + DBMS_LOB.getlength(t_body_end)));
+
+        -- Write the start of the body to the request
+        UTL_HTTP.write_text(t_request, t_body_start);
+
+        -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
+        t_blob_len := DBMS_LOB.getlength(a_file);
+
+        -- Write the BLOB content to the request in chunks
+        WHILE t_offset <= t_blob_len
+        LOOP
+            DBMS_LOB.read(a_file,
+                          t_chunk_size,
+                          t_offset,
+                          t_chunk);
+            UTL_HTTP.write_raw(t_request, t_chunk);
+            t_offset := t_offset + t_chunk_size;
+        END LOOP;
+
+        -- Write the end of the body to the request
+        UTL_HTTP.write_text(t_request, t_body_end);
+
+        -- Get the response
+        t_response := UTL_HTTP.get_response(t_request);
+
+        -- Handle the response as needed (e.g., print the response)
+        FOR i IN 1 .. UTL_HTTP.get_header_count(t_response)
+        LOOP
+        BEGIN
+            t_response := UTL_HTTP.get_response(t_request);
+
+            LOOP
+                UTL_HTTP.read_text(t_response, t_text, 32766);
+                DBMS_LOB.writeappend(t_response_text, LENGTH(t_text), t_text);
+            END LOOP;
+        EXCEPTION
+            WHEN UTL_HTTP.end_of_body
+            THEN
+                UTL_HTTP.end_response(t_response);
+        END;
+            UTL_HTTP.get_header(t_response,
+                                i,
+                                t_response_header_name,
+                                t_response_header_value);
+            DBMS_OUTPUT.put_line(
+                'Response> '
+                || t_response_header_name
+                || ': '
+                || t_response_header_value);
+        END LOOP;
+
+        UTL_HTTP.read_text(t_response, t_response_body, 32767);
+        DBMS_OUTPUT.put_line('Response body>');
+        DBMS_OUTPUT.put_line(t_response_body);
+
+        -- Close the HTTP request/response
+        UTL_HTTP.end_response(t_response);
+        UTL_HTTP.end_request(t_request);
+            RETURN t_response_text;
+    EXCEPTION
+        WHEN UTL_HTTP.request_failed
+        THEN
+            t_response_text := UTL_HTTP.get_detailed_sqlerrm;
+            dbms_output.put_line(t_response_text);
+            
+            -- Handle HTTP request failure or SSL failure
+            DBMS_OUTPUT.put_line(
+                'Error: HTTP request failed or SSL failure - ' || SQLERRM);
+--            RAISE;
+            RETURN t_response_text;
+                
+        WHEN OTHERS
+        THEN
+            t_response_text := UTL_HTTP.get_detailed_sqlerrm;
+
+            DBMS_OUTPUT.put_line(
+                'detail error:' || UTL_HTTP.get_detailed_sqlerrm);
+            UTL_HTTP.end_response(t_response);
+            RAISE;
+            RETURN t_response_text;
+    END;
+
+    FUNCTION calllspold(a_url          IN VARCHAR2,
+                     a_method       IN VARCHAR2,
+                     a_content      IN CLOB,
+                     a_file         IN BLOB)
+        RETURN CLOB
+    IS
         t_response     CLOB;
         t_buffer       RAW(32767);
         t_bufferlength INTEGER := 32767;
@@ -43,7 +190,7 @@ AS
 
         t_http_request UTL_HTTP.req;
         t_http_response UTL_HTTP.resp;
-        t_text         VARCHAR2(32767); 
+        t_text         VARCHAR2(32767);
     BEGIN
         DBMS_LOB.createtemporary(t_response, TRUE, DBMS_LOB.session);
         t_bloblen := DBMS_LOB.getlength(a_file);
@@ -63,7 +210,7 @@ AS
         IF (a_file IS NULL)
         THEN
             DBMS_OUTPUT.put_line('NOT a FILE: ');
-        
+
             UTL_HTTP.set_header(t_http_request,
                                 'content-type',
                                 'application/json');
@@ -73,8 +220,8 @@ AS
 
             UTL_HTTP.write_text(t_http_request, a_content);
         ELSE
-             DBMS_OUTPUT.put_line('FILE: ');
-           UTL_HTTP.set_header(t_http_request,
+            DBMS_OUTPUT.put_line('FILE: ');
+            UTL_HTTP.set_header(t_http_request,
                                 'content-type',
                                 'application/octet-stream');
             UTL_HTTP.set_header(t_http_request,
