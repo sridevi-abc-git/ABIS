@@ -40,7 +40,7 @@ AS
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
         t_request      UTL_HTTP.req;
         t_response     UTL_HTTP.resp;
-        t_response_text         CLOB;
+        t_response_text CLOB := ' ';
         --    t_blob          BLOB;
         t_blob_len     NUMBER;
         t_chunk_size   NUMBER := 32767;
@@ -64,64 +64,63 @@ AS
         t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
     BEGIN
-        --        SELECT d.VALUE
-        --          INTO t_blob
-        --          FROM api.relationships  r
-        --               LEFT OUTER JOIN doc.documentblobs d
-        --                   ON d.documentid = r.toobjectid
-        --         WHERE r.endpointid =
-        --               api.pkg_configquery.endpointidforname(
-        --                   'p_IssueCatererEventAuth',
-        --                   'Document')
-        --           and rownum = 1
-        --           AND r.fromobjectid = '114061010';
-        -- Open the HTTP request
-
         UTL_HTTP.set_wallet(
             'file:/orabin1/admin/'
             || LOWER(ora_database_name)
             || '/walletSSL/',
             NULL);
 
+        -- Open the HTTP request
         t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
 
-        -- Set the request headers
         UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
-        UTL_HTTP.set_header(t_request, 'Content-Type', t_content_type);
-        UTL_HTTP.set_header(
-            t_request,
-            'Content-Length',
-            TO_CHAR(
-                  DBMS_LOB.getlength(t_body_start)
-                + DBMS_LOB.getlength(a_file)
-                + DBMS_LOB.getlength(t_body_end)));
 
-        -- Write the start of the body to the request
-        UTL_HTTP.write_text(t_request, t_body_start);
+        IF (a_file IS NULL)
+        THEN
+            IF (a_content IS NOT NULL)
+            THEN
+                UTL_HTTP.set_header(t_request,
+                                    'content-type',
+                                    'application/json');
+                UTL_HTTP.set_header(t_request,
+                                    'Content-Length',
+                                    LENGTH(a_content));
 
-        -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
-        t_blob_len := DBMS_LOB.getlength(a_file);
+                UTL_HTTP.write_text(t_request, a_content);
+            END IF;
+        ELSE
+            -- Set the request headers
+            UTL_HTTP.set_header(t_request, 'Content-Type', t_content_type);
+            UTL_HTTP.set_header(
+                t_request,
+                'Content-Length',
+                TO_CHAR(
+                      DBMS_LOB.getlength(t_body_start)
+                    + DBMS_LOB.getlength(a_file)
+                    + DBMS_LOB.getlength(t_body_end)));
 
-        -- Write the BLOB content to the request in chunks
-        WHILE t_offset <= t_blob_len
-        LOOP
-            DBMS_LOB.read(a_file,
-                          t_chunk_size,
-                          t_offset,
-                          t_chunk);
-            UTL_HTTP.write_raw(t_request, t_chunk);
-            t_offset := t_offset + t_chunk_size;
-        END LOOP;
+            -- Write the start of the body to the request
+            UTL_HTTP.write_text(t_request, t_body_start);
 
-        -- Write the end of the body to the request
-        UTL_HTTP.write_text(t_request, t_body_end);
+            -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
+            t_blob_len := DBMS_LOB.getlength(a_file);
+
+            -- Write the BLOB content to the request in chunks
+            WHILE t_offset <= t_blob_len
+            LOOP
+                DBMS_LOB.read(a_file,
+                              t_chunk_size,
+                              t_offset,
+                              t_chunk);
+                UTL_HTTP.write_raw(t_request, t_chunk);
+                t_offset := t_offset + t_chunk_size;
+            END LOOP;
+
+            -- Write the end of the body to the request
+            UTL_HTTP.write_text(t_request, t_body_end);
+        END IF;
 
         -- Get the response
-        t_response := UTL_HTTP.get_response(t_request);
-
-        -- Handle the response as needed (e.g., print the response)
-        FOR i IN 1 .. UTL_HTTP.get_header_count(t_response)
-        LOOP
         BEGIN
             t_response := UTL_HTTP.get_response(t_request);
 
@@ -134,52 +133,41 @@ AS
             THEN
                 UTL_HTTP.end_response(t_response);
         END;
-            UTL_HTTP.get_header(t_response,
-                                i,
-                                t_response_header_name,
-                                t_response_header_value);
-            DBMS_OUTPUT.put_line(
-                'Response> '
-                || t_response_header_name
-                || ': '
-                || t_response_header_value);
-        END LOOP;
-
-        UTL_HTTP.read_text(t_response, t_response_body, 32767);
-        DBMS_OUTPUT.put_line('Response body>');
-        DBMS_OUTPUT.put_line(t_response_body);
 
         -- Close the HTTP request/response
         UTL_HTTP.end_response(t_response);
         UTL_HTTP.end_request(t_request);
-            RETURN t_response_text;
-    EXCEPTION
-        WHEN UTL_HTTP.request_failed
-        THEN
-            t_response_text := UTL_HTTP.get_detailed_sqlerrm;
-            dbms_output.put_line(t_response_text);
-            
-            -- Handle HTTP request failure or SSL failure
-            DBMS_OUTPUT.put_line(
-                'Error: HTTP request failed or SSL failure - ' || SQLERRM);
---            RAISE;
-            RETURN t_response_text;
-                
-        WHEN OTHERS
-        THEN
-            t_response_text := UTL_HTTP.get_detailed_sqlerrm;
-
-            DBMS_OUTPUT.put_line(
-                'detail error:' || UTL_HTTP.get_detailed_sqlerrm);
-            UTL_HTTP.end_response(t_response);
-            RAISE;
-            RETURN t_response_text;
+        RETURN t_response_text;
+--    EXCEPTION
+--        WHEN UTL_HTTP.request_failed
+--        THEN
+--            t_response_text := UTL_HTTP.get_detailed_sqlerrm;
+--            DBMS_OUTPUT.put_line(t_response_text);
+--            DBMS_OUTPUT.put_line(
+--                SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990));
+--
+--            -- Handle HTTP request failure or SSL failure
+--            DBMS_OUTPUT.put_line(
+--                'Error: HTTP request failed or SSL failure - ' || SQLERRM);
+--            --            RAISE;
+--            RETURN t_response_text;
+--        WHEN OTHERS
+--        THEN
+--            t_response_text := UTL_HTTP.get_detailed_sqlerrm;
+--            DBMS_OUTPUT.put_line(
+--                SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990));
+--
+--            DBMS_OUTPUT.put_line(
+--                'detail error:' || UTL_HTTP.get_detailed_sqlerrm);
+--            UTL_HTTP.end_response(t_response);
+--            --            RAISE;
+--            RETURN t_response_text;
     END;
 
     FUNCTION calllspold(a_url          IN VARCHAR2,
-                     a_method       IN VARCHAR2,
-                     a_content      IN CLOB,
-                     a_file         IN BLOB)
+                        a_method       IN VARCHAR2,
+                        a_content      IN CLOB,
+                        a_file         IN BLOB)
         RETURN CLOB
     IS
         t_response     CLOB;
