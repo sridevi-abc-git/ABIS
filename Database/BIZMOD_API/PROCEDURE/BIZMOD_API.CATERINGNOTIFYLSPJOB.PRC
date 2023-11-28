@@ -259,13 +259,13 @@ BEGIN
                 || 'metadata=abc-218.pdf';
             t_response :=
                 bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
-                                                   a_method    => 'PATCH', --put
+                                                   a_method    => 'PATCH',
                                                    a_content   => NULL,
                                                    a_file      => t_data);
         ELSE
             t_response :=
                 bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
-                                                   a_method    => 'PUT',
+                                                   a_method    => 'PATCH',
                                                    a_content   => NULL,
                                                    a_file      => NULL);
         END IF;
@@ -290,9 +290,29 @@ BEGIN
                  || CHR(13)
                  || 'Response: '
                  || t_response);
-EXCEPTION
-    WHEN OTHERS
-    THEN
+    EXCEPTION
+        WHEN UTL_HTTP.request_failed
+        THEN
+        t_sqlerrm := 'HTTP: ' || UTL_HTTP.get_detailed_sqlerrm || chr(13) || SQLERRM;
+        t_trace := DBMS_UTILITY.format_error_backtrace;
+
+                INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                       processjob,
+                                                       info,
+                                                       errmsg,
+                                                       bktrace)
+                     VALUES (0,
+                             'CATERINGNOTIFYLSPJOB',
+                             'Application Id: ' || t_applicationid || chr(13) ||
+                             case when t_outcome is null then 'Application Update'
+                                  else 'Outcome: ' || t_outcome end || chr(13) ||
+                             'URL: ' || t_url,
+                             t_sqlerrm,
+                             t_trace);
+        
+                COMMIT;
+        WHEN OTHERS
+        THEN
         t_sqlerrm := SQLERRM;
         t_trace := DBMS_UTILITY.format_error_backtrace;
 
@@ -311,8 +331,6 @@ EXCEPTION
                              t_trace);
         
                 COMMIT;
-        DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || t_trace);
---        RAISE;
 END;
 /
 
