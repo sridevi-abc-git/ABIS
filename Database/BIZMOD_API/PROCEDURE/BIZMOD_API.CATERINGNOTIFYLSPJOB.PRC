@@ -12,7 +12,6 @@ AS
     --     1.0   11/01/2023  TJL BIZ-12802  Initial Procedure Created
     -- **************************************************************************
     t_data         BLOB;
-    --        t_lspid        VARCHAR2(100);
     t_outcome      VARCHAR2(20);
     t_url          VARCHAR2(1000)
         := '<<path>>/api/licensing/internal/catering/applications/<<applicationId>>';
@@ -20,8 +19,6 @@ AS
     t_response     CLOB;
     t_results      CLOB;
     t_json_app     json_object_t;
-    t_json_arr     json_array_t := json_array_t();
-    t_json_data    json_object_t := json_object_t();
 
     t_applicationid VARCHAR2(1000);
     t_sponsoringorganizationaddr VARCHAR(1000);
@@ -29,15 +26,29 @@ AS
     t_address      bizmod_api.var_tbl := bizmod_api.var_tbl();
     t_phone        VARCHAR2(20);
 
+    t_error        VARCHAR2(4000);
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000 BYTE);
 BEGIN
+    -- check if application was just created
+    IF (  api.pkg_columnquery.datevalue(a_objectid, 'CreatedDate')
+        + ((1 / 24 / 60) * 5) >
+        SYSDATE)
+    THEN
+        DBMS_OUTPUT.put_line('exiting: ');
+        RETURN;
+    END IF;
+
     t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
     t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
+
     t_sponsoringorganizationaddr :=
-        api.pkg_columnquery.VALUE(a_objectid,
-                                  'SponsoringOrganizationMailing');
+        REPLACE(
+            api.pkg_columnquery.VALUE(a_objectid,
+                                      'SponsoringOrganizationMailing'),
+            ',,',
+            ', ,');
     t_addressid :=
         api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
 
@@ -62,6 +73,7 @@ BEGIN
         api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
 
     t_json_app := NEW json_object_t();
+    t_json_app.put('applicationId', t_applicationid);
     t_json_app.put(
         'eventStartDate',
         api.pkg_columnquery.datevalue(a_objectid, 'DateOfEventFrom'));
@@ -84,7 +96,18 @@ BEGIN
                                           a_objectid,
                                           'Timeyouwillbeginservingalcohol'),
                                       0)
-                                + 1200)
+                                + CASE
+                                      WHEN NVL(
+                                               api.pkg_columnquery.numericvalue(
+                                                   a_objectid,
+                                                   'Timeyouwillbeginservingalcohol'),
+                                               0) <
+                                           1200
+                                      THEN
+                                          1200
+                                      ELSE
+                                          0
+                                  END)
                         ELSE
                             TO_CHAR(
                                 NVL(
@@ -96,7 +119,7 @@ BEGIN
                     4,
                     '0'),
                 'HH24MI'),
-            'HH24:MI:SS'));
+            'HH24:MI'));
     t_json_app.put(
         'eventEndTime',
         TO_CHAR(
@@ -113,7 +136,18 @@ BEGIN
                                           a_objectid,
                                           'TimeYouWillStopServingAlcohol'),
                                       0)
-                                + 1200)
+                                + CASE
+                                      WHEN NVL(
+                                               api.pkg_columnquery.numericvalue(
+                                                   a_objectid,
+                                                   'Timeyouwillbeginservingalcohol'),
+                                               0) <
+                                           1200
+                                      THEN
+                                          1200
+                                      ELSE
+                                          0
+                                  END)
                         ELSE
                             TO_CHAR(
                                 NVL(
@@ -125,7 +159,7 @@ BEGIN
                     4,
                     '0'),
                 'HH24MI'),
-            'HH24:MI:SS'));
+            'HH24:MI'));
     t_json_app.put(
         'expectedAttendance',
         api.pkg_columnquery.numericvalue(a_objectid, 'EstimatedAttendance'));
@@ -183,8 +217,9 @@ BEGIN
 
     t_json_app.put('eventLocationAddress1',
                    api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1'));
-    t_json_app.put('eventLocationAddress2',
-                   api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2'));
+    t_json_app.put(
+        'eventLocationAddress2',
+        NVL(api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2'), ''));
     t_json_app.put('eventLocationCity',
                    api.pkg_columnquery.VALUE(t_addressid, 'CACity'));
     t_json_app.put('eventLocationZip',
@@ -195,35 +230,6 @@ BEGIN
                    api.pkg_columnquery.VALUE(a_objectid, ''));
     t_json_app.put('specificLocation',
                    api.pkg_columnquery.VALUE(a_objectid, 'SpecificLocation'));
-
-    t_json_arr.append(t_json_app);
-    t_json_data.put('APPLICATION', t_json_arr);
-    bizmod_api.utl_licenseinfo.clean(a_json => t_json_data);
-    t_json_arr := t_json_data.get_array('APPLICATION');
-
-    IF (t_outcome = 'Approved')
-    THEN
-    BEGIN
-        SELECT d.VALUE
-          INTO t_data
-          FROM api.relationships  r
-               LEFT OUTER JOIN doc.documentblobs d
-                   ON d.documentid = r.toobjectid
-         WHERE r.endpointid =
-               api.pkg_configquery.endpointidforname(
-                   'p_IssueCatererEventAuth',
-                   'Document')
-           and rownum = 1
-           AND r.fromobjectid = a_objectid;
-
-----------------------------------           
--- this for testing only -------           
-    exception when no_data_found
-    then
-    t_data := utl_raw.cast_to_raw('File Not Found');
---------------------------------    
-    END;
-    END IF;
 
     t_url :=
         REPLACE(
@@ -238,25 +244,60 @@ BEGIN
             '<<applicationId>>',
             t_applicationid);
 
+    t_packet := t_json_app.TO_CLOB;
     t_response :=
         bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
                                            a_method    => 'PUT',
-                                           a_content   => t_json_arr.TO_CLOB,
-                                           a_file      => t_data);
-    DBMS_OUTPUT.put_line('Response: ' || t_response);
+                                           a_content   => t_packet,
+                                           a_file      => NULL);
 
-    IF (t_outcome IS NOT NULL)
+    INSERT INTO bizmod_api.e_process_log_t(seq,
+                                           processjob,
+                                           info,
+                                           errmsg,
+                                           packet)
+             VALUES (
+                 0,
+                 'CATERINGNOTIFYLSPJOB',
+                 'Application Id: '
+                 || t_applicationid
+                 || CHR(13)
+                 || 'Application Update'
+                 || CHR(13)
+                 || 'URL: '
+                 || t_url,
+                 SUBSTR(t_response, 1, 3990),
+                 t_packet);
+
+    COMMIT;
+
+    IF (t_outcome IS NOT NULL
+    AND t_response IS NULL)
     THEN
         t_url := t_url || CHR(63) || 'status=' || t_outcome;
 
         IF (t_outcome = 'Approved')
         THEN
+            -- get 218 file to send to LSP
+            SELECT d.VALUE
+              INTO t_data
+              FROM api.relationships  r
+                   LEFT OUTER JOIN doc.documentblobs d
+                       ON d.documentid = r.toobjectid
+             WHERE r.endpointid =
+                   api.pkg_configquery.endpointidforname(
+                       'p_IssueCatererEventAuth',
+                       'Document')
+               AND api.pkg_columnquery.VALUE(d.documentid, 'filename') =
+                   'ABC-218.pdf'
+               AND r.fromobjectid = a_objectid;
+
             t_url :=
                 t_url
                 || CHR(38)
-                || 'file=abc-218.pdf'
+                || 'file=ABC-218.pdf'
                 || CHR(38)
-                || 'metadata=abc-218.pdf';
+                || 'metadata=ABC-218.pdf';
             t_response :=
                 bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
                                                    a_method    => 'PATCH',
@@ -269,68 +310,84 @@ BEGIN
                                                    a_content   => NULL,
                                                    a_file      => NULL);
         END IF;
+
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg)
+                 VALUES (
+                     0,
+                     'CATERINGNOTIFYLSPJOB',
+                     'Application Id: '
+                     || t_applicationid
+                     || CHR(13)
+                     || CASE
+                            WHEN t_outcome IS NULL THEN 'Application Update'
+                            ELSE 'Outcome: ' || t_outcome
+                        END
+                     || CHR(13)
+                     || 'URL: '
+                     || t_url,
+                     t_response);
+
+        COMMIT;
     END IF;
-
-    DBMS_OUTPUT.put_line('Response: ' || t_response);
-
-    INSERT INTO bizmod_api.e_process_log_t(seq, processjob, info)
-             VALUES (
-                 0,
-                 'CATERINGNOTIFYLSPJOB',
-                 'Application Id: '
-                 || t_applicationid
-                 || CHR(13)
-                 || CASE
-                        WHEN t_outcome IS NULL THEN 'Application Update'
-                        ELSE 'Outcome: ' || t_outcome
-                    END
-                 || CHR(13)
-                 || 'URL: '
-                 || t_url
-                 || CHR(13)
-                 || 'Response: '
-                 || t_response);
-    EXCEPTION
-        WHEN UTL_HTTP.request_failed
-        THEN
-        t_sqlerrm := 'HTTP: ' || UTL_HTTP.get_detailed_sqlerrm || chr(13) || SQLERRM;
+EXCEPTION
+    WHEN UTL_HTTP.request_failed
+    THEN
+        t_sqlerrm :=
+            'HTTP: ' || UTL_HTTP.get_detailed_sqlerrm || CHR(13) || SQLERRM;
         t_trace := DBMS_UTILITY.format_error_backtrace;
 
-                INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                       processjob,
-                                                       info,
-                                                       errmsg,
-                                                       bktrace)
-                     VALUES (0,
-                             'CATERINGNOTIFYLSPJOB',
-                             'Application Id: ' || t_applicationid || chr(13) ||
-                             case when t_outcome is null then 'Application Update'
-                                  else 'Outcome: ' || t_outcome end || chr(13) ||
-                             'URL: ' || t_url,
-                             t_sqlerrm,
-                             t_trace);
-        
-                COMMIT;
-        WHEN OTHERS
-        THEN
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                     0,
+                     'CATERINGNOTIFYLSPJOB',
+                     'Application Id: '
+                     || t_applicationid
+                     || CHR(13)
+                     || CASE
+                            WHEN t_outcome IS NULL THEN 'Application Update'
+                            ELSE 'Outcome: ' || t_outcome
+                        END
+                     || CHR(13)
+                     || 'URL: '
+                     || t_url,
+                     t_sqlerrm,
+                     t_trace);
+
+        COMMIT;
+    WHEN OTHERS
+    THEN
         t_sqlerrm := SQLERRM;
         t_trace := DBMS_UTILITY.format_error_backtrace;
 
-                INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                       processjob,
-                                                       info,
-                                                       errmsg,
-                                                       bktrace)
-                     VALUES (0,
-                             'CATERINGNOTIFYLSPJOB',
-                             'Application Id: ' || t_applicationid || chr(13) ||
-                             case when t_outcome is null then 'Application Update'
-                                  else 'Outcome: ' || t_outcome end || chr(13) ||
-                             'URL: ' || t_url,
-                             t_sqlerrm,
-                             t_trace);
-        
-                COMMIT;
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                     0,
+                     'CATERINGNOTIFYLSPJOB',
+                     'Application Id: '
+                     || t_applicationid
+                     || CHR(13)
+                     || CASE
+                            WHEN t_outcome IS NULL THEN 'Application Update'
+                            ELSE 'Outcome: ' || t_outcome
+                        END
+                     || CHR(13)
+                     || 'URL: '
+                     || t_url,
+                     t_sqlerrm,
+                     t_trace);
+
+        COMMIT;
 END;
 /
 
