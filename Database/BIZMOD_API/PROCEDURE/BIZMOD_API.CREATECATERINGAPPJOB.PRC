@@ -10,6 +10,9 @@ IS
     -------------------------------------------------------------------------------
     --              Date           Ticket     Comment
     --   1.0     10/20/2023  JS  BIZ-12471    Initial process created
+    --           12/06/2023 TJL  BIZ-12471    Added URL coding to call approiate LSP URL for database
+    --                                          Added updating process log table
+    --                                          Added exception handling for HTTP request failures
     -- ****************************************************************************
 --************************
 --Object Ids
@@ -77,7 +80,8 @@ IS
 --*****
 --Misc
 --*****
-  t_url                            VARCHAR2(150);
+  t_url                            VARCHAR2(1000)
+        := '<<path>>/api/licensing/internal/catering/payments/<<lsppaymentid>>/fees'; -- TJL
   t_sqlerrm                        VARCHAR2(4000);
   t_trace                          VARCHAR2(4000);
   t_msg                            VARCHAR2(4000);
@@ -137,7 +141,23 @@ t_quantity:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.ANNUALEVENTSCOUNT');
 t_contactname:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.CONTACTNAME');
 t_contactphonenumber:= REGEXP_REPLACE(JSON_VALUE(t_packet, '$.DATA.APPLICATION.CONTACTPHONE'), '\D');
 t_contactemail:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.CONTACTEMAIL');
-t_url:= 'https://qa-01.abcbiz-qa.abc.ca.gov/api/licensing/internal/catering/payments/'||t_lsppaymentid||'/fees';
+
+    -- 12/06/2023 TJL added updating url for different LSP environments
+    t_url :=
+        REPLACE(
+            REPLACE(
+                t_url,
+                '<<path>>',
+                CASE ora_database_name
+                    WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
+                    WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
+                    WHEN 'ABISQA1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISD1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
+                    ELSE 'https://unknown'
+                END),
+            '<<lsppaymentid>>',
+            t_lsppaymentid);
+
 
 --*************************
 --Format Sponsoring Address
@@ -362,7 +382,27 @@ FROM TABLE(
 t_results := json_object('feeObjectId' VALUE t_feeobjid);
 
 t_response:= bizmod_api.utl_licenseinfo.calllsp(a_seq, t_url, t_results);
---t_output:= t_results || t_response;
+
+    -- 12/06/2023 TJL add log update
+    INSERT INTO bizmod_api.e_process_log_t(seq,
+                                           processjob,
+                                           info,
+                                           errmsg,
+                                           packet)
+             VALUES (
+                 a_seq,
+                 'CREATECATERINGAPPJOB',
+                 'Application Id: '
+                 || t_applicationid
+                 || CHR(13)
+                 || 'p_IssueCatererEventAuth'
+                 || t_isscatobjid
+                 || CHR(13)
+                 || 'URL: '
+                 || t_url,
+                 SUBSTR(t_response, 1, 3990),
+                 t_results);
+
 --********************
 --Update eServices Log
 --********************
@@ -375,14 +415,64 @@ COMMIT;
 --Error Handling
 --**************
 EXCEPTION
+    -- 12/06/2023 TJL Added exception handling for HTTP failures and logging to 
+    --  the process log table.
+    WHEN UTL_HTTP.request_failed
+    THEN
+        t_sqlerrm :=
+            'HTTP: ' || UTL_HTTP.get_detailed_sqlerrm || CHR(13) || SQLERRM;
+        t_trace := DBMS_UTILITY.format_error_backtrace;
+
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                     a_seq,
+                     'CREATECATERINGAPPJOB',
+                     'Application Id: '
+                     || t_applicationid
+                     || CHR(13)
+                 || 'p_IssueCatererEventAuth'
+                 || t_isscatobjid
+                 || CHR(13)
+                 || 'URL: '
+                 || t_url,
+                     t_sqlerrm,
+                     t_trace);
+
+        UPDATE bizmod_api.eservices_log_t
+           SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
+         WHERE seq = a_seq;
+
+        COMMIT;
     WHEN OTHERS
     THEN
         t_sqlerrm := SQLERRM;
         t_trace := DBMS_UTILITY.format_error_backtrace;
-        t_msg := SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990);
+
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                     a_seq,
+                     'CREATECATERINGAPPJOB',
+                     'Application Id: '
+                     || t_applicationid
+                     || CHR(13)
+                 || 'p_IssueCatererEventAuth'
+                 || t_isscatobjid
+                 || CHR(13)
+                 || 'URL: '
+                 || t_url,
+                     t_sqlerrm,
+                     t_trace);
 
         UPDATE bizmod_api.eservices_log_t
-           SET err = t_msg
+           SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
          WHERE seq = a_seq;
 
         COMMIT;
