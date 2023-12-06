@@ -9,7 +9,7 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --              Date           Ticket     Comment
-    --   1.0     10/20/2023  TJL  BIZ-12471    Initial process created
+    --   1.0     10/20/2023  JS  BIZ-12471    Initial process created
     -- ****************************************************************************
 --************************
 --Object Ids
@@ -39,7 +39,8 @@ IS
   t_beginservingalcoholampmtime    VARCHAR2(3);
   t_eventendtime                   VARCHAR2(40);
   t_stopservingalcoholampmtime     VARCHAR2(3);
-  t_eventtype                      VARCHAR2(40);
+  t_eventtype                      VARCHAR2(100);
+  t_othereventtype                 VARCHAR2(100);
   t_sponsoringorganization         VARCHAR2(80);
   t_sponsoringorganizationmailing  VARCHAR2(80);
   t_sponsoringorganizationaddress1 VARCHAR2(80);
@@ -55,7 +56,7 @@ IS
   t_eventlocationaddressline1      VARCHAR2(50);
   t_eventlocationaddressline2      VARCHAR2(50);
   t_eventlocationcity              VARCHAR2(50);
-  t_eventlocationzip               VARCHAR2(5);
+  t_eventlocationzip               VARCHAR2(10);
   t_specificLocation               VARCHAR2(80);
 --*********
 --Fee Data
@@ -83,6 +84,7 @@ IS
   t_results                        CLOB;
   t_response                       CLOB;
   t_output                         CLOB;
+  t_count                          NUMBER;
 
 BEGIN
 --*****************
@@ -131,11 +133,35 @@ t_eventlocationzip:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONZIP')
 t_specificLocation:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.SPECIFICLOCATION');
 t_submitteddate:= TO_TIMESTAMP(JSON_VALUE(t_packet, '$.DATA.APPLICATION.SUBMITTEDDATE'), 'YYYY-MM-DD"T"HH24:MI:SS.ff3"Z"') - INTERVAL '8' HOUR;
 t_quantity:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.ANNUALEVENTSCOUNT');
-t_sponsoringorganizationmailing:= t_sponsoringorganizationaddress1 ||','|| t_sponsoringorganizationaddress2 ||','|| t_sponsoringorganizationcity ||','||t_sponsoringorganizationstate||','||t_sponsoringorganizationzip;
+--t_sponsoringorganizationmailing:= t_sponsoringorganizationaddress1 ||','|| t_sponsoringorganizationaddress2 ||','|| t_sponsoringorganizationcity ||','||t_sponsoringorganizationstate||','||t_sponsoringorganizationzip;
 t_contactname:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.CONTACTNAME');
 t_contactphonenumber:= REGEXP_REPLACE(JSON_VALUE(t_packet, '$.DATA.APPLICATION.CONTACTPHONE'), '\D');
 t_contactemail:= JSON_VALUE(t_packet, '$.DATA.APPLICATION.CONTACTEMAIL');
 t_url:= 'https://qa-01.abcbiz-qa.abc.ca.gov/api/licensing/internal/catering/payments/'||t_lsppaymentid||'/fees';
+
+--*************************
+--Format Sponsoring Address
+--*************************
+IF (t_sponsoringorganizationaddress1 IS NULL)
+THEN
+t_sponsoringorganizationmailing:= NULL;
+ELSE
+t_sponsoringorganizationmailing:= t_sponsoringorganizationaddress1 ||','|| t_sponsoringorganizationaddress2 ||','|| t_sponsoringorganizationcity ||','||t_sponsoringorganizationstate||','||t_sponsoringorganizationzip;
+END IF;
+
+--*****************************
+--Check for existing event type
+--*****************************
+SELECT COUNT(attributevalue)
+INTO t_count
+FROM api.domainlistofvalues
+WHERE domainid = 305110
+AND attributevalue = t_eventtype;
+IF(t_count = 0)
+THEN
+  t_othereventtype:= t_eventtype;
+  t_eventtype:='OTHER EVENT';
+END IF;
 
 --*********************
 --Get or create address
@@ -256,6 +282,7 @@ t_url:= 'https://qa-01.abcbiz-qa.abc.ca.gov/api/licensing/internal/catering/paym
   api.pkg_columnupdate.setvalue(t_processid, 'EstimatedAttendance', t_estimatedattendance);
   api.pkg_columnupdate.setvalue(t_processid, 'Description', t_description);
   api.pkg_columnupdate.setvalue(t_processid, 'EventType', t_eventtype);
+  api.pkg_columnupdate.setvalue(t_processid, 'OtherEventType', t_othereventtype);
   api.pkg_columnupdate.setvalue(t_processid, 'SponsoringOrganization', t_sponsoringorganization);
   api.pkg_columnupdate.setvalue(t_processid, 'SponsoringOrganizationMailing', t_sponsoringorganizationmailing);
   api.pkg_columnupdate.setvalue(t_processid, 'PersonInChargeOfEvent', t_personinchargeofevent);
@@ -362,3 +389,6 @@ EXCEPTION
 
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.CREATECATERINGAPPJOB TO POSSEEXTENSIONS;
