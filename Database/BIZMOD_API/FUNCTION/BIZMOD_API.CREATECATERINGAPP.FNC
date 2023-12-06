@@ -211,18 +211,6 @@ BEGIN
             t_json_arr.append('PUBLICEVENT');
         END IF;
 
-        -- check for valid event type
-        SELECT COUNT(attributevalue)
-          INTO t_count
-          FROM api.domainlistofvalues
-         WHERE domainid = 305110
-           AND attributevalue = rec.eventtype;
-
-        IF (t_count = 0)
-        THEN
-            t_json_arr.append('EVENTTYPE');
-        END IF;
-
         IF (NOT REGEXP_LIKE(rec.sponsoringorganizationzip,
                             '([[:digit:]]{5})(-[[:digit:]]{4})?$')
         AND rec.sponsoringorganizationzip IS NOT NULL)
