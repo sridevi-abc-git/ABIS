@@ -239,7 +239,9 @@ BEGIN
                 CASE ora_database_name
                     WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
                     WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
-                    ELSE 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISQA1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISD1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
+                    ELSE 'https://unknown'
                 END),
             '<<applicationId>>',
             t_applicationid);
