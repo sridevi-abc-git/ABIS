@@ -16,11 +16,14 @@ IS
     --    2.0   08/31/2023 TJL  BIZ-12458   Added default parameter to contain file data
     --                                      to be uploaded into ABIS.  Updated saving
     --                                      data in log files.
-    --    3.0   09/21/2023 TJL  BIZ-12883   Change loging to log Process for requests when 
+    --    3.0   09/21/2023 TJL  BIZ-12883   Change loging to log Process for requests when
     --                                        request is CREATEPROCESSJOB
+    --    4.0   11/28/2023 JS   BIZ-13702   Added validation to check for filedata for
+    --                                      FILEUPLOADJOB requests.
     -- ****************************************************************************
     no_update      EXCEPTION;
     bad_json       EXCEPTION;
+    missing_file   EXCEPTION;
     t_response     CLOB;
     t_request      VARCHAR2(40);
     t_seq          NUMBER;
@@ -73,6 +76,15 @@ BEGIN
     COMMIT;
 
     -- ***********************************************************************
+    -- Verify file data exists
+    -- ***********************************************************************
+    DBMS_OUTPUT.PUT_LINE('REQUEST: '|| t_request);
+    IF(json_value(a_packet, '$.PROCESS') = 'FILEUPLOADJOB' AND a_filedata IS NULL)
+    THEN
+        RAISE missing_file;
+    END IF;
+
+    -- ***********************************************************************
     --  Call the function to process the request
     -- ***********************************************************************
     EXECUTE IMMEDIATE 'BEGIN :a := ' || t_request || '(:b, :c); END;'
@@ -123,6 +135,23 @@ EXCEPTION
                    'DATA' VALUE
                        json_object('MSGNO' VALUE '11',
                                    'MSG' VALUE 'Invalid JSON'));
+    WHEN missing_file
+    THEN
+        t_response:= json_object(
+                   'PACKET_TYPE' VALUE 'MESSAGE',
+                   'DATA' VALUE
+                       json_object('MSGNO' VALUE '17',
+                                   'MSG' VALUE 'Missing file for attachement'));                  
+        UPDATE eservices_log_t
+           SET err = 'Missing file for attachement',
+               response = t_response 
+         WHERE seq = t_seq;
+
+        RETURN json_object(
+                   'PACKET_TYPE' VALUE 'MESSAGE',
+                   'DATA' VALUE
+                       json_object('MSGNO' VALUE '17',
+                                   'MSG' VALUE 'Missing file for attachement'));
     WHEN OTHERS
     THEN
         t_sqlerrm := SQLERRM;
