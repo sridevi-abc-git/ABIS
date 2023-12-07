@@ -20,6 +20,8 @@ AS
     --                                        in createawfpayments procedure
     --     3.0  10/30/2023 TJL  TRK-33861   Corrected bug of incorrect payment amount being found
     --                                        AWF Payment Batches for zero payments (no fee due)
+    --     3.0  12/07/2023 TJL              Correct bug in payfees that for certain license payments
+    --                                        would fail with no data found.
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -87,7 +89,27 @@ AS
                 a_error := t_sqlerrm;
             END IF;
 
+--        t_sqlerrm := SQLERRM;
+--        t_backtrace := DBMS_UTILITY.format_error_backtrace;
+
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                     0,
+                     'MAKEPAYMENT',
+                     'LicenseNumber: '
+                     || rec.licensenumber
+                     || CHR(13)
+                     || 'Confirmation Id: '
+                     || rec.confirmationid,
+                     t_sqlerrm,
+                     t_backtrace);
+
             COMMIT;
+            
         END LOOP;
     END;
 
@@ -327,17 +349,20 @@ AS
         api.pkg_logicaltransactionupdate.resettransaction;
         ROLLBACK;
 
+        DBMS_OUTPUT.put_line(a_licensenumber || ' : ' || a_payeereference);
+
         -- From License number get first license type job for creating proposed payment job
         --  and generate any required penalties
         WITH
             ltobjid
             AS
-                (SELECT objectid,
+                (SELECT /*+ materialize */
+                        objectid,
                         api.pkg_columnquery.VALUE(objectid,
                                                   'LicenseTypeCode')
                             licensetypecode,
-                        api.pkg_columnquery.VALUE(objectid,
-                                                  'SecondaryLicenseTypeCode')
+                        api.pkg_columnquery.VALUE(slt.toobjectid,
+                                                  'LicenseTypeCode')
                             secondarylicensetypecode
                    FROM TABLE(
                             CAST(
@@ -346,7 +371,13 @@ AS
                                     a_columnname =>
                                         'dup_LicenseExternalFileNum',
                                     a_value     => a_licensenumber)
-                                    AS api.udt_objectlist)) o)
+                                    AS api.udt_objectlist)) o
+                        JOIN api.relationships slt
+                            ON (o.objectid = slt.fromobjectid
+                            AND slt.endpointid =
+                                api.pkg_configquery.endpointidforname(
+                                    'j_LicenseType',
+                                    'LicTypeCatSecondary')))
         SELECT lt.objectid
           INTO t_jobid
           FROM bizmod_api.e_payments_t  p
@@ -806,25 +837,29 @@ AS
 
                     api.pkg_logicaltransactionupdate.endtransaction;
                     COMMIT;
-                
-                -- 09/06/2023 TJL BIZ-12648  Added
-                -- *****************************************************************
-                -- Find and process Prepare Transmittal  
-                -- *****************************************************************
-                -- get processes
-                SELECT processid
-                  INTO t_processid
-                  FROM api.processes p
-                 WHERE p.jobid = t_transmittalobjectid
-                   AND p.processtypeid = api.pkg_objectdefquery.idforname('p_PrepareTransmittal');
 
-                -- set outcome to Complete (process will complete when COMMIT is executed.
-                api.pkg_logicaltransactionupdate.starttransaction;
-                api.pkg_columnupdate.setvalue(t_processid, 'Outcome', 'Sent to HQ');
-                api.pkg_logicaltransactionupdate.endtransaction;
-                COMMIT;
+                    -- 09/06/2023 TJL BIZ-12648  Added
+                    -- *****************************************************************
+                    -- Find and process Prepare Transmittal
+                    -- *****************************************************************
+                    -- get processes
+                    SELECT processid
+                      INTO t_processid
+                      FROM api.processes p
+                     WHERE p.jobid = t_transmittalobjectid
+                       AND p.processtypeid =
+                           api.pkg_objectdefquery.idforname(
+                               'p_PrepareTransmittal');
+
+                    -- set outcome to Complete (process will complete when COMMIT is executed.
+                    api.pkg_logicaltransactionupdate.starttransaction;
+                    api.pkg_columnupdate.setvalue(t_processid,
+                                                  'Outcome',
+                                                  'Sent to HQ');
+                    api.pkg_logicaltransactionupdate.endtransaction;
+                    COMMIT;
                 -- end BIZ-12648
-                    
+
                 EXCEPTION
                     WHEN OTHERS
                     THEN
@@ -935,7 +970,7 @@ AS
               FROM bizmod_api.awf_t  a
                    LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
                        ON (a.licensenumber = pp.licensenumber
-                          AND t_loop = 1) -- 10/30/2023 TJL  TRK-33861
+                       AND t_loop = 1) -- 10/30/2023 TJL  TRK-33861
              WHERE a.completed IS NULL
                AND a.paymentbatch IS NULL
                AND a.submitteddate IS NOT NULL
@@ -1055,12 +1090,13 @@ AS
                         t_batchpaymententryobjectid,
                         'CheckAmount',
                         t_awf(inx).paymentamount);
-                        
+
                     -- 09/12/2023 TJL  BIZ-12752 added code
                     --      tmp_jobid entry will be deleted on oracle commit.
-                    INSERT INTO abc.tmp_jobid j (objectid)
-                    VALUES (t_batchpaymententryobjectid);
-                    -- end BIZ-12752 
+                    INSERT INTO abc.tmp_jobid j(objectid)
+                         VALUES (t_batchpaymententryobjectid);
+
+                    -- end BIZ-12752
 
                     -- add license and payment amount information
                     api.pkg_columnupdate.setvalue(
@@ -1167,9 +1203,10 @@ AS
 
                     -- 09/12/2023 TJL  BIZ-12752 added code
                     --      tmp_jobid entry will be deleted on oracle commit.
-                    INSERT INTO abc.tmp_jobid j (objectid)
-                    VALUES (t_batchpaymententryobjectid);
-                    -- end BIZ-12752 
+                    INSERT INTO abc.tmp_jobid j(objectid)
+                         VALUES (t_batchpaymententryobjectid);
+
+                    -- end BIZ-12752
 
                     -- add license and payment amount information
                     api.pkg_columnupdate.setvalue(
