@@ -27,6 +27,7 @@ AS
     --                                          HTTPS endpoints. Function CALLLSP
     --   4.1    10/31/2023  TJL  BIZ-12802    Added new function to allow ABIS to send files to LSP. Function
     --                                          CALLLSP (different parameters)
+    --   4.1    12/07/2023  TJL  BIZ-12802    Removed old CALLLSP function
     -- ****************************************************************************
 
     FUNCTION calllsp(a_url          IN VARCHAR2,
@@ -148,55 +149,6 @@ AS
         RETURN t_response_text;
     END;
 
-
-    FUNCTION calllsp(a_seq IN NUMBER, a_url IN VARCHAR2, a_content IN CLOB)
-        RETURN CLOB
-    IS
-        t_response     CLOB;
-        t_http_request UTL_HTTP.req;
-        t_http_response UTL_HTTP.resp;
-        t_text         VARCHAR2(32767);
-    BEGIN
-        UTL_HTTP.set_wallet(
-            'file:/orabin1/admin/'
-            || LOWER(ora_database_name)
-            || '/walletSSL/',
-            NULL);
-
-        -- Make a HTTP request and get the response.
-        t_http_request :=
-            UTL_HTTP.begin_request(url => a_url, method => 'PATCH');
-
-        UTL_HTTP.set_header(t_http_request, 'X-Internal-Request', 'True');
-        UTL_HTTP.set_header(t_http_request,
-                            'content-type',
-                            'application/json');
-        UTL_HTTP.set_header(t_http_request,
-                            'Content-Length',
-                            LENGTH(a_content));
-
-        UTL_HTTP.write_text(t_http_request, a_content);
-
-        t_http_response := UTL_HTTP.get_response(t_http_request);
-
-        IF (t_http_response.status_code NOT IN (200, 201, 204))
-        THEN
-            -- Loop through the response.
-            BEGIN
-                LOOP
-                    UTL_HTTP.read_text(t_http_response, t_text, 32766);
-                    DBMS_LOB.writeappend(t_response, t_text, LENGTH(t_text));
-
-                    DBMS_OUTPUT.put_line('Response: ' || t_text);
-                END LOOP;
-            EXCEPTION
-                WHEN UTL_HTTP.end_of_body
-                THEN
-                    UTL_HTTP.end_response(t_http_response);
-            END;
-        END IF;
-        RETURN t_response;
-    END;
 
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
