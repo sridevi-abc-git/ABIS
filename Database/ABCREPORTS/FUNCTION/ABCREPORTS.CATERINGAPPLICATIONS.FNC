@@ -15,8 +15,11 @@ IS
     -------------------------------------------------------------------------------
     --    Ver:     Date                       Comment
     --          11/15/2023  TJL BIZ-13555  Initial Package Created
+    --          12/05/2023  TJL BIZ-13827  Add support to select report by office
     -- ****************************************************************************
-    CURSOR query(p_start_date IN DATE, p_end_date IN DATE)
+    CURSOR query(p_start_date   IN DATE,
+                 p_end_date     IN DATE,
+                 p_officeid     IN t_officeobject)
     IS
         SELECT api.pkg_columnquery.VALUE(o.objectid, 'LicenseNumber')
                    licensenumber,
@@ -36,26 +39,46 @@ IS
                    numberofdays,
                api.pkg_columnquery.VALUE(o.objectid, 'PublicEvent')
                    publicorprivate,
-               workflow.pkg_processquery.staffidlist(objectid) 
-                   assignedstaff,    
+               workflow.pkg_processquery.staffidlist(objectid)
+                   assignedstaff,
                api.pkg_columnquery.VALUE(o.objectid, 'LSPId')
                    lspapplicationid,
                api.pkg_columnquery.datevalue(o.objectid, 'CreatedDate')
-                   cateringauthorizationapplicationcreatedate
-                         FROM TABLE(
+                   cateringauthorizationapplicationcreatedate,
+               (SELECT qd.officename
+                  FROM query.o_office qd
+                 WHERE qd.officecode =
+                       LPAD(
+                           api.pkg_columnquery.VALUE(
+                               api.pkg_columnquery.numericvalue(o.objectid,
+                                                                'JobId'),
+                               'District'),
+                           2,
+                           '0'))
+                   officename
+          FROM TABLE(
                    CAST(
                        api.pkg_simplesearch.castableobjectsbyindexrange(
                            a_objectdefname => 'p_IssueCatererEventAuth',
-                           a_columnname => 'dup_CreatedDate', 
+                           a_columnname => 'dup_CreatedDate',
                            a_lowvalue  =>
                                TO_CHAR(p_start_date, 'yyyy-mm-dd'),
                            a_highvalue =>
                                TO_CHAR(p_end_date, 'yyyy-mm-dd'))
-                           AS api.udt_objectlist)) o;
+                           AS api.udt_objectlist)) o
+         WHERE LPAD(
+                   api.pkg_columnquery.VALUE(
+                       api.pkg_columnquery.numericvalue(o.objectid, 'JobId'),
+                       'District'),
+                   2,
+                   '0') IN
+                   (SELECT d.officecode
+                      FROM TABLE(p_officeid) d);
 
 
     lv_status_msg  VARCHAR2(8096);
     lblob_csv      BLOB;
+    office_id      t_officeobject;
     ld_start       DATE;
     ld_end         DATE;
     lv_csv_row     VARCHAR2(8096);
@@ -65,8 +88,11 @@ BEGIN
     ld_start := TO_DATE(p_parms.get_value('START_DATE'), 'MM/DD/YYYY');
     ld_end := TO_DATE(p_parms.get_value('END_DATE'), 'MM/DD/YYYY');
     p_parms.upd_value('REPORT_DATE', TO_CHAR(SYSDATE, 'MM/DD/YYYY HH:MI PM'));
+    office_id :=
+        rqs_utils.buildofficelist(p_parms.get_value('OFFICEOBJECTID'),
+                                  lv_status_msg);
 
-    FOR rec IN query(ld_start, ld_end)
+    FOR rec IN query(ld_start, ld_end, office_id)
     LOOP
         lv_csv_row :=
             TRANSLATE(
@@ -103,11 +129,13 @@ BEGIN
                 || ',"'
                 || rec.publicorprivate
                 || '","'
-                || rec.assignedstaff 
+                || rec.assignedstaff
                 || '",'
                 || rec.lspapplicationid
                 || ',"'
                 || rec.cateringauthorizationapplicationcreatedate
+                || '","'
+                || rec.officename
                 || '",',
                 CHR(9) || CHR(10) || CHR(13),
                 '   ')
