@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION bizmod_api.paidfees(a_packet       IN CLOB,
+CREATE OR REPLACE FUNCTION BIZMOD_API.paidfees(a_packet       IN CLOB,
                                                a_seq          IN NUMBER)
     RETURN CLOB
 IS
@@ -15,6 +15,7 @@ IS
     --  11/29/2022 TJL   Added filters to prevent duplicate payments being
     --                     added to payment table.
     --  12/09/2022 TJL   Added call to create a ABIS Payment Job
+    --  12/07/2023 TJL   Added commit before creating payment job
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
     t_packet       CLOB := EMPTY_CLOB();
@@ -195,6 +196,8 @@ BEGIN
         AND t_paidcount > 0
         AND paidfees.licensenumber != paidfees.nextlic)
         THEN
+            COMMIT;
+            
             bizmod_api.createjob(
                 a_procedure => 'E_PAYMENT.MAKEPAYMENT',
                 a_description => 'Pay License Number: ' || t_licensenumber,
