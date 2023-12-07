@@ -64,7 +64,7 @@ IS
                            a_lowvalue  =>
                                TO_CHAR(p_start_date, 'yyyy-mm-dd'),
                            a_highvalue =>
-                               TO_CHAR(p_end_date, 'yyyy-mm-dd'))
+                               TO_CHAR(p_end_date + 1, 'yyyy-mm-dd'))
                            AS api.udt_objectlist)) o
          WHERE LPAD(
                    api.pkg_columnquery.VALUE(
