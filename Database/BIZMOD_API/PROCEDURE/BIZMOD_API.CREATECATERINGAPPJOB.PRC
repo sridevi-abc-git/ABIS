@@ -13,6 +13,7 @@ IS
     --           12/06/2023 TJL  BIZ-12471    Added URL coding to call approiate LSP URL for database
     --                                          Added updating process log table
     --                                          Added exception handling for HTTP request failures
+    --           12/07/2023 TJL  BIZ-12471    Change calllsp to newer calllsp procedure
     -- ****************************************************************************
 --************************
 --Object Ids
@@ -380,8 +381,7 @@ FROM TABLE(
 --Format data packet and use CallLSP
 --**********************************
 t_results := json_object('feeObjectId' VALUE t_feeobjid);
-
-t_response:= bizmod_api.utl_licenseinfo.calllsp(a_seq, t_url, t_results);
+t_response:= bizmod_api.utl_licenseinfo.calllsp(t_url, 'PATCH', t_results, null); -- 12/07/2023 TJL
 
     -- 12/06/2023 TJL add log update
     INSERT INTO bizmod_api.e_process_log_t(seq,
