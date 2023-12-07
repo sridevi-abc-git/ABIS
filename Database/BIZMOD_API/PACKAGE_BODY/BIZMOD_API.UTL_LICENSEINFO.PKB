@@ -158,7 +158,9 @@ AS
         t_text         VARCHAR2(32767);
     BEGIN
         UTL_HTTP.set_wallet(
-            'file:/orabin1/admin/' || ora_database_name || '/walletSSL/',
+            'file:/orabin1/admin/'
+            || LOWER(ora_database_name)
+            || '/walletSSL/',
             NULL);
 
         -- Make a HTTP request and get the response.
