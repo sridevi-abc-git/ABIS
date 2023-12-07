@@ -140,7 +140,7 @@ BEGIN
                                       WHEN NVL(
                                                api.pkg_columnquery.numericvalue(
                                                    a_objectid,
-                                                   'Timeyouwillbeginservingalcohol'),
+                                                   'TimeYouWillStopServingAlcohol'),
                                                0) <
                                            1200
                                       THEN
@@ -185,8 +185,15 @@ BEGIN
 
     t_json_app.put('contactEmail',
                    api.pkg_columnquery.VALUE(a_objectid, 'ContactEmail'));
-    t_json_app.put('eventType',
-                   api.pkg_columnquery.VALUE(a_objectid, 'EventType'));
+    t_json_app.put(
+        'eventType',
+        CASE api.pkg_columnquery.VALUE(a_objectid, 'EventType')
+            WHEN 'OTHER EVENT'
+            THEN
+                api.pkg_columnquery.VALUE(a_objectid, 'OtherEventType')
+            ELSE
+                api.pkg_columnquery.VALUE(a_objectid, 'EventType')
+        END);
     t_json_app.put(
         'sponsoringOrganization',
         api.pkg_columnquery.VALUE(a_objectid, 'SponsoringOrganization'));
