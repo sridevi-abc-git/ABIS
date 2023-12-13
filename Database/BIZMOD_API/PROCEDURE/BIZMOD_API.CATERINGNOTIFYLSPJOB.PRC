@@ -409,7 +409,10 @@ BEGIN
                          || CHR(13)
                          || 'URL: '
                          || t_url,
-                         'LSP Response: ' || t_response);
+                         CASE
+                             WHEN t_response IS NULL THEN NULL
+                             ELSE 'LSP Response: ' || t_response
+                         END);
 
             COMMIT;
         END IF;
