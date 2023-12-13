@@ -1,4 +1,4 @@
-create or replace FUNCTION            BIZMOD_API.requestlicenselist(a_packet       IN CLOB,
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestlicenselist(a_packet       IN CLOB,
                                               a_seq          IN NUMBER)
     RETURN CLOB
 IS
@@ -175,3 +175,4 @@ BEGIN
             RETURN t_results;
     END;
 END;
+/
