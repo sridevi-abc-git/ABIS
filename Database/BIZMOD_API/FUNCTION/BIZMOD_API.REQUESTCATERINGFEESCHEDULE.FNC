@@ -1,4 +1,4 @@
-create or replace FUNCTION            BIZMOD_API.requestcateringfeeschedule(
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestcateringfeeschedule(
     a_packet       IN CLOB,
     a_seq          IN NUMBER)
     RETURN CLOB
@@ -74,3 +74,4 @@ BEGIN
 
     RETURN t_object.TO_CLOB;
 END;
+/
