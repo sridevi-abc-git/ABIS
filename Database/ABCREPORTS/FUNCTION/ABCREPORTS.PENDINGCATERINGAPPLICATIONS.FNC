@@ -69,7 +69,8 @@ IS
                            a_highvalue =>
                                TO_CHAR(p_end_date + 1, 'yyyy-mm-dd'))
                            AS api.udt_objectlist)) o
-         WHERE api.pkg_columnquery.VALUE(o.objectid, 'OutCome') IS NULL
+         WHERE api.pkg_columnquery.VALUE(o.objectid, 'Outcome') IS NULL
+           AND api.pkg_columnquery.VALUE(o.objectid, 'CateringOrEvent') = '58 - Catering'
            AND LPAD(
                    api.pkg_columnquery.VALUE(
                        api.pkg_columnquery.numericvalue(o.objectid, 'JobId'),
@@ -77,7 +78,8 @@ IS
                    2,
                    '0') IN
                    (SELECT d.officecode
-                      FROM TABLE(p_officeid) d);
+                      FROM TABLE(p_officeid) d)
+         ORDER BY cateringauthorizationapplicationcreatedate;
 
 
     lv_status_msg  VARCHAR2(8096);
@@ -170,5 +172,5 @@ EXCEPTION
                    || CHR(13)
                    || 'TRACE: '
                    || DBMS_UTILITY.format_error_backtrace);
-END cateringapplications;
+END pendingcateringapplications;
 /
