@@ -14,6 +14,7 @@ IS
     --    Ver:     Date                       Comment
     --    1.0   09/12/2023  TJL BIZ-12467   Initial Function Created
     --                          BIZ-12643   Validation Rules
+    --    1.1   12/14/2023  TJL             Corrected bug in selecting license type
     -- ****************************************************************************
     t_process      VARCHAR2(40);
     t_json_obj     json_object_t := json_object_t();
@@ -100,7 +101,7 @@ BEGIN
                                    submitteddate DATE PATH '$.SUBMITTEDDATE'))))
     LOOP
         BEGIN
-            SELECT api.pkg_columnquery.VALUE(o.objectid, 'LicenseTypeCode')    licensetypecode
+            SELECT distinct api.pkg_columnquery.VALUE(o.objectid, 'LicenseTypeCode')    licensetypecode
               INTO t_licensetypecode
               FROM TABLE(
                        CAST(
@@ -117,7 +118,7 @@ BEGIN
                                'LicTypeCatSecondary'))
              WHERE api.pkg_columnquery.VALUE(slt.toobjectid,
                                              'LicenseTypeCode') IN
-                       ('58', '77');
+                       ('58');
         EXCEPTION
             WHEN NO_DATA_FOUND
             THEN
