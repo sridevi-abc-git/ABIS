@@ -234,11 +234,11 @@ BEGIN
         t_json_app.put(
             'sponsoringOrganization',
             api.pkg_columnquery.VALUE(a_objectid, 'SponsoringOrganization'));
-        t_json_app.put('sponsoringOrganizationAddress1', t_address(1));
-        t_json_app.put('sponsoringOrganizationAddress2', t_address(2));
-        t_json_app.put('sponsoringOrganizationCity', t_address(3));
-        t_json_app.put('sponsoringOrganizationState', t_address(4));
-        t_json_app.put('sponsoringOrganizationZip', t_address(5));
+        t_json_app.put('sponsoringOrganizationAddress1', TRIM(t_address(1)));
+        t_json_app.put('sponsoringOrganizationAddress2', TRIM(t_address(2)));
+        t_json_app.put('sponsoringOrganizationCity', TRIM(t_address(3)));
+        t_json_app.put('sponsoringOrganizationState', TRIM(t_address(4)));
+        t_json_app.put('sponsoringOrganizationZip', TRIM(t_address(5)));
         t_json_app.put(
             'personInCharge',
             api.pkg_columnquery.VALUE(a_objectid, 'PersonInChargeOfEvent'));
