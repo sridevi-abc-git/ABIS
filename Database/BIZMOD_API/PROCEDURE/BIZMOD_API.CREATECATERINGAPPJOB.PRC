@@ -17,6 +17,7 @@ IS
     --                                          Added exception handling for HTTP request failures
     --           12/07/2023 TJL  BIZ-12471    Change calllsp to newer calllsp procedure
     --   1.1     12/12/2023 TJL  BIZ-13929    Added additional logging
+    --                                        Changed where getting secondary license type status from
     -- ****************************************************************************
     --************************
     --Object Ids
@@ -348,7 +349,7 @@ BEGIN
                    api.pkg_columnquery.VALUE(o.objectid, 'StatusName')
                        status,
                    api.pkg_columnquery.VALUE(o.objectid,
-                                             'dup_SecondaryLTCodeWithCount')
+                                             'SecondaryLTCodeWithCount')
                        lictypes
               FROM TABLE(
                        CAST(
