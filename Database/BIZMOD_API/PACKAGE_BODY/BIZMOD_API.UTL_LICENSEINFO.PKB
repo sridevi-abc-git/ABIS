@@ -28,6 +28,7 @@ AS
     --   4.1    10/31/2023  TJL  BIZ-12802    Added new function to allow ABIS to send files to LSP. Function
     --                                          CALLLSP (different parameters)
     --   4.1    12/07/2023  TJL  BIZ-12802    Removed old CALLLSP function
+    --   4.2    12/14/2023  TJL  BIZ-13929    Added logging to ESERVICES_LOT_T to calllsp function
     -- ****************************************************************************
 
     FUNCTION calllsp(a_url          IN VARCHAR2,
@@ -36,13 +37,12 @@ AS
                      a_file         IN BLOB)
         RETURN CLOB
     IS
-        --    l_url           VARCHAR2(4000) := 'https://qa-01.abcbiz-qa.abc.ca.gov/api/licensing/internal/catering/applications/216?status=Approved';
+        t_seq          NUMBER;
         t_boundary     VARCHAR2(100)
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
         t_request      UTL_HTTP.req;
         t_response     UTL_HTTP.resp;
         t_response_text CLOB;
-        --    t_blob          BLOB;
         t_blob_len     NUMBER;
         t_chunk_size   NUMBER := 32767;
         t_offset       NUMBER := 1;
@@ -65,6 +65,19 @@ AS
         t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
     BEGIN
+        INSERT INTO eservices_log_t(request,
+                                    packet,
+                                    info,
+                                    filedata,
+                                    requestdate)
+             VALUES ('CALLLSP',
+                     a_content,
+                     'URL: ' || a_url || CHR(13) || 'Method: ' || a_method,
+                     a_file,
+                     SYSTIMESTAMP)
+          RETURNING seq
+               INTO t_seq;
+
         UTL_HTTP.set_wallet(
             'file:/orabin1/admin/'
             || LOWER(ora_database_name)
@@ -146,6 +159,13 @@ AS
         UTL_HTTP.end_response(t_response);
         UTL_HTTP.end_request(t_request);
 
+        UPDATE eservices_log_t
+           SET response = json_object('LSPRESPONSE' VALUE t_response_text), responsedate = SYSTIMESTAMP
+         WHERE seq = t_seq
+           LOG ERRORS INTO bizmod_api.err$_eservices_log_t
+                   ('UPDATE')
+                   REJECT LIMIT UNLIMITED;
+               
         RETURN t_response_text;
     END;
 
