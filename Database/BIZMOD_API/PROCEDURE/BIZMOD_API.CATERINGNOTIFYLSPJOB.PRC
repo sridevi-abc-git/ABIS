@@ -13,6 +13,8 @@ AS
     --     1.1   12/12/2023  TJL BIZ-13929  Added additional logging and removing
     --                                        null tags.
     --                                      Corrected bug in time formatting
+    --     1.2   12/14/2023  TJL            Corrected bug when Application has more than
+    --                                          one ABC-218 files attached
     -- **************************************************************************
     t_data         BLOB;
     t_outcome      VARCHAR2(20);
@@ -365,7 +367,8 @@ BEGIN
                            'Document')
                    AND api.pkg_columnquery.VALUE(d.documentid, 'filename') =
                        'ABC-218.pdf'
-                   AND r.fromobjectid = a_objectid;
+                   AND r.fromobjectid = a_objectid
+                   AND rownum = 1;
 
                 t_url :=
                     t_url
