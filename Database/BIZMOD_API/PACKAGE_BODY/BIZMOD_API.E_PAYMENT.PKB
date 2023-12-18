@@ -22,6 +22,7 @@ AS
     --                                        AWF Payment Batches for zero payments (no fee due)
     --     3.0  12/07/2023 TJL              Correct bug in payfees that for certain license payments
     --                                        would fail with no data found.
+    --     3.0  12/15/2023 TJL  BIZ-13929   Added additional logging to createtransmitta function
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -89,27 +90,26 @@ AS
                 a_error := t_sqlerrm;
             END IF;
 
---        t_sqlerrm := SQLERRM;
---        t_backtrace := DBMS_UTILITY.format_error_backtrace;
+            --        t_sqlerrm := SQLERRM;
+            --        t_backtrace := DBMS_UTILITY.format_error_backtrace;
 
-        INSERT INTO bizmod_api.e_process_log_t(seq,
-                                               processjob,
-                                               info,
-                                               errmsg,
-                                               bktrace)
-                 VALUES (
-                     0,
-                     'MAKEPAYMENT',
-                     'LicenseNumber: '
-                     || rec.licensenumber
-                     || CHR(13)
-                     || 'Confirmation Id: '
-                     || rec.confirmationid,
-                     t_sqlerrm,
-                     t_backtrace);
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                     VALUES (
+                         0,
+                         'MAKEPAYMENT',
+                         'LicenseNumber: '
+                         || rec.licensenumber
+                         || CHR(13)
+                         || 'Confirmation Id: '
+                         || rec.confirmationid,
+                         t_sqlerrm,
+                         t_backtrace);
 
             COMMIT;
-            
         END LOOP;
     END;
 
@@ -735,7 +735,7 @@ AS
         t_transmittals api.udt_objectlist := api.udt_objectlist();
         t_transmittalobjectid api.pkg_definition.udt_id;
         t_rel          api.pkg_definition.udt_id;
-
+        t_info         VARCHAR2(4000);
         t_paymentamount NUMBER := 0;
         t_paymentcount NUMBER := 0;
     BEGIN
@@ -763,7 +763,14 @@ AS
                        AND p2.transmittalbatch IS NULL
                        AND api.pkg_columnquery.VALUE(p2.paymentobjectid,
                                                      'Objectdefname') =
-                           'o_Payment') p;
+                           'o_Payment') p
+                   LEFT OUTER JOIN api.relationships rn
+                       ON rn.endpointid =
+                          api.pkg_configquery.endpointidforname(
+                              'j_Transmittal',
+                              'Payment')
+                      AND rn.toobjectid = p.paymentobjectid
+             WHERE rn.fromobjectid IS NULL;
 
             IF (t_objectlist.COUNT > 0)
             THEN
@@ -911,6 +918,57 @@ AS
                 COMMIT;
             END IF;
         END LOOP;
+
+        IF (t_transmittals.COUNT > 0)
+        THEN
+            FOR rec IN (SELECT objectid FROM TABLE(t_transmittals))
+            LOOP
+                t_info :=
+                    t_info
+                    || 'Transmittal Batch External File Number: '
+                    || CHR(9)
+                    || RPAD(
+                           api.pkg_columnquery.VALUE(rec.objectid,
+                                                     'externalfilenum'),
+                           10,
+                           ' ')
+                    || RPAD(
+                           api.pkg_columnquery.VALUE(rec.objectid,
+                                                     'TransmittalType'),
+                           15,
+                           ' ')
+                    || 'Payment Count: '
+                    || LPAD(
+                           api.pkg_columnquery.VALUE(rec.objectid,
+                                                     'PaymentCount'),
+                           4,
+                           ' ')
+                    || '   Payment Total Amt: '
+                    || LPAD(
+                           TO_CHAR(
+                               api.pkg_columnquery.VALUE(
+                                   rec.objectid,
+                                   'PaymentTotalAmount'),
+                               'fm99G999D00'),
+                           10,
+                           ' ')
+                    || CHR(13);
+            END LOOP;
+        ELSE
+            t_info := 'No Transmittal Batches Produced';
+        END IF;
+
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                     0,
+                     'CREATETRANSMITTAL',
+                     t_info,
+                     t_sqlerrm,
+                     t_backtrace);
 
         RETURN t_transmittals;
     END createtransmittal;
