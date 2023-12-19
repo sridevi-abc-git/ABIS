@@ -18,6 +18,8 @@ IS
     --           12/07/2023 TJL  BIZ-12471    Change calllsp to newer calllsp procedure
     --   1.1     12/12/2023 TJL  BIZ-13929    Added additional logging
     --                                        Changed where getting secondary license type status from
+    --   1.1     12/19/2023 TJL  BIZ-13974    Allow applications created when 58 has a status of 
+    --                                          REV PENDING
     -- ****************************************************************************
     --************************
     --Object Ids
@@ -358,8 +360,9 @@ BEGIN
                                a_columnname => 'dup_LicenseExternalFileNum',
                                a_value     => t_licensenumber)
                                AS api.udt_objectlist)) o)
-     WHERE status = 'ACTIVE'
-       AND lictypes LIKE '%58 (ACTIVE)%';
+     WHERE status in ('ACTIVE', 'REVPEN')
+       AND (lictypes LIKE '%58 (ACTIVE)%'
+         OR lictypes LIKE '%58 (REV PENDING)%');
 
     --**********************************
     --Get id of p_CreateCatererEventAuth
