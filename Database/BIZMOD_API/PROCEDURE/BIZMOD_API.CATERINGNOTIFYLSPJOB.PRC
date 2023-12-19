@@ -15,7 +15,78 @@ AS
     --                                      Corrected bug in time formatting
     --     1.2   12/14/2023  TJL            Corrected bug when Application has more than
     --                                          one ABC-218 files attached
+    --     1.2   12/19/2023  TJL            Added check that once application is completed
+    --                                          that no more updates will be sent. After
+    --                                          complete a ABC-172 can be created which would
+    --                                          generate a notify request that generate an
+    --                                          error email.
+    --                                      Added parsing function to parse Sponsoring Organization
+    --                                          Mailing Address.
     -- **************************************************************************
+FUNCTION parseaddress(a_address IN VARCHAR2)
+    return bizmod_api.var_tbl
+  Is  
+    t_address      bizmod_api.var_tbl := bizmod_api.var_tbl();
+    t_beginpos     NUMBER;
+    t_endpos       NUMBER;
+    t_temp         VARCHAR2(1000);
+BEGIN
+    t_address.EXTEND(5);
+
+    -- get zip code at end of string
+    t_beginpos := REGEXP_INSTR(a_address, '[^, ]*$');
+    t_address(5) := SUBSTR(a_address, t_beginpos);
+    DBMS_OUTPUT.put_line('Zip: ' || t_address(5));
+
+    -- get state
+    t_endpos := t_beginpos - 1;
+    t_temp := TRIM(SUBSTR(a_address, 1, t_endpos));
+    t_beginpos := REGEXP_INSTR(t_temp, '[^, ]*$');
+
+    -- find new begining if there is a comma after state
+    IF (t_beginpos >= LENGTH(t_temp))
+    THEN
+        t_beginpos :=
+            REGEXP_INSTR(SUBSTR(t_temp, 1, LENGTH(t_temp) - 2), '[^, ]*$');
+    END IF;
+    t_address(4) := SUBSTR(t_temp, t_beginpos, 2);
+
+    -- get City
+    t_endpos := t_beginpos - 1;
+    t_temp := TRIM(SUBSTR(a_address, 1, t_endpos));
+        t_beginpos :=
+            REGEXP_INSTR(SUBSTR(t_temp, 1, LENGTH(t_temp) - 2), '[^, ]*$');
+    t_address(3) := SUBSTR(t_temp, t_beginpos, LENGTH(t_temp) - t_beginpos);
+
+    -- get Address 1
+    t_endpos := t_beginpos - 1;
+    t_temp := TRIM(SUBSTR(t_temp, 1, t_endpos));
+    t_endpos := INSTR(t_temp, ',');
+    t_address(1) := SUBSTR(t_temp, 1, t_endpos - 1);
+
+    -- check for address 2
+    t_beginpos :=
+          REGEXP_INSTR(t_temp,
+                       ',',
+                       1,
+                       1)
+        + 1;
+    t_temp := TRIM(SUBSTR(t_temp, t_beginpos));
+    IF (NVL(LENGTH(t_temp), 0) > 1)
+    THEN
+        t_address(2) := SUBSTR(t_temp, 1, LENGTH(t_temp) - 1);
+    END IF;
+
+    return t_address;
+END;
+
+-- ****************************************************************************
+-- ****************************************************************************
+--  Main Function Body
+-- ****************************************************************************
+-- ****************************************************************************
+BEGIN
+    DECLARE
     t_data         BLOB;
     t_outcome      VARCHAR2(20);
     t_url          VARCHAR2(1000)
@@ -42,6 +113,9 @@ BEGIN
     IF (  api.pkg_columnquery.datevalue(a_objectid, 'CreatedDate')
         + ((1 / 24 / 60) * 2) >
         SYSDATE)
+    OR (  api.pkg_columnquery.datevalue(a_objectid, 'DateCompleted')
+        + ((1 / 24 / 60) * 1) >
+        SYSDATE)
     THEN
         DBMS_OUTPUT.put_line('exiting: ');
         RETURN;
@@ -56,31 +130,33 @@ BEGIN
 
     IF (t_applicationid IS NOT NULL)
     THEN
-        t_sponsoringorganizationaddr :=
-            REPLACE(
-                api.pkg_columnquery.VALUE(a_objectid,
-                                          'SponsoringOrganizationMailing'),
-                ',,',
-                ', ,');
-        t_addressid :=
-            api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
-
-            SELECT REGEXP_SUBSTR(t_sponsoringorganizationaddr,
-                                 '[^,]+',
-                                 1,
-                                 LEVEL)
-              BULK COLLECT INTO t_address
-              FROM DUAL
-        CONNECT BY REGEXP_SUBSTR(t_sponsoringorganizationaddr,
-                                 '[^,]+',
-                                 1,
-                                 LEVEL)
-                       IS NOT NULL;
-
-        IF (t_address.COUNT < 5)
-        THEN
-            t_address.EXTEND(5 - t_address.COUNT);
-        END IF;
+        t_address := parseaddress(api.pkg_columnquery.VALUE(a_objectid,
+                                          'SponsoringOrganizationMailing'));
+--        t_sponsoringorganizationaddr :=
+--            REPLACE(
+--                api.pkg_columnquery.VALUE(a_objectid,
+--                                          'SponsoringOrganizationMailing'),
+--                ',,',
+--                ', ,');
+--        t_addressid :=
+--            api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
+--
+--            SELECT REGEXP_SUBSTR(t_sponsoringorganizationaddr,
+--                                 '[^,]+',
+--                                 1,
+--                                 LEVEL)
+--              BULK COLLECT INTO t_address
+--              FROM DUAL
+--        CONNECT BY REGEXP_SUBSTR(t_sponsoringorganizationaddr,
+--                                 '[^,]+',
+--                                 1,
+--                                 LEVEL)
+--                       IS NOT NULL;
+--
+--        IF (t_address.COUNT < 5)
+--        THEN
+--            t_address.EXTEND(5 - t_address.COUNT);
+--        END IF;
 
         t_addressid :=
             api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
@@ -506,6 +582,7 @@ EXCEPTION
                      CASE t_notifynumber WHEN 1 THEN t_packet ELSE NULL END);
 
         COMMIT;
+END;
 END;
 /
 
