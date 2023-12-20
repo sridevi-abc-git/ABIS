@@ -23,6 +23,7 @@ AS
     --     3.0  12/07/2023 TJL              Correct bug in payfees that for certain license payments
     --                                        would fail with no data found.
     --     3.0  12/15/2023 TJL  BIZ-13929   Added additional logging to createtransmitta function
+    --     3.0  12/20/2023 TJL              Fixed bug in payment process
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -372,7 +373,7 @@ AS
                                         'dup_LicenseExternalFileNum',
                                     a_value     => a_licensenumber)
                                     AS api.udt_objectlist)) o
-                        JOIN api.relationships slt
+                        LEFT OUTER JOIN api.relationships slt
                             ON (o.objectid = slt.fromobjectid
                             AND slt.endpointid =
                                 api.pkg_configquery.endpointidforname(
