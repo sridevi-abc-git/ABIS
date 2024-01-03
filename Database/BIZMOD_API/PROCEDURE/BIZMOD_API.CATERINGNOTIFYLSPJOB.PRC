@@ -22,63 +22,103 @@ AS
     --                                          error email.
     --                                      Added parsing function to parse Sponsoring Organization
     --                                          Mailing Address.
+    --   2.0     01/02/2024 TJL  BIZ-14058  Corrected bug in parsing Sponsoring Organization
+    --                                          Mailing Address.
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
     IS
         t_address      bizmod_api.var_tbl := bizmod_api.var_tbl();
-        t_beginpos     NUMBER;
-        t_endpos       NUMBER;
-        t_temp         VARCHAR2(1000);
+        t_array        bizmod_api.var_tbl := bizmod_api.var_tbl();
+
+        t_count        NUMBER;
+        t_state_zip    BOOLEAN;
+        t_pos          NUMBER;
     BEGIN
         t_address.EXTEND(5);
 
-        -- get zip code at end of string
-        t_beginpos := REGEXP_INSTR(a_address, '[^, ]*$');
-        t_address(5) := SUBSTR(a_address, t_beginpos);
+            SELECT TRIM(REGEXP_SUBSTR(a_address,
+                                      '[^,]+',
+                                      1,
+                                      LEVEL))    str
+              BULK COLLECT INTO t_array
+              FROM DUAL
+        CONNECT BY REGEXP_SUBSTR(a_address,
+                                 '[^,]+',
+                                 1,
+                                 LEVEL)
+                       IS NOT NULL;
+
+        t_count := t_array.COUNT;
+
+        -- get position of first non space for begining of zip code
+        t_pos := REGEXP_INSTR(t_array(t_count), '[^ ]*$');
+
+        -- when no space is found it points to first position
+        --  t_state_zip when false indicates the state is missing or a
+        --     comma was used to seprate zip and state
+        t_state_zip := CASE t_pos WHEN 1 THEN FALSE ELSE TRUE END;
+
+        -- get zip code
+        t_address(5) := SUBSTR(t_array(t_count), t_pos);
 
         -- get state
-        t_endpos := t_beginpos - 1;
-        t_temp := TRIM(SUBSTR(a_address, 1, t_endpos));
-        t_beginpos := REGEXP_INSTR(t_temp, '[^, ]*$');
-
-        -- find new begining if there is a comma after state
-        IF (t_beginpos >= LENGTH(t_temp))
+        --   (location in array can vary depending on parsing address)
+        IF (t_state_zip)
         THEN
-            t_beginpos :=
-                REGEXP_INSTR(SUBSTR(t_temp, 1, LENGTH(t_temp) - 2),
-                             '[^, ]*$');
+            t_address(4) := SUBSTR(t_array(t_count), 1, 2);
+        ELSE
+            -- check if a comma seprated between state and zip
+            t_address(4) :=
+                CASE LENGTH(t_array(t_count - 1))
+                    WHEN 2
+                    THEN
+                        t_array(t_count - 1)
+                    WHEN 3
+                    THEN
+                        CASE SUBSTR(t_array(t_count - 1), 3, 1)
+                            WHEN '.' THEN SUBSTR(t_array(t_count - 1), 1, 2)
+                            ELSE NULL
+                        END
+                    ELSE
+                        NULL
+                END;
         END IF;
 
-        t_address(4) := SUBSTR(t_temp, t_beginpos, 2);
-
-        -- get City
-        t_endpos := t_beginpos - 1;
-        t_temp := TRIM(SUBSTR(a_address, 1, t_endpos));
-        t_beginpos :=
-            REGEXP_INSTR(SUBSTR(t_temp, 1, LENGTH(t_temp) - 2), '[^,]*$');
-        t_address(3) :=
-            SUBSTR(t_temp, t_beginpos, LENGTH(t_temp) - t_beginpos);
-
-        -- get Address 1
-        t_endpos := t_beginpos - 1;
-        t_temp := TRIM(SUBSTR(t_temp, 1, t_endpos));
-        t_endpos := INSTR(t_temp, ',');
-        t_address(1) := SUBSTR(t_temp, 1, t_endpos - 1);
-
-        -- check for address 2
-        t_beginpos :=
-              REGEXP_INSTR(t_temp,
-                           ',',
-                           1,
-                           1)
-            + 1;
-        t_temp := TRIM(SUBSTR(t_temp, t_beginpos));
-
-        IF (NVL(LENGTH(t_temp), 0) > 1)
+        -- get address2 and city
+        --   (location in array can vary depending on parsing address)
+        IF (t_state_zip)
         THEN
-            t_address(2) := SUBSTR(t_temp, 1, LENGTH(t_temp) - 1);
+            t_address(3) := t_array(t_count - 1);
+
+            -- check if address2 was found
+            IF (t_count = 4
+             OR t_count = 5)
+            THEN
+                t_address(2) := t_array(2);
+            END IF;
+        ELSE
+            IF (t_address(4) IS NULL)
+            THEN
+                t_address(3) := t_array(t_count - 1);
+
+                IF (t_count = 4)
+                THEN
+                    t_address(2) := t_array(2);
+                END IF;
+            ELSE
+                t_address(3) := t_array(t_count - 2);
+
+                IF (t_count = 5)
+                THEN
+                    t_address(2) := t_array(2);
+                END IF;
+            END IF;
         END IF;
+
+        -- save address 1
+        t_address(1) := t_array(1);
+
 
         RETURN t_address;
     END;

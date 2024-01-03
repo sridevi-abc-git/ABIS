@@ -18,8 +18,10 @@ IS
     --           12/07/2023 TJL  BIZ-12471    Change calllsp to newer calllsp procedure
     --   1.1     12/12/2023 TJL  BIZ-13929    Added additional logging
     --                                        Changed where getting secondary license type status from
-    --   1.1     12/19/2023 TJL  BIZ-13974    Allow applications created when 58 has a status of 
+    --   1.1     12/19/2023 TJL  BIZ-13974    Allow applications created when 58 has a status of
     --                                          REV PENDING
+    --   2.0     01/02/2024 TJL  BIZ-14058    Changed the formatting of Sponsoring Orgaization Mailing
+    --                                          Address
     -- ****************************************************************************
     --************************
     --Object Ids
@@ -196,7 +198,6 @@ BEGIN
         - INTERVAL '8' HOUR;
     t_quantity :=
         json_value(t_packet, '$.DATA.APPLICATION.ANNUALEVENTSCOUNT');
-    --t_sponsoringorganizationmailing:= t_sponsoringorganizationaddress1 ||','|| t_sponsoringorganizationaddress2 ||','|| t_sponsoringorganizationcity ||','||t_sponsoringorganizationstate||','||t_sponsoringorganizationzip;
     t_contactname := json_value(t_packet, '$.DATA.APPLICATION.CONTACTNAME');
     t_contactphonenumber :=
         REGEXP_REPLACE(
@@ -228,15 +229,21 @@ BEGIN
     THEN
         t_sponsoringorganizationmailing := NULL;
     ELSE
+        -- 01/02/2024 TJL BIZ-14058
         t_sponsoringorganizationmailing :=
             t_sponsoringorganizationaddress1
-            || ','
-            || t_sponsoringorganizationaddress2
-            || ','
+            || ', '
+            || CASE
+                   WHEN t_sponsoringorganizationaddress2 IS NOT NULL
+                   THEN
+                       t_sponsoringorganizationaddress2 || ', '
+                   ELSE
+                       NULL
+               END
             || t_sponsoringorganizationcity
-            || ','
+            || ', '
             || t_sponsoringorganizationstate
-            || ','
+            || ' '
             || t_sponsoringorganizationzip;
     END IF;
 
@@ -360,7 +367,7 @@ BEGIN
                                a_columnname => 'dup_LicenseExternalFileNum',
                                a_value     => t_licensenumber)
                                AS api.udt_objectlist)) o)
-     WHERE status in ('ACTIVE', 'REVPEN')
+     WHERE status IN ('ACTIVE', 'REVPEN')
        AND (lictypes LIKE '%58 (ACTIVE)%'
          OR lictypes LIKE '%58 (REV PENDING)%');
 
