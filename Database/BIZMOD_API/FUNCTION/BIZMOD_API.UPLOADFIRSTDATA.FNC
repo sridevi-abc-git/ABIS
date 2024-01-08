@@ -12,13 +12,13 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Ver:     Date          Ticket          Comment
-    --          09/13/2023 TJL  BIZ-        Initial File Created
-    --          12/20/2023 TJL              Corrected bugs and adding logging
+    --          09/13/2023 TJL  BIZ-14091   Initial File Created
+    --          12/20/2023 TJL  BIZ-14091   Corrected bugs and adding logging
+    --    1.0   01/04/2023 TJL  BIZ-14091   Corrected bug in parsing file
     -- ****************************************************************************
 
-    FUNCTION split_clob(
-        a_clob         IN CLOB,
-        a_delimiter    IN VARCHAR2 DEFAULT CHR(10) || CHR(13))
+    FUNCTION split_clob(a_clob         IN CLOB,
+                        a_delimiter    IN VARCHAR2 DEFAULT CHR(10))
         RETURN var_tbl
     IS
         t_tbl          var_tbl := var_tbl();
@@ -193,7 +193,7 @@ BEGIN
         FOR inx IN 1 .. t_headings.COUNT
         LOOP
             t_headings(inx) :=
-                REGEXP_REPLACE(t_headings(inx), '([ ./#]+)', '');
+                UPPER(REGEXP_REPLACE(t_headings(inx), '([ ./#]+)', ''));
         END LOOP;
 
         FOR inx IN 2 .. t_var.COUNT
@@ -374,6 +374,7 @@ BEGIN
 
             t_row.createddate := SYSDATE;
 
+            -- make sure not adding duplicate records to payment process table
             MERGE INTO bizmod_api.e_payments_processed_t a
                  USING (SELECT t_row.confirmationnumber
                                    confirmationnumber,
@@ -450,8 +451,8 @@ BEGIN
                                  a_description => 'Process Payments');
         END IF;
 
-        UPDATE eservices_log_t
-           SET info =
+        UPDATE eservices_log_t e
+           SET e.info =
                    'File Uploaded'
                    || CHR(13)
                    || CHR(9)
@@ -473,7 +474,15 @@ BEGIN
                    || 'Errors: '
                    || CHR(9)
                    || t_errorrecords
-                   || CHR(13)
+                   || CHR(13),
+               e.err =
+                   CASE
+                       WHEN t_errorrecords > 0
+                       THEN
+                           t_errorrecords || ' error(s) found on file upload'
+                       ELSE
+                           NULL
+                   END
          WHERE seq = a_seq;
 
         COMMIT;
@@ -497,7 +506,7 @@ BEGIN
                        'DATA' VALUE
                            json_object('MSGNO' VALUE '5',
                                        'MSG' VALUE 'Oracle Exception',
-                                       'EXCEPTION' VALUE t_sqlerrm));
+                                       'EXCEPTION' VALUE t_msg));
     END;
 END;
 /
