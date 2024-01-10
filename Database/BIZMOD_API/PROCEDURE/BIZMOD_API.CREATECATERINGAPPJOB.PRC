@@ -22,6 +22,7 @@ IS
     --                                          REV PENDING
     --   2.0     01/02/2024 TJL  BIZ-14058    Changed the formatting of Sponsoring Orgaization Mailing
     --                                          Address
+    --   2.1     01/10/2024 TJL  BIZ-14162    Remove allowing REV PENDING licenses to create applications
     -- ****************************************************************************
     --************************
     --Object Ids
