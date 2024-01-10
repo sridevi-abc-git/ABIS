@@ -232,17 +232,27 @@ BEGIN
         -- 01/02/2024 TJL BIZ-14058
         t_sponsoringorganizationmailing :=
             t_sponsoringorganizationaddress1
-            || ', '
             || CASE
                    WHEN t_sponsoringorganizationaddress2 IS NOT NULL
                    THEN
-                       t_sponsoringorganizationaddress2 || ', '
+                       ', ' || t_sponsoringorganizationaddress2
                    ELSE
                        NULL
                END
-            || t_sponsoringorganizationcity
-            || ', '
-            || t_sponsoringorganizationstate
+            || CASE
+                   WHEN t_sponsoringorganizationcity IS NOT NULL
+                   THEN
+                       ', ' || t_sponsoringorganizationcity
+                   ELSE
+                       NULL
+               END
+            || CASE
+                   WHEN t_sponsoringorganizationstate IS NOT NULL
+                   THEN
+                       ', ' || t_sponsoringorganizationstate
+                   ELSE
+                       NULL
+               END
             || ' '
             || t_sponsoringorganizationzip;
     END IF;
@@ -367,9 +377,8 @@ BEGIN
                                a_columnname => 'dup_LicenseExternalFileNum',
                                a_value     => t_licensenumber)
                                AS api.udt_objectlist)) o)
-     WHERE status IN ('ACTIVE', 'REVPEN')
-       AND (lictypes LIKE '%58 (ACTIVE)%'
-         OR lictypes LIKE '%58 (REV PENDING)%');
+     WHERE status = 'ACTIVE'
+       AND lictypes LIKE '%58 (ACTIVE)%';
 
     --**********************************
     --Get id of p_CreateCatererEventAuth

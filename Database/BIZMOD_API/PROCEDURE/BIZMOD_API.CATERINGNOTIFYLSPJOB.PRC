@@ -34,6 +34,7 @@ AS
         t_count        NUMBER;
         t_state_zip    BOOLEAN;
         t_pos          NUMBER;
+        t_tmp          VARCHAR2(1000);
     BEGIN
         t_address.EXTEND(5);
 
@@ -43,75 +44,98 @@ AS
                                       LEVEL))    str
               BULK COLLECT INTO t_array
               FROM DUAL
-        CONNECT BY REGEXP_SUBSTR(a_address,
-                                 '[^,]+',
-                                 1,
-                                 LEVEL)
-                       IS NOT NULL;
+        CONNECT BY LEVEL <=
+                   LENGTH(a_address) - LENGTH(REPLACE(a_address, ',')) + 1;
 
         t_count := t_array.COUNT;
 
-        -- get position of first non space for begining of zip code
-        t_pos := REGEXP_INSTR(t_array(t_count), '[^ ]*$');
-
-        -- when no space is found it points to first position
-        --  t_state_zip when false indicates the state is missing or a
-        --     comma was used to seprate zip and state
-        t_state_zip := CASE t_pos WHEN 1 THEN FALSE ELSE TRUE END;
-
-        -- get zip code
-        t_address(5) := SUBSTR(t_array(t_count), t_pos);
-
-        -- get state
-        --   (location in array can vary depending on parsing address)
-        IF (t_state_zip)
+        IF (t_count > 1)
         THEN
-            t_address(4) := SUBSTR(t_array(t_count), 1, 2);
-        ELSE
-            -- check if a comma seprated between state and zip
-            t_address(4) :=
-                CASE LENGTH(t_array(t_count - 1))
-                    WHEN 2
+            -- get position of first non space for begining of zip code
+            t_pos :=
+                CASE t_count
+                    WHEN 1 THEN 1
+                    ELSE REGEXP_INSTR(t_array(t_count), '[^ ]*$')
+                END;
+
+            -- when no space is found it points to first position
+            --  t_state_zip when false indicates the state is missing or a
+            --     comma was used to seprate zip and state
+            t_state_zip := CASE t_pos WHEN 1 THEN FALSE ELSE TRUE END;
+
+            -- get zip code
+            t_address(5) :=
+                CASE
+                    WHEN REGEXP_LIKE(SUBSTR(t_array(t_count), t_pos),
+                                     '^([0-9]{5})(-[0-9]{4})?$')
                     THEN
-                        t_array(t_count - 1)
-                    WHEN 3
-                    THEN
-                        CASE SUBSTR(t_array(t_count - 1), 3, 1)
-                            WHEN '.' THEN SUBSTR(t_array(t_count - 1), 1, 2)
-                            ELSE NULL
-                        END
+                        SUBSTR(t_array(t_count), t_pos)
                     ELSE
                         NULL
                 END;
+
+            -- get state
+            --   (location in array can vary depending on parsing address)
+            IF (t_state_zip)
+            THEN
+                t_tmp := TRIM(SUBSTR(t_array(t_count), 1, t_pos - 1));
+                t_address(4) :=
+                    CASE
+                        WHEN LENGTH(t_tmp) < 4 THEN SUBSTR(t_tmp, 1, 2)
+                        ELSE ' '
+                    END;
+            ELSE
+                -- check if a comma seprated between state and zip
+                t_address(4) :=
+                    CASE LENGTH(t_array(t_count - 1))
+                        WHEN 2
+                        THEN
+                            t_array(t_count - 1)
+                        WHEN 3
+                        THEN
+                            CASE SUBSTR(t_array(t_count - 1), 3, 1)
+                                WHEN '.'
+                                THEN
+                                    SUBSTR(t_array(t_count - 1), 1, 2)
+                                ELSE
+                                    ' '
+                            END
+                        ELSE
+                            ' '
+                    END;
+            END IF;
         END IF;
 
-        -- get address2 and city
-        --   (location in array can vary depending on parsing address)
-        IF (t_state_zip)
+        IF (t_count > 2)
         THEN
-            t_address(3) := t_array(t_count - 1);
-
-            -- check if address2 was found
-            IF (t_count = 4
-             OR t_count = 5)
-            THEN
-                t_address(2) := t_array(2);
-            END IF;
-        ELSE
-            IF (t_address(4) IS NULL)
+            -- get address2 and city
+            --   (location in array can vary depending on parsing address)
+            IF (t_state_zip)
             THEN
                 t_address(3) := t_array(t_count - 1);
 
-                IF (t_count = 4)
+                -- check if address2 was found
+                IF (t_count = 4
+                 OR t_count = 5)
                 THEN
                     t_address(2) := t_array(2);
                 END IF;
             ELSE
-                t_address(3) := t_array(t_count - 2);
-
-                IF (t_count = 5)
+                IF (t_address(4) IS NULL)
                 THEN
-                    t_address(2) := t_array(2);
+                    t_address(3) := t_array(t_count - 1);
+
+                    IF (t_count = 4)
+                    THEN
+                        t_address(2) := t_array(2);
+                    END IF;
+                ELSE
+                    t_address(3) := t_array(t_count - 2);
+
+                    IF (t_count = 5)
+                    THEN
+                        t_address(2) := t_array(2);
+                    END IF;
                 END IF;
             END IF;
         END IF;
@@ -119,6 +143,7 @@ AS
         -- save address 1
         t_address(1) := t_array(1);
 
+        t_address(4) := TRIM(t_address(4));
 
         RETURN t_address;
     END;
@@ -433,6 +458,110 @@ BEGIN
                                                    a_content   => t_packet,
                                                    a_file      => NULL);
 
+            IF (t_response IS NOT NULL)
+            THEN
+                t_response :=
+                    t_response
+                    || CHR(13) 
+                    || CHR(13)
+                    || 'Outcome: ' 
+                    || t_outcome
+                    || CHR(13)
+                    || 'eventStartDate: '
+                    || api.pkg_columnquery.datevalue(a_objectid,
+                                                     'DateOfEventFrom')
+                    || CHR(13)
+                    || 'eventEndDate: '
+                    || api.pkg_columnquery.datevalue(a_objectid,
+                                                     'dateofeventto')
+                    || CHR(13)
+                    || 'BeginServingAlcoholAMPMTime: '
+                    || api.pkg_columnquery.VALUE(
+                           a_objectid,
+                           'BeginServingAlcoholAMPMTime')
+                    || CHR(13)
+                    || 'eventStartTime: '
+                    || api.pkg_columnquery.numericvalue(
+                           a_objectid,
+                           'Timeyouwillbeginservingalcohol')
+                    || CHR(13)
+                    || 'StopServingAlcoholAMPMTime: '
+                    || api.pkg_columnquery.VALUE(
+                           a_objectid,
+                           'StopServingAlcoholAMPMTime')
+                    || CHR(13)
+                    || 'eventEndTime: '
+                    || api.pkg_columnquery.numericvalue(
+                           a_objectid,
+                           'TimeYouWillStopServingAlcohol')
+                    || CHR(13)
+                    || 'expectedAttendance: '
+                    || api.pkg_columnquery.numericvalue(
+                           a_objectid,
+                           'EstimatedAttendance')
+                    || CHR(13)
+                    || 'publicEvent: '
+                    || api.pkg_columnquery.VALUE(a_objectid, 'PublicEvent')
+                    || CHR(13)
+                    || 'contactName: '
+                    || api.pkg_columnquery.VALUE(a_objectid, 'ContactName')
+                    || CHR(13)
+                    || 'ContactPhoneNumber: '
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'ContactPhoneNumber')
+                    || CHR(13)
+                    || 'contactEmail: '
+                    || api.pkg_columnquery.VALUE(a_objectid, 'ContactEmail')
+                    || CHR(13)
+                    || 'eventType: '
+                    || api.pkg_columnquery.VALUE(a_objectid, 'EventType')
+                    || CHR(13)
+                    || 'OtherEventType: '
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'OtherEventType')
+                    || CHR(13)
+                    || 'sponsoringOrganization: '
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'SponsoringOrganization')
+                    || CHR(13)
+                    || 'SponsoringOrganizationMailing: '
+                    || api.pkg_columnquery.VALUE(
+                           a_objectid,
+                           'SponsoringOrganizationMailing')
+                    || CHR(13)
+                    || 'personInCharge: '
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'PersonInChargeOfEvent')
+                    || CHR(13)
+                    || 'PersonInChargePhoneNumber'
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'PersonInChargePhoneNumber')
+                    || CHR(13)
+                    || 'eventLocationAddress1: '
+                    || api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1')
+                    || CHR(13)
+                    || 'eventLocationAddress2: '
+                    || api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2')
+                    || CHR(13)
+                    || 'eventLocationCity: '
+                    || api.pkg_columnquery.VALUE(t_addressid, 'CACity')
+                    || CHR(13)
+                    || 'eventLocationZip: '
+                    || api.pkg_columnquery.VALUE(t_addressid, 'ZipCode')
+                    || CHR(13)
+                    || 'withinCityLimits: '
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'WithinCityLimits')
+                    || CHR(13)
+                    || 'annualEventsCount: '
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'annualEventsCount')
+                    || CHR(13)
+                    || 'specificLocation: '
+                    || api.pkg_columnquery.VALUE(a_objectid,
+                                                 'SpecificLocation');
+            END IF;
+
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
                                                    info,
@@ -533,8 +662,17 @@ BEGIN
                              || 'URL: '
                              || t_url,
                              CASE
-                                 WHEN t_response IS NULL THEN NULL
-                                 ELSE 'LSP Response: ' || t_response
+                                 WHEN t_response IS NULL
+                                 THEN
+                                     NULL
+                                 ELSE
+                                     'Sponsoring Org Mailing: '
+                                     || api.pkg_columnquery.VALUE(
+                                            a_objectid,
+                                            'SponsoringOrganizationMailing')
+                                     || CHR(13)
+                                     || 'LSP Response: '
+                                     || t_response
                              END);
 
                 COMMIT;
