@@ -974,7 +974,11 @@ AS
         RETURN t_transmittals;
     END createtransmittal;
 
-    PROCEDURE createawfpayments
+    FUNCTION createawfpayments(a_makepayments IN NUMBER) RETURN NUMBER
+    
+    -- a_makepayment    1 - Create AWF Payment Batch with payments
+    --                  0 - Create AWF Payment Batch with Zero amount payments
+    
     IS
         TYPE awf_rec IS RECORD(seq NUMBER,
                                licensenumber VARCHAR2(10),
@@ -997,7 +1001,7 @@ AS
         t_endpointid   api.pkg_definition.udt_id;
         t_relid        api.pkg_definition.udt_id;
 
-        t_feeamount    NUMBER;
+--        t_feeamount    NUMBER;
         t_totalfees    NUMBER;
         t_checkcount   NUMBER;
         t_receiptnumber NUMBER;
@@ -1005,15 +1009,15 @@ AS
         t_licensetypecode VARCHAR2(3);
         t_licensenumber VARCHAR2(10);
         t_sequenceid   api.pkg_definition.udt_id;
-        t_cnt          NUMBER;
-        t_loop         NUMBER := 2;
-        t_limit        NUMBER := 200;
+--        t_cnt          NUMBER;
+--        t_loop         NUMBER := 2;
+--        t_limit        NUMBER := 200;
     BEGIN
         api.pkg_logicaltransactionupdate.resettransaction;
         ROLLBACK;
 
-        WHILE (t_loop > 0)
-        LOOP
+--        WHILE (t_loop > 0)
+--        LOOP
             SELECT (SELECT seq
                       FROM bizmod_api.e_payments_t p
                      WHERE p.description = 'AWF'
@@ -1029,14 +1033,14 @@ AS
               FROM bizmod_api.awf_t  a
                    LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
                        ON (a.licensenumber = pp.licensenumber
-                       AND t_loop = 1) -- 10/30/2023 TJL  TRK-33861
+                       AND a_makepayments = 1) 
              WHERE a.completed IS NULL
                AND a.paymentbatch IS NULL
                AND a.submitteddate IS NOT NULL
-               AND ((t_loop = 2
-                 AND a.awffeeamount <= 0) -- AWF batch for no change and refund
-                 OR (t_loop = 1
-                 AND a.awffeeamount > 0 -- AWF batch for payments
+               AND ((a_makepayments = 0 -- AWF batch for no change and refund
+                 AND a.awffeeamount <= 0) 
+                 OR (a_makepayments = 1  -- AWF batch for payments
+                 AND a.awffeeamount > 0
                  AND EXISTS
                          (SELECT 1
                             FROM bizmod_api.e_payments_t p
@@ -1045,14 +1049,14 @@ AS
                              AND pp.paymenttype = 'Primary'
                              AND p.paymentobjectid IS NULL)));
 
-            DBMS_OUTPUT.put_line(t_loop || '  to process ' || t_awf.COUNT);
+--            DBMS_OUTPUT.put_line(t_loop || '  to process ' || t_awf.COUNT);
 
             IF (t_awf.COUNT > 0)
             THEN
                 -- *****************************************************************
                 -- Initialize batch variables at begining of each batch loop
                 -- *****************************************************************
-                t_feeamount := 0;
+--                t_feeamount := 0;
                 t_totalfees := 0;
                 t_checkcount := 0;
                 t_batchid :=
@@ -1102,7 +1106,6 @@ AS
                     -- *****************************************************************
                     -- Build batch payment entry record
                     -- *****************************************************************
-                    BEGIN
                         t_batchpaymententrydefid :=
                             api.pkg_configquery.objectdefidforname(
                                 'o_BatchPaymentEntry');
@@ -1112,21 +1115,6 @@ AS
 
                         api.pkg_logicaltransactionupdate.endtransaction;
                         COMMIT;
-                    EXCEPTION
-                        WHEN OTHERS
-                        THEN
-                            api.pkg_logicaltransactionupdate.resettransaction;
-                            ROLLBACK;
-                            DBMS_OUTPUT.put_line(
-                                'ERROR: '
-                                || t_licensetypecode
-                                || ' - '
-                                || t_licensenumber
-                                || ' - '
-                                || t_feeamount);
-
-                            CONTINUE;
-                    END;
 
                     -- *****************************************************************
                     -- add batch payment entry to payment batch job
@@ -1198,7 +1186,7 @@ AS
                 api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
 
-                IF (t_loop = 2)
+                IF (a_makepayments = 0)
                 THEN
                     -- complete the batch for refunds and no change AWF's
                     api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
@@ -1302,7 +1290,7 @@ AS
                                               'Penalty',
                                               'Timely');
 
-                IF (t_loop = 2)
+                IF (a_makepayments = 0)
                 THEN
                     api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                                   'CompleteVerifyProcess',
@@ -1325,8 +1313,7 @@ AS
 
                     UPDATE bizmod_api.awf_t t
                        SET t.completed =
-                               CASE t_loop
-                                   WHEN 2
+                               CASE a_makepayments WHEN 0 
                                    THEN
                                        CASE t.awffeeamount
                                            WHEN 0 THEN 'Y'
@@ -1344,8 +1331,9 @@ AS
                 COMMIT;
             END IF;
 
-            t_loop := t_loop - 1;
-        END LOOP;
+--            t_loop := t_loop - 1;
+--        END LOOP;
+        RETURN t_batchpaymententryobjectid;
     END;
 END;
 /

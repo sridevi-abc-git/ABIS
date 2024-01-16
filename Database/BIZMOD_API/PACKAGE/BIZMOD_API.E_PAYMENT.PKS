@@ -12,6 +12,7 @@ AS
     --    Date                  Comment
     -- 04/29/2021 TJL        Package Created
     -- 12/01/2022 TJL        Added createtransmittal to spec's
+    -- 01/11/2024 TJL        
     -- **************************************************************************
 
 --    gc_transmittallimit CONSTANT NUMBER := 1000000;
@@ -30,7 +31,7 @@ AS
         RETURN NUMBER;
 
     FUNCTION createtransmittal RETURN api.udt_objectlist;
-    PROCEDURE createawfpayments;
+    FUNCTION createawfpayments(a_makepayments IN NUMBER) RETURN NUMBER;
 
     PROCEDURE makepayment(a_licensenumber VARCHAR2, a_asofdate DATE);
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
