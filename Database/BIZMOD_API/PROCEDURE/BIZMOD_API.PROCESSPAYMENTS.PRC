@@ -20,6 +20,7 @@ IS
     t_paidcount    NUMBER := 0;
     t_results      CLOB;
     t_transmittal  api.udt_objectlist;
+    t_awfbatch     NUMBER;
     t_msg          VARCHAR2(4000);
     t_seq          NUMBER;
     t_to           VARCHAR2(4000);
@@ -191,8 +192,12 @@ BEGIN
     t_transmittal := e_payment.createtransmittal;
 
     -- process any AWF payments that need to be made
-    bizmod_api.e_payment.createawfpayments;
-
+    begin
+    t_awfbatch := bizmod_api.e_payment.createawfpayments(1);
+    exception when others then
+    
+    null;
+    END;
 --    t_body := 'Process Cleared Payments Job Completed' || CHR(10) || CHR(13);
     t_body := 'Payments Processed' || CHR(13);
 
