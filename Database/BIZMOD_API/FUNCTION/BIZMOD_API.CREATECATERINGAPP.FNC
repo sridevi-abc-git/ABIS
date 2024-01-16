@@ -15,6 +15,7 @@ IS
     --    1.0   09/12/2023  TJL BIZ-12467   Initial Function Created
     --                          BIZ-12643   Validation Rules
     --    1.1   12/14/2023  TJL             Corrected bug in selecting license type
+    --    2.0   01/11/2024  TJL BIZ-12162   Added validating License Type status
     -- ****************************************************************************
     t_process      VARCHAR2(40);
     t_json_obj     json_object_t := json_object_t();
@@ -118,12 +119,13 @@ BEGIN
                                'LicTypeCatSecondary'))
              WHERE api.pkg_columnquery.VALUE(slt.toobjectid,
                                              'LicenseTypeCode') IN
-                       ('58');
+                       ('58')
+               AND api.pkg_columnquery.VALUE(o.objectid, 'StatusName') = 'ACTIVE';
         EXCEPTION
             WHEN NO_DATA_FOUND
             THEN
                 t_json_arr.append(
-                    'Invalid License Type for Catering Application');
+                    'Invalid License Type or Status');
         END;
 
         -- check if duplicate application
