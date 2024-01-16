@@ -1,7 +1,7 @@
 CREATE OR REPLACE PROCEDURE BIZMOD_API.nightlyprocess
 IS
     -- ****************************************************************************
-    -- File:        NIGHTLYPROCESS.PRC
+    -- File:        BIZMOD_API.NIGHTLYPROCESS.PRC
     -- Author:      Timothy J. Lord
     --
     -- Purpose :
@@ -11,10 +11,14 @@ IS
     --              Date           Ticket     Comment
     --          05/31/2023  TJL             Initial Procedure Created
     --   2.0    08/01/2023  TJL             Corrected bug in updating AWF completed flag
+    --   3.0    01/11/2024  TJL             Added call to create AWF payment batches for zero
+    --                                        amount due. Added updating new process log. 
+    --                                      Corrected bug in updating AWF fee object id.
     -- ****************************************************************************
     t_refunded     VARCHAR2(1);
     t_feetransfer  NUMBER;
     t_paymenttransfer NUMBER;
+    t_awfbatch      NUMBER;
 
     t_body         VARCHAR2(32000);
     t_to           VARCHAR2(4000);
@@ -22,11 +26,39 @@ IS
     t_cc           VARCHAR2(4000);
     t_bcc          VARCHAR2(4000);
     t_rowcount     NUMBER;
+
+        t_error        VARCHAR2(4000);
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
 BEGIN
     -- ********************************************************************
     t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
 
+        -- ********************************************************************
+        -- ************************************************************
+        -- Process any AWF reports that have 0 amount due or a refund 
+        -- ************************************************************
     BEGIN
+    begin
+    t_awfbatch := bizmod_api.e_payment.createawfpayments(0);
+    if (t_awfbatch is not null)
+    then
+                t_body :=
+                t_body
+                || 'AWF Payment Batch: ' || t_awfbatch || chr(13)
+                || 'Records in Batch: ' || api.pkg_columnquery.value(t_awfbatch, 'CheckCount')
+                || CHR(13);
+    end if;
+    
+    exception when others then
+        t_error := substr('bizmod_api.e_payment.createawfpayments(0) ERROR' 
+                || chr(13)
+                || SQLERRM
+                || chr(13)
+                || DBMS_UTILITY.format_error_backtrace,
+                1, 4000);
+    END;
+    
         -- ********************************************************************
         -- ************************************************************
         -- Check for payments being removed from original transmittal and
@@ -220,16 +252,16 @@ BEGIN
                        AND f.description LIKE '%AWF%'
                        AND ROWNUM = 1)
          WHERE a.awffeeid IS NULL
-           AND NVL(a.completed, 'N') = 'N'
            AND ((a.awffeeamount = 0
              AND a.paymentbatch IS NOT NULL)
-             OR (a.awffeeamount > 0)
+             OR (NVL(a.completed, 'N') = 'N'
+           AND a.awffeeamount > 0
             AND EXISTS
                     (SELECT 1
                        FROM bizmod_api.e_payments_t p
                       WHERE p.licensenumber = a.licensenumber
                         AND p.createddate >= a.submitteddate
-                        AND p.description LIKE '%AWF%')
+                        AND p.description LIKE '%AWF%'))
             AND EXISTS
                     (SELECT 1
                        FROM api.fees f
@@ -310,25 +342,25 @@ BEGIN
 
         COMMIT;
 
-        t_body := t_body || 'AWF Refunds to Process:' || CHR(13);
-
-        FOR rec
-            IN (SELECT a.licensenumber, a.paymentbatchdate, a.awffeeamount
-                  FROM bizmod_api.awf_t a
-                 WHERE a.awffeeamount < 0
-                   AND NVL(a.completed, 'N') != 'Y')
-        LOOP
-            t_body :=
-                t_body
-                || CHR(9)
-                || rec.licensenumber
-                || CHR(9)
-                || CHR(9)
-                || TO_CHAR(rec.paymentbatchdate, 'MM/DD/YYYY')
-                || CHR(9)
-                || LPAD(TO_CHAR(rec.awffeeamount, 'fm99G999D00'), 10, ' ')
-                || CHR(13);
-        END LOOP;
+--        t_body := t_body || 'AWF Refunds to Process:' || CHR(13);
+--
+--        FOR rec
+--            IN (SELECT a.licensenumber, a.paymentbatchdate, a.awffeeamount
+--                  FROM bizmod_api.awf_t a
+--                 WHERE a.awffeeamount < 0
+--                   AND NVL(a.completed, 'N') != 'Y')
+--        LOOP
+--            t_body :=
+--                t_body
+--                || CHR(9)
+--                || rec.licensenumber
+--                || CHR(9)
+--                || CHR(9)
+--                || TO_CHAR(rec.paymentbatchdate, 'MM/DD/YYYY')
+--                || CHR(9)
+--                || LPAD(TO_CHAR(rec.awffeeamount, 'fm99G999D00'), 10, ' ')
+--                || CHR(13);
+--        END LOOP;
 
         UPDATE bizmod_api.e_payments_t p
            SET p.feeobjid =
@@ -365,12 +397,23 @@ BEGIN
     EXCEPTION
         WHEN OTHERS
         THEN
+            t_sqlerrm := SQLERRM;
+            t_trace := DBMS_UTILITY.format_error_backtrace;
+
+        t_error := t_error || chr(13) ||  substr('Nightly Processing ERROR' 
+                || chr(13)
+                || t_sqlerrm
+                || chr(13)
+                || t_trace,
+                1, 4000);
+
             t_body :=
                 t_body
                 || CHR(13)
-                || SQLERRM
+                || t_sqlerrm
                 || CHR(13)
-                || DBMS_UTILITY.format_error_backtrace;
+                || t_trace;
+
     END;
 
     -- Generate email of completion of first data processing
@@ -396,10 +439,61 @@ BEGIN
             p_toaddress => t_to,
             p_cc        => t_cc,
             p_bcc       => t_bcc,
-            p_subject   => 'Nightly Job Completed',
-            p_body      => t_body,
+            p_subject   => 'Nightly Job Completed ' || case when t_error is not null then 'with errors' else null end,
+            p_body      => t_body || chr(13) || t_error,
             p_mimetype  => 'text/plain');
     END IF;
+    
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                     VALUES (
+                         0,
+                         'NIGHTLYPROCESS',
+                         t_error,
+                         t_sqlerrm,
+                         t_trace);
+
+            COMMIT;
+
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg)
+                     VALUES (
+                         0,
+                         'NIGHTLYPROCESS',
+t_body,
+t_error
+);
+--                         'Application Id: '
+--                         || t_applicationid
+--                         || CHR(13)
+--                         || 'License Number: '
+--                         || t_licensenumber
+--                         || CHR(13)
+--                         || 'Catering Object Id: '
+--                         || a_objectid
+--                         || CHR(13)
+--                         || CASE t_notifynumber
+--                                WHEN 1 THEN 'Application Update'
+--                                ELSE 'Outcome: ' || t_outcome
+--                            END
+--                         || CHR(13)
+--                         || 'URL: '
+--                         || t_url,
+--                         t_sqlerrm,
+--                         t_trace,
+--                         CASE t_notifynumber
+--                             WHEN 1 THEN t_packet
+--                             ELSE NULL
+--                         END);
+
+            COMMIT;
+
+    
 END nightlyprocess;
 /
 
