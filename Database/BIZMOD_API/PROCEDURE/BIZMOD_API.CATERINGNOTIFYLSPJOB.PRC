@@ -677,26 +677,6 @@ BEGIN
 
                 COMMIT;
             END IF;
-        ELSE
-            INSERT INTO bizmod_api.e_process_log_t(seq, processjob, info)
-                     VALUES (
-                         0,
-                         'CATERINGNOTIFYLSPJOB',
-                         'Application Id: '
-                         || t_applicationid
-                         || CHR(13)
-                         || 'License Number: '
-                         || t_licensenumber
-                         || CHR(13)
-                         || 'Catering Object Id: '
-                         || a_objectid
-                         || CHR(13)
-                         || 'Outcome: '
-                         || t_outcome
-                         || CHR(13)
-                         || 'Application Id missing from Catering Application');
-
-            COMMIT;
         END IF;
     EXCEPTION
         WHEN UTL_HTTP.request_failed

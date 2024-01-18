@@ -12,13 +12,13 @@ IS
     --          05/31/2023  TJL             Initial Procedure Created
     --   2.0    08/01/2023  TJL             Corrected bug in updating AWF completed flag
     --   3.0    01/11/2024  TJL             Added call to create AWF payment batches for zero
-    --                                        amount due. Added updating new process log. 
+    --                                        amount due. Added updating new process log.
     --                                      Corrected bug in updating AWF fee object id.
     -- ****************************************************************************
     t_refunded     VARCHAR2(1);
     t_feetransfer  NUMBER;
     t_paymenttransfer NUMBER;
-    t_awfbatch      NUMBER;
+    t_awfbatch     NUMBER;
 
     t_body         VARCHAR2(32000);
     t_to           VARCHAR2(4000);
@@ -27,38 +27,22 @@ IS
     t_bcc          VARCHAR2(4000);
     t_rowcount     NUMBER;
 
-        t_error        VARCHAR2(4000);
-        t_sqlerrm      VARCHAR2(4000);
-        t_trace        VARCHAR2(4000);
+    t_error        VARCHAR2(4000);
+    t_sqlerrm      VARCHAR2(4000);
+    t_trace        VARCHAR2(4000);
 BEGIN
     -- ********************************************************************
     t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
 
-        -- ********************************************************************
-        -- ************************************************************
-        -- Process any AWF reports that have 0 amount due or a refund 
-        -- ************************************************************
+    -- ********************************************************************
+    -- ************************************************************
+    -- Process any AWF reports that have 0 amount due or a refund
+    -- ************************************************************
     BEGIN
-    begin
-    t_awfbatch := bizmod_api.e_payment.createawfpayments(0);
-    if (t_awfbatch is not null)
-    then
-                t_body :=
-                t_body
-                || 'AWF Payment Batch: ' || t_awfbatch || chr(13)
-                || 'Records in Batch: ' || api.pkg_columnquery.value(t_awfbatch, 'CheckCount')
-                || CHR(13);
-    end if;
-    
-    exception when others then
-        t_error := substr('bizmod_api.e_payment.createawfpayments(0) ERROR' 
-                || chr(13)
-                || SQLERRM
-                || chr(13)
-                || DBMS_UTILITY.format_error_backtrace,
-                1, 4000);
-    END;
-    
+        bizmod_api.createjob(a_procedure => 'CREATEAWFPAYMENTSJOB',
+                             a_description => 'Create AWF Payment Batch',
+                             a_argument1 => '0');
+
         -- ********************************************************************
         -- ************************************************************
         -- Check for payments being removed from original transmittal and
@@ -255,13 +239,13 @@ BEGIN
            AND ((a.awffeeamount = 0
              AND a.paymentbatch IS NOT NULL)
              OR (NVL(a.completed, 'N') = 'N'
-           AND a.awffeeamount > 0
-            AND EXISTS
-                    (SELECT 1
-                       FROM bizmod_api.e_payments_t p
-                      WHERE p.licensenumber = a.licensenumber
-                        AND p.createddate >= a.submitteddate
-                        AND p.description LIKE '%AWF%'))
+             AND a.awffeeamount > 0
+             AND EXISTS
+                     (SELECT 1
+                        FROM bizmod_api.e_payments_t p
+                       WHERE p.licensenumber = a.licensenumber
+                         AND p.createddate >= a.submitteddate
+                         AND p.description LIKE '%AWF%'))
             AND EXISTS
                     (SELECT 1
                        FROM api.fees f
@@ -342,26 +326,6 @@ BEGIN
 
         COMMIT;
 
---        t_body := t_body || 'AWF Refunds to Process:' || CHR(13);
---
---        FOR rec
---            IN (SELECT a.licensenumber, a.paymentbatchdate, a.awffeeamount
---                  FROM bizmod_api.awf_t a
---                 WHERE a.awffeeamount < 0
---                   AND NVL(a.completed, 'N') != 'Y')
---        LOOP
---            t_body :=
---                t_body
---                || CHR(9)
---                || rec.licensenumber
---                || CHR(9)
---                || CHR(9)
---                || TO_CHAR(rec.paymentbatchdate, 'MM/DD/YYYY')
---                || CHR(9)
---                || LPAD(TO_CHAR(rec.awffeeamount, 'fm99G999D00'), 10, ' ')
---                || CHR(13);
---        END LOOP;
-
         UPDATE bizmod_api.e_payments_t p
            SET p.feeobjid =
                    (SELECT reo.objectid     feeobjid
@@ -377,22 +341,6 @@ BEGIN
          WHERE p.feeobjid IS NULL
            AND p.description LIKE 'AWF';
 
-        -- ********************************************************************
-        -- Log processed information
-        -- ********************************************************************
-        --        INSERT INTO bizmod_api.e_process_log_t l(l.processid,
-        --                                                 l.processdate,
-        --                                                 l.licensespaid,
-        --                                                 l.transmittals,
-        --                                                 l.deposits,
-        --                                                 l.processerrors)
-        --             VALUES (t_processid,
-        --                     t_processdate,
-        --                     t_licensecount,
-        --                     t_transmittalcount,
-        --                     t_depositcount,
-        --                     t_errors);
-
         COMMIT;
     EXCEPTION
         WHEN OTHERS
@@ -400,20 +348,19 @@ BEGIN
             t_sqlerrm := SQLERRM;
             t_trace := DBMS_UTILITY.format_error_backtrace;
 
-        t_error := t_error || chr(13) ||  substr('Nightly Processing ERROR' 
-                || chr(13)
-                || t_sqlerrm
-                || chr(13)
-                || t_trace,
-                1, 4000);
-
-            t_body :=
-                t_body
+            t_error :=
+                t_error
                 || CHR(13)
-                || t_sqlerrm
-                || CHR(13)
-                || t_trace;
+                || SUBSTR(
+                       'Nightly Processing ERROR'
+                       || CHR(13)
+                       || t_sqlerrm
+                       || CHR(13)
+                       || t_trace,
+                       1,
+                       4000);
 
+            t_body := t_body || CHR(13) || t_sqlerrm || CHR(13) || t_trace;
     END;
 
     -- Generate email of completion of first data processing
@@ -439,61 +386,28 @@ BEGIN
             p_toaddress => t_to,
             p_cc        => t_cc,
             p_bcc       => t_bcc,
-            p_subject   => 'Nightly Job Completed ' || case when t_error is not null then 'with errors' else null end,
-            p_body      => t_body || chr(13) || t_error,
+            p_subject   =>
+                'Nightly Job Completed '
+                || CASE
+                       WHEN t_error IS NOT NULL THEN 'with errors'
+                       ELSE NULL
+                   END,
+            p_body      => t_body || CHR(13) || t_error,
             p_mimetype  => 'text/plain');
     END IF;
-    
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg,
-                                                   bktrace)
-                     VALUES (
-                         0,
-                         'NIGHTLYPROCESS',
-                         t_error,
-                         t_sqlerrm,
-                         t_trace);
 
-            COMMIT;
+    INSERT INTO bizmod_api.e_process_log_t(seq,
+                                           processjob,
+                                           info,
+                                           errmsg,
+                                           bktrace)
+         VALUES (0,
+                 'NIGHTLYPROCESS',
+                 t_body,
+                 t_sqlerrm,
+                 t_trace);
 
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg)
-                     VALUES (
-                         0,
-                         'NIGHTLYPROCESS',
-t_body,
-t_error
-);
---                         'Application Id: '
---                         || t_applicationid
---                         || CHR(13)
---                         || 'License Number: '
---                         || t_licensenumber
---                         || CHR(13)
---                         || 'Catering Object Id: '
---                         || a_objectid
---                         || CHR(13)
---                         || CASE t_notifynumber
---                                WHEN 1 THEN 'Application Update'
---                                ELSE 'Outcome: ' || t_outcome
---                            END
---                         || CHR(13)
---                         || 'URL: '
---                         || t_url,
---                         t_sqlerrm,
---                         t_trace,
---                         CASE t_notifynumber
---                             WHEN 1 THEN t_packet
---                             ELSE NULL
---                         END);
-
-            COMMIT;
-
-    
+    COMMIT;
 END nightlyprocess;
 /
 

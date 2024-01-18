@@ -11,7 +11,7 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --              Date          Ticket      Comment
-    --   1.0     01/16/2024  TJL BIZ-14091  Process created from e_payment.createtransmittal 
+    --   1.0     01/16/2024  TJL BIZ-14091  Process created from e_payment.createtransmittal
     --                                          function.
     -- ************************************************************************
     t_transmittal  api.pkg_definition.udt_id;
@@ -28,6 +28,10 @@ IS
     t_info         VARCHAR2(4000);
     t_paymentamount NUMBER := 0;
     t_paymentcount NUMBER := 0;
+    t_to           VARCHAR2(4000);
+    t_from         VARCHAR2(4000);
+    t_cc           VARCHAR2(4000);
+    t_bcc          VARCHAR2(4000);
 BEGIN
     api.pkg_logicaltransactionupdate.resettransaction;
     ROLLBACK;
@@ -153,6 +157,24 @@ BEGIN
                 COMMIT;
             -- end BIZ-12648
 
+            -- *****************************************************************
+            -- Casher the transmittal
+            -- *****************************************************************
+            api.pkg_logicaltransactionupdate.starttransaction;
+
+            api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                          'CashieredDate',
+                                          SYSDATE);
+            api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                          'PaymentCountCashier',
+                                          t_paymentcount);
+            api.pkg_columnupdate.setvalue(t_transmittalobjectid,
+                                          'BatchTotal',
+                                          t_paymentamount);
+
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
+
             EXCEPTION
                 WHEN OTHERS
                 THEN
@@ -208,25 +230,28 @@ BEGIN
         LOOP
             t_info :=
                 t_info
-                || 'Transmittal Batch External File Number: '
+                || 'File Number: '
                 || CHR(9)
                 || RPAD(
                        api.pkg_columnquery.VALUE(rec.objectid,
                                                  'externalfilenum'),
                        10,
                        ' ')
+                || CHR(13) || CHR(9)
                 || RPAD(
                        api.pkg_columnquery.VALUE(rec.objectid,
                                                  'TransmittalType'),
                        15,
                        ' ')
+                || CHR(13) || CHR(9)
                 || 'Payment Count: '
                 || LPAD(
                        api.pkg_columnquery.VALUE(rec.objectid,
                                                  'PaymentCount'),
                        4,
                        ' ')
-                || '   Payment Total Amt: '
+                || CHR(13) || CHR(9)
+                || 'Payment Total Amt: '
                 || LPAD(
                        TO_CHAR(
                            api.pkg_columnquery.VALUE(rec.objectid,
@@ -246,7 +271,7 @@ BEGIN
                                            errmsg,
                                            bktrace)
          VALUES (0,
-                 'CREATETRANSMITTAL',
+                 'CREATETRANSMITTALJOB',
                  t_info,
                  t_sqlerrm,
                  t_backtrace);
@@ -280,5 +305,8 @@ BEGIN
             p_body      => t_info,
             p_mimetype  => 'text/plain');
     END IF;
-END createtransmittal;
+END createtransmittaljob;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.CREATETRANSMITTALJOB TO POSSEEXTENSIONS;

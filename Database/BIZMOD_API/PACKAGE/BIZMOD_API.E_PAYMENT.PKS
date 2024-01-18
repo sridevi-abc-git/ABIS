@@ -12,11 +12,9 @@ AS
     --    Date                  Comment
     -- 04/29/2021 TJL        Package Created
     -- 12/01/2022 TJL        Added createtransmittal to spec's
-    -- 01/11/2024 TJL        
+    -- 01/11/2024 TJL  BIZ-14091  Removed createtransmittal and createawfpayments 
+    --                              from package.        
     -- **************************************************************************
-
---    gc_transmittallimit CONSTANT NUMBER := 1000000;
---    gc_depositlimit CONSTANT NUMBER := 1000000;
 
 
     FUNCTION payfees(a_paymentmethod IN    VARCHAR2,
@@ -29,9 +27,6 @@ AS
                      a_sqlerrm         OUT VARCHAR2,
                      a_backtrace       OUT VARCHAR2)
         RETURN NUMBER;
-
-    FUNCTION createtransmittal RETURN api.udt_objectlist;
-    FUNCTION createawfpayments(a_makepayments IN NUMBER) RETURN NUMBER;
 
     PROCEDURE makepayment(a_licensenumber VARCHAR2, a_asofdate DATE);
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
