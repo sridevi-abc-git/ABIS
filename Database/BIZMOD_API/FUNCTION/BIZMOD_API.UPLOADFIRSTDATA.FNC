@@ -227,12 +227,12 @@ BEGIN
                                                  LEVEL)
                                        IS NOT NULL)
                 LOOP
-                    --                DBMS_OUTPUT.put_line(
-                    --                    t_headings(rec.LN)
-                    --                    || ' : '
-                    --                    || NVL(rec.split, 'null')
-                    --                    || ' : '
-                    --                    || rec.LN);
+--                                    DBMS_OUTPUT.put_line(
+--                                        t_headings(rec.LN)
+--                                        || ' : '
+--                                        || NVL(rec.split, 'null')
+--                                        || ' : '
+--                                        || rec.LN);
 
                     CASE t_headings(rec.LN)
                         WHEN 'SITEID'
@@ -268,9 +268,10 @@ BEGIN
                         THEN
                             t_row.reference := rec.split;
                             t_row.licensenumber :=
-                                SUBSTR(rec.split,
-                                       1,
-                                       INSTR(rec.split, ',') - 1);
+                                REGEXP_SUBSTR(rec.split,
+                                              '[^,]+',
+                                              1,
+                                              2);
                         WHEN 'RECURRINGID'
                         THEN
                             t_row.recurringid := rec.split;
@@ -532,7 +533,7 @@ BEGIN
 
                 COMMIT;
 
-                RETURN json_object(
+                t_return := json_object(
                            'PACKET_TYPE' VALUE 'MESSAGE',
                            'DATA' VALUE
                                json_object('MSGNO' VALUE '5',
