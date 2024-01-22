@@ -280,30 +280,40 @@ BEGIN
         --**************************
         --Check for existing address
         --**************************
-
-        SELECT objid
-          INTO t_addressobjectid
-          FROM (SELECT o.objectid                                               objid,
-                       api.pkg_columnquery.VALUE(o.objectid, 'AddressLine2')    addline2
-                  FROM TABLE(
-                           CAST(
-                               api.pkg_simplesearch.castableobjectsbyindex(
-                                   a_objectdefname => 'o_Address',
-                                   a_columnname => 'dup_UniqueAddress',
-                                   a_value     =>
+        t_addressobjectid :=      api.pkg_simplesearch.objectbyindex(
+                                    'o_Address',
+                                    'dup_UniqueAddress',
                                        t_eventlocationaddressline1
                                        || '%'
                                        || t_eventlocationaddressline2
                                        || '%'
                                        || t_eventlocationcity
-                                       || '%') AS api.udt_objectlist)) o)
-         WHERE (addline2 IS NULL
-             OR (addline2 = t_eventlocationaddressline2
-             AND t_eventlocationaddressline2 IS NOT NULL))
-           AND ROWNUM = 1;
-    EXCEPTION
-        WHEN NO_DATA_FOUND
-        THEN
+                                       || '%');                                    
+--        SELECT objid
+--          INTO t_addressobjectid
+--          FROM (SELECT o.objectid                                               objid,
+--                       api.pkg_columnquery.VALUE(o.objectid, 'AddressLine2')    addline2
+--                  FROM TABLE(
+--                           CAST(
+--                               api.pkg_simplesearch.castableobjectsbyindex(
+--                                   a_objectdefname => 'o_Address',
+--                                   a_columnname => 'dup_UniqueAddress',
+--                                   a_value     =>
+--                                       t_eventlocationaddressline1
+--                                       || '%'
+--                                       || t_eventlocationaddressline2
+--                                       || '%'
+--                                       || t_eventlocationcity
+--                                       || '%') AS api.udt_objectlist)) o)
+--         WHERE (addline2 IS NULL
+--             OR (addline2 = t_eventlocationaddressline2
+--             AND t_eventlocationaddressline2 IS NOT NULL))
+--           AND ROWNUM = 1;
+--    EXCEPTION
+--        WHEN NO_DATA_FOUND
+--        THEN
+        if (t_addressobjectid is null)
+        then 
             --******************
             --Get city object id
             --******************
@@ -357,7 +367,8 @@ BEGIN
             --*********
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
-    END;
+        end if;
+    end;
 
     --************************
     --Get object id of license
@@ -645,5 +656,7 @@ EXCEPTION
 END;
 /
 
+
+GRANT EXECUTE ON BIZMOD_API.CREATECATERINGAPPJOB TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.CREATECATERINGAPPJOB TO POSSEEXTENSIONS;
