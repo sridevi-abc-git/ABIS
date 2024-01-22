@@ -280,40 +280,19 @@ BEGIN
         --**************************
         --Check for existing address
         --**************************
-        t_addressobjectid :=      api.pkg_simplesearch.objectbyindex(
-                                    'o_Address',
-                                    'dup_UniqueAddress',
-                                       t_eventlocationaddressline1
-                                       || '%'
-                                       || t_eventlocationaddressline2
-                                       || '%'
-                                       || t_eventlocationcity
-                                       || '%');                                    
---        SELECT objid
---          INTO t_addressobjectid
---          FROM (SELECT o.objectid                                               objid,
---                       api.pkg_columnquery.VALUE(o.objectid, 'AddressLine2')    addline2
---                  FROM TABLE(
---                           CAST(
---                               api.pkg_simplesearch.castableobjectsbyindex(
---                                   a_objectdefname => 'o_Address',
---                                   a_columnname => 'dup_UniqueAddress',
---                                   a_value     =>
---                                       t_eventlocationaddressline1
---                                       || '%'
---                                       || t_eventlocationaddressline2
---                                       || '%'
---                                       || t_eventlocationcity
---                                       || '%') AS api.udt_objectlist)) o)
---         WHERE (addline2 IS NULL
---             OR (addline2 = t_eventlocationaddressline2
---             AND t_eventlocationaddressline2 IS NOT NULL))
---           AND ROWNUM = 1;
---    EXCEPTION
---        WHEN NO_DATA_FOUND
---        THEN
-        if (t_addressobjectid is null)
-        then 
+        t_addressobjectid :=
+            api.pkg_simplesearch.objectbyindex(
+                'o_Address',
+                'dup_UniqueAddress',
+                t_eventlocationaddressline1
+                || '%'
+                || t_eventlocationaddressline2
+                || '%'
+                || t_eventlocationcity
+                || '%');
+
+        IF (t_addressobjectid IS NULL)
+        THEN
             --******************
             --Get city object id
             --******************
@@ -367,8 +346,21 @@ BEGIN
             --*********
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
-        end if;
-    end;
+        ELSE
+            IF (api.pkg_columnquery.VALUE(t_addressobjectid, 'ZipCode')
+                    IS NULL)
+            THEN
+                -- use zip code provided when zip code missing from address object.
+                --   missing zip code will cause exception to be thrown
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'ZipCode',
+                                              t_eventlocationzip);
+
+                api.pkg_logicaltransactionupdate.endtransaction;
+                COMMIT;
+            END IF;
+        END IF;
+    END;
 
     --************************
     --Get object id of license
@@ -624,6 +616,12 @@ EXCEPTION
         t_sqlerrm := SQLERRM;
         t_trace := DBMS_UTILITY.format_error_backtrace;
 
+        --*****************
+        --Clear any errors
+        --*****************
+        api.pkg_logicaltransactionupdate.resettransaction;
+        ROLLBACK;
+
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
                                                info,
@@ -650,8 +648,6 @@ EXCEPTION
            SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
          WHERE seq = a_seq;
 
-        DBMS_SESSION.sleep(3);
-        api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 END;
 /
