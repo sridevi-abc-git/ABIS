@@ -448,8 +448,6 @@ BEGIN
                     '<<applicationId>>',
                     t_applicationid);
 
-            bizmod_api.utl_licenseinfo.clean(t_json_app);
-
             t_packet := t_json_app.TO_CLOB;
             t_notifynumber := 1;
             t_response :=
