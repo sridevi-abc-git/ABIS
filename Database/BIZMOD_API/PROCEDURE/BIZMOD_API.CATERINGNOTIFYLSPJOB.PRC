@@ -419,7 +419,7 @@ BEGIN
                 'withinCityLimits',
                 api.pkg_columnquery.VALUE(a_objectid, 'WithinCityLimits'));
             t_json_app.put('annualEventsCount',
-                           api.pkg_columnquery.VALUE(a_objectid, ''));
+                           api.pkg_columnquery.VALUE(a_objectid, 'Quantity'));
             t_json_app.put(
                 'specificLocation',
                 api.pkg_columnquery.VALUE(a_objectid, 'SpecificLocation'));
