@@ -433,7 +433,9 @@ BEGIN
                        END
                     || CHR(13)
                     || 'Payment Type: '
-                    || t_paymenttype;
+                    || t_paymenttype
+                    || CHR(13)
+                    || CHR(13);
             END IF;
 
             t_paymenttype :=
