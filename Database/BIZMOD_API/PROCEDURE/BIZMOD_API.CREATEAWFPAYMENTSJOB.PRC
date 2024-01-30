@@ -39,7 +39,6 @@ IS
     t_endpointid   api.pkg_definition.udt_id;
     t_relid        api.pkg_definition.udt_id;
 
-    --        t_feeamount    NUMBER;
     t_totalfees    NUMBER;
     t_checkcount   NUMBER;
     t_receiptnumber NUMBER;
@@ -50,9 +49,6 @@ IS
     t_info         VARCHAR2(4000);
     t_paymenttype  VARCHAR2(25)
         := CASE a_makepayments WHEN 0 THEN 'Check' ELSE 'Credit Card' END;
-    --        t_cnt          NUMBER;
-    --        t_loop         NUMBER := 2;
-    --        t_limit        NUMBER := 200;
     t_sqlerrm      VARCHAR2(4000);
     t_backtrace    VARCHAR2(4000);
     t_to           VARCHAR2(4000);
@@ -83,7 +79,8 @@ BEGIN
                    LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
                        ON (a.licensenumber = pp.licensenumber
                        AND pp.paymenttype = 'Primary'
-                       AND pp.paymentmedium = t_paymenttype
+                       AND case pp.paymentmedium when 'E-Check' then 'ECheck' 
+                                                 else pp.paymentmedium end = t_paymenttype
                        AND a_makepayments = 1)
              WHERE a.completed IS NULL
                AND a.paymentbatch IS NULL
