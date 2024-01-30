@@ -553,7 +553,7 @@ BEGIN
                     || CHR(13)
                     || 'annualEventsCount: '
                     || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'annualEventsCount')
+                                                 'Quantity')
                     || CHR(13)
                     || 'specificLocation: '
                     || api.pkg_columnquery.VALUE(a_objectid,
