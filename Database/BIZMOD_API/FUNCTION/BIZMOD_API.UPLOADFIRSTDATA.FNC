@@ -99,7 +99,7 @@ IS
                                                REGEXP_REPLACE(t_tmp,
                                                               '([=()]+)',
                                                               ''),
-                                               '[^(' || a_delimiter || ')]+',
+                                               '[^' || a_delimiter || ']+',
                                                1,
                                                LEVEL))    str
                                   FROM DUAL
@@ -107,7 +107,7 @@ IS
                                            REGEXP_REPLACE(t_tmp,
                                                           '([=()]+)',
                                                           ''),
-                                           '[^(' || a_delimiter || ')]+',
+                                           '[^' || a_delimiter || ']+',
                                            1,
                                            LEVEL)
                                            IS NOT NULL)
@@ -130,13 +130,13 @@ IS
                                                REGEXP_REPLACE(t_tmp,
                                                               '([=()]+)',
                                                               ''),
-                                               '[^(' || a_delimiter || ')]+',
+                                               '[^' || a_delimiter || ']+',
                                                1,
                                                LEVEL))    str
                                   FROM DUAL
                             CONNECT BY REGEXP_SUBSTR(
                                            t_tmp,
-                                           '[^(' || a_delimiter || ')]+',
+                                           '[^' || a_delimiter || ']+',
                                            1,
                                            LEVEL)
                                            IS NOT NULL)
@@ -176,6 +176,7 @@ BEGIN
         t_recordsloaded NUMBER := 0;
         t_errorrecords NUMBER := 0;
         t_recordsskipped NUMBER := 0;
+        t_count        NUMBER;
         t_msg          VARCHAR2(4000);
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
@@ -227,12 +228,12 @@ BEGIN
                                                  LEVEL)
                                        IS NOT NULL)
                 LOOP
---                                    DBMS_OUTPUT.put_line(
---                                        t_headings(rec.LN)
---                                        || ' : '
---                                        || NVL(rec.split, 'null')
---                                        || ' : '
---                                        || rec.LN);
+                    --                                    DBMS_OUTPUT.put_line(
+                    --                                        t_headings(rec.LN)
+                    --                                        || ' : '
+                    --                                        || NVL(rec.split, 'null')
+                    --                                        || ' : '
+                    --                                        || rec.LN);
 
                     CASE t_headings(rec.LN)
                         WHEN 'SITEID'
@@ -460,13 +461,32 @@ BEGIN
 
             IF (t_recordsloaded > 0)
             THEN
-                bizmod_api.createjob(
-                    a_procedure => 'CREATEAWFPAYMENTSJOB',
-                    a_description => 'Create AWF Payment Batch',
-                    a_argument1 => '1');
+                SELECT COUNT(1)
+                  INTO t_count
+                  FROM scheduler.sysschedule s
+                 WHERE status IN (1)
+                   AND s.description LIKE '%Create AWF Payment Batch';
 
-                bizmod_api.createjob(a_procedure => 'CREATETRANSMITTALJOB',
-                                     a_description => 'Create Transmittals');
+                IF (t_count = 0)
+                THEN
+                    bizmod_api.createjob(
+                        a_procedure => 'CREATEAWFPAYMENTSJOB',
+                        a_description => 'Create AWF Payment Batch',
+                        a_argument1 => '1');
+                END IF;
+
+                SELECT COUNT(1)
+                  INTO t_count
+                  FROM scheduler.sysschedule s
+                 WHERE status IN (1)
+                   AND s.description LIKE '%Create Transmittals';
+
+                IF (t_count = 0)
+                THEN
+                    bizmod_api.createjob(
+                        a_procedure => 'CREATETRANSMITTALJOB',
+                        a_description => 'Create Transmittals');
+                END IF;
             END IF;
 
             t_info :=
@@ -533,12 +553,13 @@ BEGIN
 
                 COMMIT;
 
-                t_return := json_object(
-                           'PACKET_TYPE' VALUE 'MESSAGE',
-                           'DATA' VALUE
-                               json_object('MSGNO' VALUE '5',
-                                           'MSG' VALUE 'Oracle Exception',
-                                           'EXCEPTION' VALUE t_msg));
+                t_return :=
+                    json_object(
+                        'PACKET_TYPE' VALUE 'MESSAGE',
+                        'DATA' VALUE
+                            json_object('MSGNO' VALUE '5',
+                                        'MSG' VALUE 'Oracle Exception',
+                                        'EXCEPTION' VALUE t_msg));
         END;
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
