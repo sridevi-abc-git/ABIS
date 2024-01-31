@@ -177,6 +177,7 @@ BEGIN
         t_errorrecords NUMBER := 0;
         t_recordsskipped NUMBER := 0;
         t_count        NUMBER;
+        t_filename     VARCHAR2(512) := json_value(a_packet, '$.FILE_NAME');
         t_msg          VARCHAR2(4000);
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
@@ -491,6 +492,11 @@ BEGIN
 
             t_info :=
                 'File Uploaded'
+                || CHR(13)
+                || CHR(9)
+                || 'File Name: '
+                || CHR(9)
+                || t_filename
                 || CHR(13)
                 || CHR(9)
                 || 'Processed: '
