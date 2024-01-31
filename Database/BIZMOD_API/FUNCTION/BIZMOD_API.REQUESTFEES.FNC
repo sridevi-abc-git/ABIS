@@ -3,7 +3,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet       IN CLOB,
     RETURN CLOB
 IS
     -- ****************************************************************************
-    -- File:    REQUESTFEES.FNC
+    -- File:    BIZMOD_API.REQUESTFEES.FNC
     -- Author:  Timothy J. Lord
     --
     -- History
@@ -11,6 +11,7 @@ IS
     -- 11/17/2022  TJL  Rewrite of REQUESTFEES
     -- 06/27/2023  TJL  BIZ-11779 Correct premise address not being retrieved
     -- 06/30/2023  TJL  Fixed bug with incorrect message number.
+    -- 01/29/2024  APD  Ordered lic view in main loop to make sure j_license row is first
     -- ****************************************************************************
 
     FUNCTION get_awf(a_licensetypejobid IN NUMBER)
@@ -18,7 +19,6 @@ IS
     IS
         t_feetbl       fee_tbl;
     BEGIN
-    
         SELECT fee_rec(
                    licensetypejobid, -- jobid
                    'P', -- primarysecondary
@@ -73,7 +73,7 @@ IS
                LEFT OUTER JOIN e_payments_t p
                    ON (p.licensenumber = a.licensenumber
                    AND p.licensetypecode = a.licensetypecode
-                   AND p.createddate > add_months(a.expirationdate, -12) -->= a.awfdate
+                   AND p.createddate > ADD_MONTHS(a.expirationdate, -12) -->= a.awfdate
                    AND p.description = a.description)
          WHERE a.licensetypejobid = a_licensetypejobid
            AND a.awffeeamount > 0
@@ -81,12 +81,14 @@ IS
                    (SELECT 1
                       FROM api.fees f
                      WHERE f.jobid = a.licensetypejobid
-                       AND f.transactiondate > add_months(a.expirationdate, -12) -- a.awfdate
+                       AND f.transactiondate >
+                           ADD_MONTHS(a.expirationdate, -12) -- a.awfdate
                        AND f.description LIKE '%AWF%')
            AND p.depositbatchid IS NULL;
 
-                DBMS_OUTPUT.put_line(a_licensetypejobid || '  AWF count: ' || t_feetbl.COUNT);
---                DBMS_OUTPUT.put_line('awf::totalowing: ' || t_feetbl(1).totalowing);
+        DBMS_OUTPUT.put_line(
+            a_licensetypejobid || '  AWF count: ' || t_feetbl.COUNT);
+        --                DBMS_OUTPUT.put_line('awf::totalowing: ' || t_feetbl(1).totalowing);
         RETURN t_feetbl;
     END;
 
@@ -469,47 +471,48 @@ BEGIN
         WITH
             lic
             AS
-                (SELECT ROWNUM
-                            line,
-                        o.objectid
-                            jobid,
-                        api.pkg_columnquery.VALUE(o.objectid, 'StatusName')
-                            statusname,
-                        api.pkg_columnquery.datevalue(o.objectid,
-                                                      'dup_ExpirationDate')
-                            expirationdate,
-                        api.pkg_columnquery.datevalue(o.objectid,
-                                                      'RenewalDate')
-                            renewaldate,
-                        TO_DATE(
-                            api.pkg_columnquery.VALUE(o.objectid,
-                                                      'LastDate50Penalty'),
-                            'Mon dd, yyyy')
-                            lastdate50penalty,
-                        TO_DATE(
-                            api.pkg_columnquery.VALUE(o.objectid,
-                                                      'LastDate100Penalty'),
-                            'Mon dd, yyyy')
-                            lastdate100penalty
-                   FROM (SELECT objectid
-                           FROM TABLE(
-                                    CAST(
-                                        api.pkg_simplesearch.castableobjectsbyindex(
-                                            a_objectdefname => 'j_License',
-                                            a_columnname => 'ExternalFileNum',
-                                            a_value     => t_licensenumber)
-                                            AS api.udt_objectlist)) o
-                         UNION
-                         SELECT objectid
-                           FROM TABLE(
-                                    CAST(
-                                        api.pkg_simplesearch.castableobjectsbyindex(
-                                            a_objectdefname =>
-                                                'j_LicenseType',
-                                            a_columnname =>
-                                                'dup_LicenseExternalFileNum',
-                                            a_value     => t_licensenumber)
-                                            AS api.udt_objectlist))) o)
+                (  SELECT ROWNUM
+                              line,
+                          o.objectid
+                              jobid,
+                          api.pkg_columnquery.VALUE(o.objectid, 'StatusName')
+                              statusname,
+                          api.pkg_columnquery.datevalue(o.objectid,
+                                                        'dup_ExpirationDate')
+                              expirationdate,
+                          api.pkg_columnquery.datevalue(o.objectid,
+                                                        'RenewalDate')
+                              renewaldate,
+                          TO_DATE(
+                              api.pkg_columnquery.VALUE(o.objectid,
+                                                        'LastDate50Penalty'),
+                              'Mon dd, yyyy')
+                              lastdate50penalty,
+                          TO_DATE(
+                              api.pkg_columnquery.VALUE(o.objectid,
+                                                        'LastDate100Penalty'),
+                              'Mon dd, yyyy')
+                              lastdate100penalty
+                     FROM (SELECT objectid
+                             FROM TABLE(
+                                      CAST(
+                                          api.pkg_simplesearch.castableobjectsbyindex(
+                                              a_objectdefname => 'j_License',
+                                              a_columnname => 'ExternalFileNum',
+                                              a_value     => t_licensenumber)
+                                              AS api.udt_objectlist)) o
+                           UNION
+                           SELECT objectid
+                             FROM TABLE(
+                                      CAST(
+                                          api.pkg_simplesearch.castableobjectsbyindex(
+                                              a_objectdefname =>
+                                                  'j_LicenseType',
+                                              a_columnname =>
+                                                  'dup_LicenseExternalFileNum',
+                                              a_value     => t_licensenumber)
+                                              AS api.udt_objectlist))) o
+                 ORDER BY renewaldate NULLS FIRST) -- Ensure j_license is first APD
         SELECT license_rec(lic.line,
                            lic.jobid,
                            lic.statusname,
@@ -672,3 +675,6 @@ BEGIN
     END;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.REQUESTFEES TO BIZMOD_USER;
