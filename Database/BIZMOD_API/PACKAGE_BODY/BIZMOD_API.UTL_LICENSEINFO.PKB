@@ -78,10 +78,14 @@ AS
           RETURNING seq
                INTO t_seq;
 
+--        UTL_HTTP.set_wallet(
+--            'file:/orabin1/admin/'
+--            || LOWER(ora_database_name)
+--            || '/walletSSL/',
+--            NULL);
+
         UTL_HTTP.set_wallet(
-            'file:/orabin1/admin/'
-            || LOWER(ora_database_name)
-            || '/walletSSL/',
+            'file:/u01/app/oracle/admin/abisp1/walletSSL',
             NULL);
 
         -- Open the HTTP request
