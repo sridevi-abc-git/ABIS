@@ -273,7 +273,7 @@ BEGIN
                                 REGEXP_SUBSTR(rec.split,
                                               '[^,]+',
                                               1,
-                                              2);
+                                              1);
                         WHEN 'RECURRINGID'
                         THEN
                             t_row.recurringid := rec.split;
