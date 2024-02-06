@@ -12,6 +12,7 @@ IS
     -------------------------------------------------------------------------------
     --    Date                  Comment
     -- 11/29/2023 PK  34004  Initial file create 34004 - New RQS Report - ABC220B (Issuance Date)
+    -- 02/06/2024 PK  Added Application number- External file num. Pawan on 02/06/2024
 
     -- ****************************************************************************
     CURSOR query(
@@ -21,7 +22,7 @@ IS
         WITH
             objects
             AS
-               (SELECT a.applicationobjectid objectid,
+               (SELECT a.applicationobjectid objectid, a.STATUS status,
                         (SELECT p.processid
                            FROM api.processes p
                           WHERE p.processtypeid = api.pkg_configquery.objectdefidforname('p_AssignAppInvestigation')
@@ -68,6 +69,8 @@ IS
                      enterapplicationdate,
                  api.pkg_columnquery.VALUE(o.objectid, 'licensenumber')
                      licensenumber,
+                 api.pkg_columnquery.VALUE(o.objectid, 'Externalfilenum')
+                     Applicationnumber,    
                  api.pkg_columnquery.VALUE(o.condappprocess, 'AssignedToList')
                     AssignedToCompletedBy,    
                  api.pkg_columnquery.VALUE(o.objectid, 'BaseFileOfficeName')
@@ -116,7 +119,7 @@ IS
                      transfertype,
                  api.pkg_columnquery.datevalue(o.objectid, 'CompletedDate')
                      Applicationcompleteddate,
-                 api.pkg_columnquery.VALUE(o.objectid, 'statusname')
+                 o.status
                      applicationstatus,
                  api.pkg_columnquery.VALUE(o.processid, 'Outcome')
                      outcome,
@@ -151,6 +154,8 @@ BEGIN
                              || rec.enterapplicationdate
                              || '","'
                              || rec.licensenumber
+                             || '","'
+                             || rec.Applicationnumber
                              || '","'
                              || rec.basefileofficename
                              || '","'
