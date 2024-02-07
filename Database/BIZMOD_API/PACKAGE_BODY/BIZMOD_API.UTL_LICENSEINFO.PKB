@@ -29,6 +29,7 @@ AS
     --                                          CALLLSP (different parameters)
     --   4.1    12/07/2023  TJL  BIZ-12802    Removed old CALLLSP function
     --   4.2    12/14/2023  TJL  BIZ-13929    Added logging to ESERVICES_LOT_T to calllsp function
+    --   5.0    02/06/2024  TJL  BIZ-14444    Change how Wallet path is created.
     -- ****************************************************************************
 
     FUNCTION calllsp(a_url          IN VARCHAR2,
@@ -64,6 +65,7 @@ AS
         t_response_header_value VARCHAR2(1024);
         t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
+        t_wallet       VARCHAR2(1000);
     BEGIN
         INSERT INTO eservices_log_t(request,
                                     packet,
@@ -78,15 +80,18 @@ AS
           RETURNING seq
                INTO t_seq;
 
---        UTL_HTTP.set_wallet(
---            'file:/orabin1/admin/'
---            || LOWER(ora_database_name)
---            || '/walletSSL/',
---            NULL);
+        t_wallet :=
+            CASE LOWER(ora_database_name)
+                WHEN 'abisp1'
+                THEN
+                    'file:/u01/app/oracle/admin/abisp1/walletSSL'
+                ELSE
+                    'file:/orabin1/admin/'
+                    || LOWER(ora_database_name)
+                    || '/walletSSL/'
+            END;
 
-        UTL_HTTP.set_wallet(
-            'file:/u01/app/oracle/admin/abisp1/walletSSL',
-            NULL);
+        UTL_HTTP.set_wallet(t_wallet, NULL);
 
         -- Open the HTTP request
         t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
@@ -164,7 +169,8 @@ AS
         UTL_HTTP.end_request(t_request);
 
         UPDATE eservices_log_t
-           SET response = json_object('LSPRESPONSE' VALUE t_response_text), responsedate = SYSTIMESTAMP
+           SET response = json_object('LSPRESPONSE' VALUE t_response_text),
+               responsedate = SYSTIMESTAMP
          WHERE seq = t_seq
            LOG ERRORS INTO bizmod_api.err$_eservices_log_t
                    ('UPDATE')
