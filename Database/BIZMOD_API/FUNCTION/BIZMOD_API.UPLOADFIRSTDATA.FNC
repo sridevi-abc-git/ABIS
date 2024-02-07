@@ -15,6 +15,7 @@ IS
     --          09/13/2023 TJL  BIZ-14091   Initial File Created
     --          12/20/2023 TJL  BIZ-14091   Corrected bugs and adding logging
     --    1.0   01/04/2023 TJL  BIZ-14091   Corrected bug in parsing file
+    --    2.0   02/06/2024 TJL  BIZ-14440   Removed parsing of Reference Column Data
     -- ****************************************************************************
 
     FUNCTION split_clob(a_clob         IN CLOB,
@@ -269,11 +270,6 @@ BEGIN
                         WHEN 'REFERENCE'
                         THEN
                             t_row.reference := rec.split;
-                            t_row.licensenumber :=
-                                REGEXP_SUBSTR(rec.split,
-                                              '[^,]+',
-                                              1,
-                                              1);
                         WHEN 'RECURRINGID'
                         THEN
                             t_row.recurringid := rec.split;
@@ -386,6 +382,8 @@ BEGIN
                 END LOOP;
 
                 t_row.createddate := SYSDATE;
+                t_row.logseq := a_seq;
+                t_row.filename := t_filename;
 
                 -- make sure not adding duplicate records to payment process table
                 MERGE INTO bizmod_api.e_payments_processed_t a
@@ -430,6 +428,23 @@ BEGIN
                         WHEN NO_DATA_FOUND
                         THEN
                             t_recordsskipped := t_recordsskipped + 1;
+
+                            INSERT INTO bizmod_api.err$_e_payments_processed_t
+                                        e(e.ora_err_tag$,
+                                          e.reference,
+                                          e.confirmationnumber,
+                                          e.paymenttype,
+                                          e.paymentmedium,
+                                          e.paymentamount,
+                                          e.filename)
+                                 VALUES ('DUPLICATE',
+                                         t_row.reference,
+                                         t_row.confirmationnumber,
+                                         t_row.paymenttype,
+                                         t_row.paymentmedium,
+                                         t_row.paymentamount,
+                                         t_row.filename);
+                            COMMIT;             
                     END;
                 ELSE
                     t_recordsloaded := t_recordsloaded + 1;
@@ -519,7 +534,7 @@ BEGIN
                            NULL
                        ELSE
                            CHR(9)
-                           || 'Errors: '
+                           || 'Errors:    '
                            || CHR(9)
                            || t_errorrecords
                            || CHR(13)
