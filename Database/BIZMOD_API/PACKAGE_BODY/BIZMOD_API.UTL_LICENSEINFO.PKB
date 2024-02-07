@@ -169,7 +169,7 @@ AS
            LOG ERRORS INTO bizmod_api.err$_eservices_log_t
                    ('UPDATE')
                    REJECT LIMIT UNLIMITED;
-               
+
         RETURN t_response_text;
     END;
 
