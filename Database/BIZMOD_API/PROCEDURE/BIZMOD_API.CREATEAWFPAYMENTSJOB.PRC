@@ -79,7 +79,7 @@ BEGIN
                    LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
                        ON (a.licensenumber = pp.licensenumber
                        AND pp.paymenttype = 'Primary'
-                       AND case pp.paymentmedium when 'E-Check' then 'ECheck' 
+                       AND case pp.paymentmedium when 'E-Check' then 'ECheck'
                                                  else pp.paymentmedium end = t_paymenttype
                        AND a_makepayments = 1)
              WHERE a.completed IS NULL
