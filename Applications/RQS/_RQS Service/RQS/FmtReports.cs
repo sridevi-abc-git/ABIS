@@ -44,7 +44,7 @@ namespace RQS.Controllers
 
 		public static string Format(string tnsname, string data)
 		{
-			ABCRQSUtils.AppConfigurationSettings	cnfg		  = ABCRQSUtils.AppConfigurationSettings.getConfigurationSection(tnsname);
+			ABCRQSUtils.AppConfigurationSettings	cnfg		  = ABCRQSUtils.AppConfigurationSettings.getConfigurationSection();
 			string									message		  = null;
 			FmtReports								report		  = null;
 			ABCException							e;

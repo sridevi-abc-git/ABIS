@@ -6,9 +6,9 @@
 
 	Description:	Layout form for ABC 19 report.
 
-    $Rev: 51 $  
-    $Date: 2018-09-01 12:02:56 -0700 (Sat, 01 Sep 2018) $
-    Last Changed By:  $Author: TLord $
+    $Rev: 2418 $  
+    $Date: 2016-02-25 08:59:43 -0800 (Thu, 25 Feb 2016) $
+    Last Changed By:  $Author: tlord $
 
 *****************************************************************************
 	07/16/2015	  7753 - Change verbiage for 5a header

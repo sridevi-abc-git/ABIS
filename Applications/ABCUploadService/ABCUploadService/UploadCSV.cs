@@ -23,126 +23,80 @@ namespace ABCUploadService
 
         static public void OnChanged(object source, FileSystemEventArgs e)
         {
-            UploadCSV.Save(e.FullPath);
+            UploadCSV.Upload(e.FullPath);
         }
 
-        static public void Save(string pFile)
+        static public void StartUp(string pPath, string pFilter)
         {
-            JavaScriptSerializer js = new JavaScriptSerializer();
+            DirectoryInfo d = new DirectoryInfo(pPath); //Assuming Test is your Folder
 
-            string json = File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + @"\" + System.Configuration.ConfigurationManager.AppSettings["configuration"]);
-            Dictionary<string, Dictionary<string, string>[]> configuration = js.Deserialize<Dictionary<string, Dictionary<string, string>[]>>(json);
+            FileInfo[] Files = d.GetFiles(pFilter); //Getting Text files
 
-            string stmt = configuration["Table"][0]["Insert"];
+            foreach (FileInfo file in Files)
+            {
+                Upload(file.FullName);
+            }
+        }
 
-            Dictionary<string, string>[] columns = configuration["Fields"];
-            TextFieldParser reader = null;
+        static public void Upload(string pFile)
+        {
             byte[] data;
-            Stream csvStream;
-            string[] items;
-
-            string columnData = "";
-            string columnName = "";
-            string sql;
-
             string connectionString = System.Configuration.ConfigurationManager.AppSettings["connection"];
-            int totalRows = 0;
-            int rowsUpdated = 0;
             int count;
+            int retry = 3;
 
             if (!File.Exists(pFile)) return;
-            if (m_trace) m_event.WriteEntry("File to Upload: " + pFile, EventLogEntryType.Information, 1);
+            if (m_trace)
+            {
+                m_event.WriteEntry("File to Upload: " + pFile, EventLogEntryType.Information, 1);
+                Console.WriteLine("File to Upload: " + pFile);
+            }
 
             OracleConnection conn = new OracleConnection(connectionString); ;
             OracleCommand cmd = conn.CreateCommand();
 
             try
             {
-                cmd.CommandType = System.Data.CommandType.Text;
-
                 System.Threading.Thread.Sleep(5000);
 
                 data = File.ReadAllBytes(pFile);
-                File.Delete(pFile);
-
-                csvStream = new MemoryStream(data);
-
-                reader = new TextFieldParser(csvStream);
-                reader.Delimiters = new string[] { @"," };
-                reader.HasFieldsEnclosedInQuotes = true;
-
-                // do not process header row of CSV
-                items = reader.ReadFields();
-
-                conn.Open();
-
-
-                while ((items = reader.ReadFields()) != null)
+                while (conn.State == System.Data.ConnectionState.Closed && retry > 0)
                 {
-                    columnData = "";
-                    columnName = "";
-                    totalRows++;
-
-                    foreach (Dictionary<string, string> column in columns)
+                    try
                     {
-                        int columnNumber = Convert.ToInt16(column["ColumnNumber"]) - 1;
-                        string columntype = column["ColumnType"];
-                        DateTime dt;
-
-                        string value = items[columnNumber];
-
-                        if (value.Length == 0) continue;
-
-                        if (column.ContainsKey("regexp_substr"))
-                        {
-                            Match match = Regex.Match(value, column["regexp_substr"]);
-                            value = (match.Success ? match.Groups[1].Value : value);
-                        }
-
-                        if (column.ContainsKey("regexp_replace"))
-                        {
-                            value = Regex.Replace(value, column["regexp_replace"], "");
-                        }
-
-                        switch (column["ColumnType"])
-                        {
-                            case "Double":
-                                value = Convert.ToDouble(value).ToString();
-                                break;
-
-                            case "DateTime":
-                                dt = DateTime.Parse(value);
-                                value = "to_date('" + dt.ToString("yyyy-MM-dd HH:mm:ss") + "','yyyy-mm-dd HH24:mi:ss')";
-                                break;
-
-                            default:
-                                value = "'" + value + "'";
-                                break;
-                        }
-
-                        columnData += (columnData.Length > 0 ? "," + value : value);
-                        columnName += (columnName.Length > 0 ? "," + column["ColumnName"] : column["ColumnName"]);
-
+                        conn.Open();
                     }
+ 
+                    catch (OracleException oe)
+                    {
+                        retry--;
 
-                    sql = stmt.Replace("<fields>", columnName).Replace("<values>", columnData);
-                    cmd.CommandText = sql;
-                    count = cmd.ExecuteNonQuery();
+                        string msg = "Error: " + oe.Message + "  \n"
+                                     + "Stack: " + oe.StackTrace;
 
-                    rowsUpdated += count;
-
+                        m_event.WriteEntry(msg, EventLogEntryType.Error, 2);
+                        Console.WriteLine(msg);
+                        Console.WriteLine(cmd.CommandText);
+                        System.Threading.Thread.Sleep(30000);
+                    }
                 }
 
-                // create job to process uploaded data
-                cmd.CommandType = System.Data.CommandType.StoredProcedure;
-                cmd.CommandText = @"Bizmod_api.createjob";
-                cmd.Parameters.Add("a_procedure", OracleDbType.Varchar2).Value = "PROCESSPAYMENTS";
-                cmd.Parameters.Add("a_description", OracleDbType.Varchar2).Value = "Process Payments";    
-                count = cmd.ExecuteNonQuery();
+                if (conn.State == System.Data.ConnectionState.Open)
+                {
+                    // upload file data
+                    cmd.CommandType = System.Data.CommandType.StoredProcedure;
+                    cmd.CommandText = @"BIZMOD_API.ESERVICES";
+                    cmd.Parameters.Add("Return_Value", OracleDbType.Clob, System.Data.ParameterDirection.ReturnValue);
 
-                conn.Close();
+                    cmd.Parameters.Add("a_packet", OracleDbType.Clob).Value = "{\"PACKET_TYPE\":\"UPLOADFIRSTDATA\",\"FILE_NAME\":\"" + Path.GetFileName(pFile) + "\"}";
+                    cmd.Parameters.Add("a_filedata", OracleDbType.Blob).Value = data;
+                    count = cmd.ExecuteNonQuery();
 
+                    conn.Close();
+                    File.Delete(pFile);
+                }
             }
+
             catch (Exception ex)
             {
                 string msg = "Error: " + ex.Message + "  \n"
@@ -153,6 +107,5 @@ namespace ABCUploadService
                 Console.WriteLine(cmd.CommandText);
             }
         }
-
     }
 }
