@@ -23,7 +23,7 @@ IS
     --   2.0     01/02/2024 TJL  BIZ-14058    Changed the formatting of Sponsoring Orgaization Mailing
     --                                          Addres
     --   2.1     01/10/2024 TJL  BIZ-14162    Remove allowing REV PENDING licenses to create application
-    --   3.0     02/07/2024 AD                Change how to find an existing event address
+    --   3.0     02/07/2024 APD  BIZ-14339    Change how to find an existing event address
     -- ****************************************************************************
     --************************
     --Object Id
@@ -275,38 +275,39 @@ BEGIN
     END IF;
 
     --*********************
-    --Get or create addres
+    --Get or create address
     --*********************
     BEGIN
         --**************************
         --Check for existing addres
         --**************************
-      FOR rec
-        IN (SELECT objectid
-              FROM TABLE(
-                       CAST(
-                           api.pkg_simplesearch.castableobjectsbyindex(
-                               a_objectdefname => 'o_Address',
-                               a_columnname => 'dup_UniqueAddress',
-                               a_value     =>
-                                   t_eventlocationaddressline1
-                                   || '%'
-                                   || t_eventlocationaddressline2
-                                   || '%'
-                                   || t_eventlocationcity
-                                   || '%') AS api.udt_objectlist)))
-      LOOP
-        IF (t_eventlocationaddressline1 =
-            api.pkg_columnquery.VALUE(rec.objectid, 'addressline1')
-        AND t_eventlocationaddressline2 =
-            api.pkg_columnquery.VALUE(rec.objectid, 'addressline2')
-        AND t_eventlocationcity =
-            api.pkg_columnquery.VALUE(rec.objectid, 'CACity'))
-        THEN
-            t_addressobjectid := rec.objectid;
-            EXIT WHEN t_addressobjectid IS NOT NULL;
-        END IF;
-      END LOOP;
+        -- 02/07/2024 APD  BIZ-14339
+        FOR rec
+          IN (SELECT objectid
+                FROM TABLE(
+                         CAST(
+                             api.pkg_simplesearch.castableobjectsbyindex(
+                                 a_objectdefname => 'o_Address',
+                                 a_columnname => 'dup_UniqueAddress',
+                                 a_value     =>
+                                     t_eventlocationaddressline1
+                                     || '%'
+                                     || t_eventlocationaddressline2
+                                     || '%'
+                                     || t_eventlocationcity
+                                     || '%') AS api.udt_objectlist)))
+        LOOP
+              IF (t_eventlocationaddressline1 =
+                  api.pkg_columnquery.VALUE(rec.objectid, 'addressline1')
+              AND nvl(t_eventlocationaddressline2,'X') =
+                  nvl(api.pkg_columnquery.VALUE(rec.objectid, 'addressline2'), 'X')
+              AND t_eventlocationcity =
+                  api.pkg_columnquery.VALUE(rec.objectid, 'CACity'))
+              THEN
+                  t_addressobjectid := rec.objectid;
+                  EXIT WHEN t_addressobjectid IS NOT NULL;
+              END IF;
+        END LOOP;
 
         IF (t_addressobjectid IS NULL)
         THEN
