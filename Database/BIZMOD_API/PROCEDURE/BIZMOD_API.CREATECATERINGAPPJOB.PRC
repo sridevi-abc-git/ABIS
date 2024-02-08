@@ -14,18 +14,19 @@ IS
     --   1.0     10/20/2023  JS  BIZ-12471    Initial process created
     --           12/06/2023 TJL  BIZ-12471    Added URL coding to call approiate LSP URL for database
     --                                          Added updating process log table
-    --                                          Added exception handling for HTTP request failures
+    --                                          Added exception handling for HTTP request failure
     --           12/07/2023 TJL  BIZ-12471    Change calllsp to newer calllsp procedure
     --   1.1     12/12/2023 TJL  BIZ-13929    Added additional logging
     --                                        Changed where getting secondary license type status from
     --   1.1     12/19/2023 TJL  BIZ-13974    Allow applications created when 58 has a status of
     --                                          REV PENDING
     --   2.0     01/02/2024 TJL  BIZ-14058    Changed the formatting of Sponsoring Orgaization Mailing
-    --                                          Address
-    --   2.1     01/10/2024 TJL  BIZ-14162    Remove allowing REV PENDING licenses to create applications
+    --                                          Addres
+    --   2.1     01/10/2024 TJL  BIZ-14162    Remove allowing REV PENDING licenses to create application
+    --   3.0     02/07/2024 AD                Change how to find an existing event address
     -- ****************************************************************************
     --************************
-    --Object Ids
+    --Object Id
     --************************
     t_licobjid     NUMBER(20);
     t_processid    api.pkg_definition.udt_id;
@@ -80,7 +81,7 @@ IS
     t_feedescription VARCHAR2(50);
     t_isscatobjid  api.pkg_definition.udt_id;
     --******************
-    --Address Object Ids
+    --Address Object Id
     --******************
     t_cityobjectid api.pkg_definition.udt_id;
     t_cityendpointid api.pkg_definition.udt_id;
@@ -101,7 +102,7 @@ IS
     t_count        NUMBER;
 BEGIN
     --*****************
-    --Clear any errors
+    --Clear any error
     --*****************
     api.pkg_logicaltransactionupdate.resettransaction;
     ROLLBACK;
@@ -206,7 +207,7 @@ BEGIN
             '\D');
     t_contactemail := json_value(t_packet, '$.DATA.APPLICATION.CONTACTEMAIL');
 
-    -- 12/06/2023 TJL added updating url for different LSP environments
+    -- 12/06/2023 TJL added updating url for different LSP environment
     t_url :=
         REPLACE(
             REPLACE(
@@ -224,7 +225,7 @@ BEGIN
 
 
     --*************************
-    --Format Sponsoring Address
+    --Format Sponsoring Addres
     --*************************
     IF (t_sponsoringorganizationaddress1 IS NULL)
     THEN
@@ -274,22 +275,38 @@ BEGIN
     END IF;
 
     --*********************
-    --Get or create address
+    --Get or create addres
     --*********************
     BEGIN
         --**************************
-        --Check for existing address
+        --Check for existing addres
         --**************************
-        t_addressobjectid :=
-            api.pkg_simplesearch.objectbyindex(
-                'o_Address',
-                'dup_UniqueAddress',
-                t_eventlocationaddressline1
-                || '%'
-                || t_eventlocationaddressline2
-                || '%'
-                || t_eventlocationcity
-                || '%');
+      FOR rec
+        IN (SELECT objectid
+              FROM TABLE(
+                       CAST(
+                           api.pkg_simplesearch.castableobjectsbyindex(
+                               a_objectdefname => 'o_Address',
+                               a_columnname => 'dup_UniqueAddress',
+                               a_value     =>
+                                   t_eventlocationaddressline1
+                                   || '%'
+                                   || t_eventlocationaddressline2
+                                   || '%'
+                                   || t_eventlocationcity
+                                   || '%') AS api.udt_objectlist)))
+      LOOP
+        IF (t_eventlocationaddressline1 =
+            api.pkg_columnquery.VALUE(rec.objectid, 'addressline1')
+        AND t_eventlocationaddressline2 =
+            api.pkg_columnquery.VALUE(rec.objectid, 'addressline2')
+        AND t_eventlocationcity =
+            api.pkg_columnquery.VALUE(rec.objectid, 'CACity'))
+        THEN
+            t_addressobjectid := rec.objectid;
+            EXIT WHEN t_addressobjectid IS NOT NULL;
+        END IF;
+      END LOOP;
 
         IF (t_addressobjectid IS NULL)
         THEN
@@ -310,7 +327,7 @@ BEGIN
                 api.pkg_configquery.endpointidforname('o_Address', 'CACity');
 
             --******************
-            --Create new address
+            --Create new addres
             --******************
             t_addressobjectid :=
                 api.pkg_objectupdate.new(
@@ -617,7 +634,7 @@ EXCEPTION
         t_trace := DBMS_UTILITY.format_error_backtrace;
 
         --*****************
-        --Clear any errors
+        --Clear any error
         --*****************
         api.pkg_logicaltransactionupdate.resettransaction;
         ROLLBACK;
