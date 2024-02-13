@@ -91,6 +91,7 @@ BEGIN
                            ON (a.licensenumber = p.licensenumber)
                  WHERE a.paymentbatch IS NULL
                    AND pp.paymentmedium IS NOT NULL
+                   AND pp.paymenttype = 'Primary'
                    AND p.description = 'AWF'
                    AND CASE pp.paymentmedium
                            WHEN 'E-Check' THEN 'ECheck'
