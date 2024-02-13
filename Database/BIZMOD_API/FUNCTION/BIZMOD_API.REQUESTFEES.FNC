@@ -8,10 +8,11 @@ IS
     --
     -- History
     -------------------------------------------------------------------------------
-    -- 11/17/2022  TJL  Rewrite of REQUESTFEES
-    -- 06/27/2023  TJL  BIZ-11779 Correct premise address not being retrieved
-    -- 06/30/2023  TJL  Fixed bug with incorrect message number.
-    -- 01/29/2024  APD  Ordered lic view in main loop to make sure j_license row is first
+    -- 11/17/2022  TJL             Rewrite of REQUESTFEES
+    -- 06/27/2023  TJL  BIZ-11779  Correct premise address not being retrieved
+    -- 06/30/2023  TJL             Fixed bug with incorrect message number.
+    -- 01/29/2024  APD             Ordered lic view in main loop to make sure j_license row is first
+    -- 02/13/2024  APD  BIZ-14426  Fixed bug in getting renewal fees
     -- ****************************************************************************
 
     FUNCTION get_awf(a_licensetypejobid IN NUMBER)
@@ -137,7 +138,10 @@ IS
                                                      'TotalOwing');
 
                 -- check if penality fees have to be supply if not already applied
-                CASE
+
+                IF (t_totalowing > 0)   -- 02/13/2024 APD BIZ-14426
+                THEN
+                  CASE
                     WHEN TRUNC(SYSDATE) > fees(indx).lastdate50penalty
                      AND fees(indx).feeactivity != 'REN100'
                      AND SUBSTR(fees(indx).feeactivity, 1, 3) = 'REN'
@@ -153,16 +157,29 @@ IS
                         fees(indx).feeactivity := 'REN50';
                     ELSE
                         t_caculate := FALSE;
-                        fees(indx).adjustedamount :=
-                            api.pkg_columnquery.numericvalue(
-                                fees(indx).feeobjid,
-                                'AdjustedAmount');
-                        fees(indx).description :=
-                            api.pkg_columnquery.VALUE(
-                                fees(indx).feeobjid,
-                                'DescriptionForDisplay');
-                        fees(indx).totalowing := t_totalowing;
-                END CASE;
+                          fees(indx).adjustedamount :=
+                           api.pkg_columnquery.numericvalue(
+                           fees(indx).feeobjid,
+                           'AdjustedAmount');
+                    fees(indx).description :=
+                        api.pkg_columnquery.VALUE(
+                            fees(indx).feeobjid,
+                           'DescriptionForDisplay');
+                    fees(indx).totalowing := t_totalowing;
+
+                    END CASE;
+                ELSE
+                    t_caculate := FALSE;
+                    fees(indx).adjustedamount :=
+                        api.pkg_columnquery.numericvalue(
+                           fees(indx).feeobjid,
+                           'AdjustedAmount');
+                    fees(indx).description :=
+                        api.pkg_columnquery.VALUE(
+                            fees(indx).feeobjid,
+                           'DescriptionForDisplay');
+                    fees(indx).totalowing := t_totalowing;
+                END IF;
 
                 IF (t_caculate)
                 THEN
