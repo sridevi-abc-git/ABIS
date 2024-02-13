@@ -17,6 +17,7 @@ IS
     --   1.0     01/16/2024  TJL BIZ-14091  Process created from e_payment.createawfpayments
     --                                          function.
     --   2.0     02/06/2024  TJL BIZ-14393  Change how AWF records are selected
+    --   3.0     02/13/2024  TJL BIZ-14393  Corrected bug in selecting payment records
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -441,10 +442,9 @@ BEGIN
                     || CHR(13)
                     || 'Type: '
                     || CASE a_makepayments
-                           WHEN 1 THEN 'First Data AWF Payment Batch'
-                           ELSE 'AWF no payment required Payment Batch'
+                           WHEN 1 THEN 'First Data AWF Payment Batch' || CHR(13)
+                           ELSE 'AWF no payment required Payment Batch' || CHR(13)
                        END
-                    || CHR(13)
                     || 'Payment Type: '
                     || t_paymenttype
                     || CHR(13)
