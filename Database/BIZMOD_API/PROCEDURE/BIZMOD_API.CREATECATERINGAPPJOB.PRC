@@ -297,12 +297,12 @@ BEGIN
                                      || t_eventlocationcity
                                      || '%') AS api.udt_objectlist)))
         LOOP
-              IF (t_eventlocationaddressline1 =
-                  api.pkg_columnquery.VALUE(rec.objectid, 'addressline1')
-              AND nvl(t_eventlocationaddressline2,'X') =
-                  nvl(api.pkg_columnquery.VALUE(rec.objectid, 'addressline2'), 'X')
-              AND t_eventlocationcity =
-                  api.pkg_columnquery.VALUE(rec.objectid, 'CACity'))
+              IF (UPPER(t_eventlocationaddressline1) =
+                  UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'addressline1'))
+              AND UPPER(nvl(t_eventlocationaddressline2,'X')) =
+                  UPPER(nvl(api.pkg_columnquery.VALUE(rec.objectid, 'addressline2'), 'X'))
+              AND UPPER(t_eventlocationcity) =
+                  UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'CACity')))
               THEN
                   t_addressobjectid := rec.objectid;
                   EXIT WHEN t_addressobjectid IS NOT NULL;
