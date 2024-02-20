@@ -23,7 +23,162 @@ AS
     --                           BIZ-12331
     --   3.0    08/15/2023  TJL  BIZ-12351    Change how the process gets license transfers for an applications
     --   3.0    08/16/2023  TJL  BIZ-12424    Changed how how 02/22 applications for a license are selected
+    --   4.0    10/18/2023  TJL  BIZ-12887    Added new function to allow ABIS to send information to LSP
+    --                                          HTTPS endpoints. Function CALLLSP
+    --   4.1    10/31/2023  TJL  BIZ-12802    Added new function to allow ABIS to send files to LSP. Function
+    --                                          CALLLSP (different parameters)
+    --   4.1    12/07/2023  TJL  BIZ-12802    Removed old CALLLSP function
+    --   4.2    12/14/2023  TJL  BIZ-13929    Added logging to ESERVICES_LOT_T to calllsp function
+    --   5.0    02/06/2024  TJL  BIZ-14444    Change how Wallet path is created.
     -- ****************************************************************************
+
+    FUNCTION calllsp(a_url          IN VARCHAR2,
+                     a_method       IN VARCHAR2,
+                     a_content      IN CLOB,
+                     a_file         IN BLOB)
+        RETURN CLOB
+    IS
+        t_seq          NUMBER;
+        t_boundary     VARCHAR2(100)
+                           := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
+        t_request      UTL_HTTP.req;
+        t_response     UTL_HTTP.resp;
+        t_response_text CLOB;
+        t_blob_len     NUMBER;
+        t_chunk_size   NUMBER := 32767;
+        t_offset       NUMBER := 1;
+        t_chunk        RAW(32767);
+        t_content_type VARCHAR2(100)
+                           := 'multipart/form-data; boundary=' || t_boundary;
+        t_body_start   VARCHAR2(1000)
+            := '--'
+               || t_boundary
+               || UTL_TCP.crlf
+               || 'Content-Disposition: form-data; name="file"; filename="report.pdf"'
+               || UTL_TCP.crlf
+               || 'Content-Type: application/pdf'
+               || UTL_TCP.crlf
+               || UTL_TCP.crlf;
+        t_body_end     VARCHAR2(100)
+            := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
+        t_response_header_name VARCHAR2(256);
+        t_response_header_value VARCHAR2(1024);
+        t_response_body VARCHAR2(32767);
+        t_text         VARCHAR2(32767);
+        t_wallet       VARCHAR2(1000);
+    BEGIN
+        INSERT INTO eservices_log_t(request,
+                                    packet,
+                                    info,
+                                    filedata,
+                                    requestdate)
+             VALUES ('CALLLSP',
+                     a_content,
+                     'URL: ' || a_url || CHR(13) || 'Method: ' || a_method,
+                     a_file,
+                     SYSTIMESTAMP)
+          RETURNING seq
+               INTO t_seq;
+
+        t_wallet :=
+            CASE LOWER(ora_database_name)
+                WHEN 'abisp1'
+                THEN
+                    'file:/u01/app/oracle/admin/abisp1/walletSSL'
+                ELSE
+                    'file:/orabin1/admin/'
+                    || LOWER(ora_database_name)
+                    || '/walletSSL/'
+            END;
+
+        UTL_HTTP.set_wallet(t_wallet, NULL);
+
+        -- Open the HTTP request
+        t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
+
+        UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
+
+        IF (a_file IS NULL)
+        THEN
+            IF (a_content IS NOT NULL)
+            THEN
+                UTL_HTTP.set_header(t_request,
+                                    'content-type',
+                                    'application/json');
+                UTL_HTTP.set_header(t_request,
+                                    'Content-Length',
+                                    LENGTH(a_content));
+
+                UTL_HTTP.write_text(t_request, a_content);
+            END IF;
+        ELSE
+            -- Set the request headers
+            UTL_HTTP.set_header(t_request, 'Content-Type', t_content_type);
+            UTL_HTTP.set_header(
+                t_request,
+                'Content-Length',
+                TO_CHAR(
+                      DBMS_LOB.getlength(t_body_start)
+                    + DBMS_LOB.getlength(a_file)
+                    + DBMS_LOB.getlength(t_body_end)));
+
+            -- Write the start of the body to the request
+            UTL_HTTP.write_text(t_request, t_body_start);
+
+            -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
+            t_blob_len := DBMS_LOB.getlength(a_file);
+
+            -- Write the BLOB content to the request in chunks
+            WHILE t_offset <= t_blob_len
+            LOOP
+                DBMS_LOB.read(a_file,
+                              t_chunk_size,
+                              t_offset,
+                              t_chunk);
+                UTL_HTTP.write_raw(t_request, t_chunk);
+                t_offset := t_offset + t_chunk_size;
+            END LOOP;
+
+            -- Write the end of the body to the request
+            UTL_HTTP.write_text(t_request, t_body_end);
+        END IF;
+
+        -- Get the response
+        t_response := UTL_HTTP.get_response(t_request);
+
+        IF (t_response.status_code NOT IN (200, 201, 204))
+        THEN
+            DBMS_LOB.createtemporary(t_response_text, TRUE, DBMS_LOB.session);
+
+            BEGIN
+                LOOP
+                    UTL_HTTP.read_text(t_response, t_text, 32766);
+                    DBMS_LOB.writeappend(t_response_text,
+                                         LENGTH(t_text),
+                                         t_text);
+                END LOOP;
+            EXCEPTION
+                WHEN UTL_HTTP.end_of_body
+                THEN
+                    UTL_HTTP.end_response(t_response);
+            END;
+        END IF;
+
+        -- Close the HTTP request/response
+        UTL_HTTP.end_response(t_response);
+        UTL_HTTP.end_request(t_request);
+
+        UPDATE eservices_log_t
+           SET response = json_object('LSPRESPONSE' VALUE t_response_text),
+               responsedate = SYSTIMESTAMP
+         WHERE seq = t_seq
+           LOG ERRORS INTO bizmod_api.err$_eservices_log_t
+                   ('UPDATE')
+                   REJECT LIMIT UNLIMITED;
+
+        RETURN t_response_text;
+    END;
+
 
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
@@ -606,3 +761,5 @@ END;
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;

@@ -37,15 +37,14 @@ namespace ABCRQSUtils
 			get { return (FTPSettings)this["FTPSettings"]; }
 		}
 
-		static public AppConfigurationSettings getConfigurationSection(string configFile = null)
+		static public AppConfigurationSettings getConfigurationSection(string configFile = "app.config")
 		{
 			Configuration				config;
 			AppConfigurationSettings	settings;
 			ExeConfigurationFileMap		configMap		= new ExeConfigurationFileMap();
 
-			if (configFile == null) configFile = Environment.GetEnvironmentVariable("TNSNAME", EnvironmentVariableTarget.Process);
-
-			configFile = (configFile == null)? ConfigurationManager.AppSettings["configuration"]: (configFile + ".config");
+                    
+            if (configFile == null) configFile = ConfigurationManager.AppSettings["configuration"];
 
 			if (configFile == null)
 			{

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Security.Permissions;
 using System.Net;
-//using ABCRQSUtils;
 using System.Diagnostics;
 using Oracle.DataAccess.Client;
 using Oracle.DataAccess.Types;
@@ -23,11 +22,10 @@ namespace ABCUploadService
         [PermissionSet(SecurityAction.Demand, Name = "FullTrust")]
         public Upload()
         {
-            string              path    = MapPath("~/Upload", null);
             FileSystemWatcher   watcher = new FileSystemWatcher();
 
             // get configuration information
-            watcher.Path = path;
+            watcher.Path = System.Configuration.ConfigurationManager.AppSettings["path"]; // path;
 
             /* Watch for changes in LastAccess and LastWrite times, and
                the renaming of files or directories. */
@@ -43,38 +41,12 @@ namespace ABCUploadService
             // Begin watching.
             watcher.EnableRaisingEvents = true;
 
-            m_event.WriteEntry(path + "\n" + watcher.Filter, EventLogEntryType.Information, 0);
-            Console.WriteLine(path);
+            m_event.WriteEntry(watcher.Path + "\n" + watcher.Filter, EventLogEntryType.Information, 0);
+            Console.WriteLine(watcher.Path);
             Console.WriteLine(watcher.Filter);
 
+            UploadCSV.StartUp(watcher.Path, watcher.Filter);
         }
-
-        public static string MapPath(string location, string fileName)
-        {
-            string file = null;
-
-            // remove any path information from the file name
-            if (location == null) location = System.IO.Path.GetDirectoryName(fileName);
-
-            // check if consol or web application
-            if (System.Web.Hosting.HostingEnvironment.MapPath("~/") == null)
-            {
-                location = location.Replace("~", "");
-                if (location[0] == '/' || location[0] == '\\') location = location.Substring(1);
-                file = AppDomain.CurrentDomain.BaseDirectory + location;
-            }
-            else
-            {
-                // remove any path information from the file name
-                file = System.Web.Hosting.HostingEnvironment.MapPath(location);
-            }
-
-            file += System.IO.Path.GetFileName(fileName);
-
-            return file;
-        }
-
-    
     }
 }
 

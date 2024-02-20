@@ -18,13 +18,6 @@ namespace ABCUploadService
     {
         static void Main(string[] args)
         {
-            string path = AppDomain.CurrentDomain.BaseDirectory + @"Upload\";
-            //string path = ABCRQSUtils.Util.MapPath(@"~\Upload\", null);
-
-
-            // check if Transfer directory exists
-            if (!System.IO.Directory.Exists(path)) System.IO.Directory.CreateDirectory(path);
-
             if (System.Environment.UserInteractive)
             {
                 // check to make sure argument(s) passed

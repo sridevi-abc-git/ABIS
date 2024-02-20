@@ -39,8 +39,6 @@ namespace RQSService
 					    switch (args[0].ToLower())
 					    {
 						    case "-i":
-							    if (args.Length > 1)
-							    {
 								    ManagedInstallerClass.InstallHelper(new string[] { Assembly.GetExecutingAssembly().Location });
 
 								    string		log    = ConfigurationManager.AppSettings["log"];
@@ -50,38 +48,24 @@ namespace RQSService
 								    {
 									    System.Diagnostics.EventLog.CreateEventSource(source, log);
 								    }
-							    }
-							    else
-							    {
-								    Console.WriteLine("\nPlease enter the data source (TNSNAMES) name for this service");
-								    Console.Read();
-							    }
 							    break;
 
 						    case "-u":
-							    if (args.Length > 1)
-							    {
 								    ManagedInstallerClass.InstallHelper(new string[] { "/u", Assembly.GetExecutingAssembly().Location });
-							    }
-							    else
-							    {
-								    Console.WriteLine("\nPlease enter the data source (TNSNAMES) name for this service");
-								    Console.Read();
-							    }
 							    break;
 
 						    case "-r":
 						    default:
 							    ABCRQSUtils.AppConfigurationSettings	cnfg;
 
-							    Environment.SetEnvironmentVariable("TNSNAME", args[1], EnvironmentVariableTarget.Process);
+                                //Environment.SetEnvironmentVariable("TNSNAME", args[1], EnvironmentVariableTarget.Process);
 							    cnfg = ABCRQSUtils.AppConfigurationSettings.getConfigurationSection();
 
 							    if (cnfg != null)
 							    {
 								    if (cnfg.AppSettings["connection"] != null)
 								    {
-									    m_listener = new ABCSockets.AsyncSocketListener(args[1], GetEventLog(), (ConfigurationManager.AppSettings["trace"] == "Y"));
+									    m_listener = new ABCSockets.AsyncSocketListener(GetEventLog(), (ConfigurationManager.AppSettings["trace"] == "Y"));
 									    m_listener.start(null, null);
 								    }
 								    else
@@ -95,7 +79,7 @@ namespace RQSService
 							    }
 							    else
 							    {
-								    Console.WriteLine("Configuration file(" + args[1] + ") not loaded ");
+								    Console.WriteLine("Configuration file not loaded ");
 
 								    Console.WriteLine("\nPress ENTER to continue...");
 								    Console.Read();
@@ -107,7 +91,7 @@ namespace RQSService
 
                     catch (Exception ex)
                     {
-                        Console.WriteLine("Configuration file(" + args[1] + ") failed to load ");
+                        Console.WriteLine("Configuration file failed to load ");
                         Console.WriteLine(ex.Message);
                         Console.WriteLine(ex.StackTrace);
 

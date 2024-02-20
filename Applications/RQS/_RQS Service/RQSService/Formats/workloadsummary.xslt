@@ -6,9 +6,9 @@
 
 	Description:	Layout form for Workload Summary Report.
 
-    $Rev: 430 $  
-    $Date: 2020-04-28 07:26:12 -0700 (Tue, 28 Apr 2020) $
-    Last Changed By:  $Author: TLord $
+    $Rev: 197 $  
+    $Date: 2019-01-10 15:02:15 -0800 (Thu, 10 Jan 2019) $
+    Last Changed By:  $Author: tlord $
 
 *****************************************************************************
 
@@ -35,15 +35,15 @@
 
           @media screen
           {
-          body			    { background-color: #E0E0E0; }
-          .padding      { padding-bottom:  5em; }
+            body			    { background-color: #E0E0E0; }
+            .padding      { padding-bottom:  5em; }
           }
-
+          
           @mdeia print
           {
-          body			     { color: #FF0000; }
+            body			     { color: #FF0000; }
           }
-
+          
           th              { border: 1px solid #b0b0b0; text-align: center; }
           td              { border: 1px solid #b0b0b0; padding-right: 5px; padding-left: 5px; }
           h1, h2          { font-size: 1.3em; }
@@ -128,10 +128,10 @@
 
           @media screen
           {
-          #section-1 th,
-          #section-2 th         { border-bottom: 1px solid #b0b0b0; }
-          #section-1 td,
-          #section-2 td         { border-bottom: 1px solid #b0b0b0; }
+            #section-1 th,
+            #section-2 th         { border-bottom: 1px solid #b0b0b0; }
+            #section-1 td,
+            #section-2 td         { border-bottom: 1px solid #b0b0b0; }
           }
 
         </style>
@@ -205,21 +205,11 @@
       <!--   Headings for section report   -->
       <thead>
         <tr>
-          <th>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </th>
-          <th>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </th>
-          <th>
-            Actual Figures<br/><xsl:value-of select="SECTION_1_1/@DATES"/><br/><xsl:value-of select="SECTION_1_1/@MONTHS"/> MONTH
-          </th>
-          <th>
-            Actual Figures<br/><xsl:value-of select="SECTION_1_2/@DATES"/><br/><xsl:value-of select="SECTION_1_2/@MONTHS"/> MONTH
-          </th>
-          <th>
-            Actual Figures<br/><xsl:value-of select="SECTION_1_3/@DATES"/><br/><xsl:value-of select="SECTION_1_3/@MONTHS"/> MONTH
-          </th>
+          <th><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</th>
+          <th><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</th>
+          <th>Actual Figures<br/><xsl:value-of select="SECTION_1_1/@DATES"/><br/><xsl:value-of select="SECTION_1_1/@MONTHS"/> MONTH</th>
+          <th>Actual Figures<br/><xsl:value-of select="SECTION_1_2/@DATES"/><br/><xsl:value-of select="SECTION_1_2/@MONTHS"/> MONTH</th>
+          <th>Actual Figures<br/><xsl:value-of select="SECTION_1_3/@DATES"/><br/><xsl:value-of select="SECTION_1_3/@MONTHS"/> MONTH</th>
         </tr>
       </thead>
 
@@ -229,411 +219,208 @@
           <td colspan="4" class="td-lic">LICENSING</td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="width: 3.3in; text-align:left;">Permanent License Applications Received</td>
-          <td style="width: 1.4in">
-            <xsl:value-of select="SECTION_1_1/APPLICATIONSRECEIVED"/>
-          </td>
-          <td style="width: 1.4in">
-            <xsl:value-of select="SECTION_1_2/APPLICATIONSRECEIVED"/>
-          </td>
-          <td style="width: 1.4in">
-            <xsl:value-of select="SECTION_1_3/APPLICATIONSRECEIVED"/>
-          </td>
+          <td style="width: 1.4in"><xsl:value-of select="SECTION_1_1/APPLICATIONSRECEIVED"/></td>
+          <td style="width: 1.4in"><xsl:value-of select="SECTION_1_2/APPLICATIONSRECEIVED"/></td>
+          <td style="width: 1.4in"><xsl:value-of select="SECTION_1_3/APPLICATIONSRECEIVED"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Priority License Applications Received</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/PDAPPLICATIONSRECEIVED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/PDAPPLICATIONSRECEIVED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/PDAPPLICATIONSRECEIVED"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/PDAPPLICATIONSRECEIVED"/></td>
+          <td><xsl:value-of select="SECTION_1_2/PDAPPLICATIONSRECEIVED"/></td>
+          <td><xsl:value-of select="SECTION_1_3/PDAPPLICATIONSRECEIVED"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Applications Protested</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/APPLICATIONSPROTESTED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/APPLICATIONSPROTESTED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/APPLICATIONSPROTESTED"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/APPLICATIONSPROTESTED"/></td>
+          <td><xsl:value-of select="SECTION_1_2/APPLICATIONSPROTESTED"/></td>
+          <td><xsl:value-of select="SECTION_1_3/APPLICATIONSPROTESTED"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Number of Protests Letters Received</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/PROTESTSREC"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/PROTESTSREC"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/PROTESTSREC"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/PROTESTSREC"/></td>
+          <td><xsl:value-of select="SECTION_1_2/PROTESTSREC"/></td>
+          <td><xsl:value-of select="SECTION_1_3/PROTESTSREC"/></td>
         </tr>
         <tr>
           <td style="text-align: right; padding-right:.0em;">*</td>
           <td style="text-align:left">Applications Registered (Protest/Petition)</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/PROPETTOTAL"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/PROPETTOTAL"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/PROPETTOTAL"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/PROPETTOTAL"/></td>
+          <td><xsl:value-of select="SECTION_1_2/PROPETTOTAL"/></td>
+          <td><xsl:value-of select="SECTION_1_3/PROPETTOTAL"/></td>
         </tr>
         <tr>
-          <td style="text-align: right; padding-right:.0em;">*</td>
-          <td style="text-align:left;">Number of Enforcement Hearings Held</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/PROCESSHEARING"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/PROCESSHEARING"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/PROCESSHEARING"/>
-          </td>
-        </tr>
-        <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Applications Withdrawn</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/WITHDRAWN"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/WITHDRAWN"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/WITHDRAWN"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/WITHDRAWN"/></td>
+          <td><xsl:value-of select="SECTION_1_2/WITHDRAWN"/></td>
+          <td><xsl:value-of select="SECTION_1_3/WITHDRAWN"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Applications Recommended for Denial</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/APPRECOMMENDDENIAL"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/APPRECOMMENDDENIAL"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/APPRECOMMENDDENIAL"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/APPRECOMMENDDENIAL"/></td>
+          <td><xsl:value-of select="SECTION_1_2/APPRECOMMENDDENIAL"/></td>
+          <td><xsl:value-of select="SECTION_1_3/APPRECOMMENDDENIAL"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Applications Recommended for Approval</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/APPRECOMMENDAPPROVAL"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/APPRECOMMENDAPPROVAL"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/APPRECOMMENDAPPROVAL"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/APPRECOMMENDAPPROVAL"/></td>
+          <td><xsl:value-of select="SECTION_1_2/APPRECOMMENDAPPROVAL"/></td>
+          <td><xsl:value-of select="SECTION_1_3/APPRECOMMENDAPPROVAL"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Permanent Licenses Issued</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/PERMANENTLICISSUED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/PERMANENTLICISSUED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/PERMANENTLICISSUED"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/PERMANENTLICISSUED"/></td>
+          <td><xsl:value-of select="SECTION_1_2/PERMANENTLICISSUED"/></td>
+          <td><xsl:value-of select="SECTION_1_3/PERMANENTLICISSUED"/></td>
         </tr>
+        <!--<tr>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
+          <td style="text-align:left">Number of License Hearings Held</td>
+          <td><xsl:value-of select="SECTION_1_1/LICENSEHEARINGS"/></td>
+          <td><xsl:value-of select="SECTION_1_2/LICENSEHEARINGS"/></td>
+          <td><xsl:value-of select="SECTION_1_3/LICENSEHEARINGS"/></td>
+        </tr>-->
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Special Daily and Catering Authorizations</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/DAILYLICENSES"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/DAILYLICENSES"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/DAILYLICENSES"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/DAILYLICENSES"/></td>
+          <td><xsl:value-of select="SECTION_1_2/DAILYLICENSES"/></td>
+          <td><xsl:value-of select="SECTION_1_3/DAILYLICENSES"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Active Permanent Licenses as of Report End Date</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/ACTIVELICENSES"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/ACTIVELICENSES"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/ACTIVELICENSES"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/ACTIVELICENSES"/></td>
+          <td><xsl:value-of select="SECTION_1_2/ACTIVELICENSES"/></td>
+          <td><xsl:value-of select="SECTION_1_3/ACTIVELICENSES"/></td>
         </tr>
         <tr>
-          <td colspan="5" style="height:1em; border: none;">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td colspan="5" style="height:1em; border: none;"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
         </tr>
         <tr style="font-weight: bold;">
           <td class="td-enf" style="">II.</td>
           <td colspan="4" class="td-enf">ENFORCEMENT</td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left">Total Number of Investigations (ABC-61) Completed</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/COMPLAINTINVESTIGATIONS + SECTION_1_1/ADMININVESTIGATIONS + SECTION_1_1/TRACEINVESTIGATIONS + SECTION_1_1/POLICEREPORTINV"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/COMPLAINTINVESTIGATIONS + SECTION_1_2/ADMININVESTIGATIONS + SECTION_1_2/TRACEINVESTIGATIONS + SECTION_1_2/POLICEREPORTINV"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/COMPLAINTINVESTIGATIONS + SECTION_1_3/ADMININVESTIGATIONS + SECTION_1_3/TRACEINVESTIGATIONS + SECTION_1_3/POLICEREPORTINV"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/COMPLAINTINVESTIGATIONS + SECTION_1_1/ADMININVESTIGATIONS + SECTION_1_1/TRACEINVESTIGATIONS + SECTION_1_1/POLICEREPORTINV"/></td>
+          <td><xsl:value-of select="SECTION_1_2/COMPLAINTINVESTIGATIONS + SECTION_1_2/ADMININVESTIGATIONS + SECTION_1_2/TRACEINVESTIGATIONS + SECTION_1_2/POLICEREPORTINV"/></td>
+          <td><xsl:value-of select="SECTION_1_3/COMPLAINTINVESTIGATIONS + SECTION_1_3/ADMININVESTIGATIONS + SECTION_1_3/TRACEINVESTIGATIONS + SECTION_1_3/POLICEREPORTINV"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Complaint Investigation Assignments Completed</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/COMPLAINTINVESTIGATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/COMPLAINTINVESTIGATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/COMPLAINTINVESTIGATIONS"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/COMPLAINTINVESTIGATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_2/COMPLAINTINVESTIGATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_3/COMPLAINTINVESTIGATIONS"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Administrative Assignments Completed</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/ADMININVESTIGATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/ADMININVESTIGATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/ADMININVESTIGATIONS"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/ADMININVESTIGATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_2/ADMININVESTIGATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_3/ADMININVESTIGATIONS"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">TRACE Assignments Completed</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/TRACEINVESTIGATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/TRACEINVESTIGATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/TRACEINVESTIGATIONS"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/TRACEINVESTIGATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_2/TRACEINVESTIGATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_3/TRACEINVESTIGATIONS"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Police Reports Assigned for Investigation (ABC-61)</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/POLICEREPORTINV"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/POLICEREPORTINV"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/POLICEREPORTINV"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/POLICEREPORTINV"/></td>
+          <td><xsl:value-of select="SECTION_1_2/POLICEREPORTINV"/></td>
+          <td><xsl:value-of select="SECTION_1_3/POLICEREPORTINV"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left;">Accusations Registered </td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/ACCUSATIONSREG"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/ACCUSATIONSREG"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/ACCUSATIONSREG"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/ACCUSATIONSREG"/></td>
+          <td><xsl:value-of select="SECTION_1_2/ACCUSATIONSREG"/></td>
+          <td><xsl:value-of select="SECTION_1_3/ACCUSATIONSREG"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td colspan="4" style="text-align: left">Violation Counts Filed by Source </td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Total Violation Counts Filed</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/ABCVIOLATIONS + SECTION_1_1/BACKTRACKVIOLATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/ABCVIOLATIONS + SECTION_1_2/BACKTRACKVIOLATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/ABCVIOLATIONS + SECTION_1_3/BACKTRACKVIOLATIONS"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/ABCVIOLATIONS + SECTION_1_1/BACKTRACKVIOLATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_2/ABCVIOLATIONS + SECTION_1_2/BACKTRACKVIOLATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_3/ABCVIOLATIONS + SECTION_1_3/BACKTRACKVIOLATIONS"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Violation Counts from ABC Investigations</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/ABCVIOLATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/ABCVIOLATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/ABCVIOLATIONS"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/ABCVIOLATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_2/ABCVIOLATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_3/ABCVIOLATIONS"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Violation Counts from Backtrack Investigations</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/BACKTRACKVIOLATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/BACKTRACKVIOLATIONS"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/BACKTRACKVIOLATIONS"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/BACKTRACKVIOLATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_2/BACKTRACKVIOLATIONS"/></td>
+          <td><xsl:value-of select="SECTION_1_3/BACKTRACKVIOLATIONS"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td colspan="4" style="text-align: left">Disposition of Accusations </td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Stipulation and Waiver</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/SWRECEIVED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/SWRECEIVED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/SWRECEIVED"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/SWRECEIVED"/></td>
+          <td><xsl:value-of select="SECTION_1_2/SWRECEIVED"/></td>
+          <td><xsl:value-of select="SECTION_1_3/SWRECEIVED"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
+          <td style="text-align:left; text-indent: 2.5em;">* Number of Enforcement Hearings Held</td>
+          <td><xsl:value-of select="SECTION_1_1/PROCESSHEARING"/></td>
+          <td><xsl:value-of select="SECTION_1_2/PROCESSHEARING"/></td>
+          <td><xsl:value-of select="SECTION_1_3/PROCESSHEARING"/></td>
+        </tr>
+        <tr>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Dismissed Accusations</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/DISMISSED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/DISMISSED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/DISMISSED"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/DISMISSED"/></td>
+          <td><xsl:value-of select="SECTION_1_2/DISMISSED"/></td>
+          <td><xsl:value-of select="SECTION_1_3/DISMISSED"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 2.5em;">* Number of Licensing Hearings Held</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/PROCESSHEARINGHELD"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/PROCESSHEARINGHELD"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/PROCESSHEARINGHELD"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/PROCESSHEARINGHELD"/></td>
+          <td><xsl:value-of select="SECTION_1_2/PROCESSHEARINGHELD"/></td>
+          <td><xsl:value-of select="SECTION_1_3/PROCESSHEARINGHELD"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Penalties Imposed as a Result of a Hearing</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/PENALTIES"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/PENALTIES"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/PENALTIES"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/PENALTIES"/></td>
+          <td><xsl:value-of select="SECTION_1_2/PENALTIES"/></td>
+          <td><xsl:value-of select="SECTION_1_3/PENALTIES"/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Accusations Sustained After Hearing</td>
-          <td>
-            <xsl:value-of select="SECTION_1_1/ACCSUSTAINED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_2/ACCSUSTAINED"/>
-          </td>
-          <td>
-            <xsl:value-of select="SECTION_1_3/ACCSUSTAINED"/>
-          </td>
+          <td><xsl:value-of select="SECTION_1_1/ACCSUSTAINED"/></td>
+          <td><xsl:value-of select="SECTION_1_2/ACCSUSTAINED"/></td>
+          <td><xsl:value-of select="SECTION_1_3/ACCSUSTAINED"/></td>
         </tr>
         <tr>
           <td colspan="5" style="height:1em;; border: none">
@@ -643,8 +430,8 @@
       </tbody>
     </table>
   </xsl:template>
-
-
+  
+  
   <!-- ********************************************************************************** -->
   <!--   REVENUE MISCELLANEOUS STATUS                                                     -->
   <!-- ********************************************************************************** -->
@@ -657,101 +444,59 @@
           <td colspan="2" class="td-rev">REVENUE</td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="width: 6.0in; text-align:left;">Renewals</td>
-          <td style="width: 2.5in">
-            <xsl:value-of select='format-number(RENEWALSANNUALS, "$###,##0")'/>
-          </td>
+          <td style="width: 2.5in"><xsl:value-of select='format-number(RENEWALSANNUALS, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left;">Original Fees</td>
-          <td>
-            <xsl:value-of select='format-number(ORIGINALFEES, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(ORIGINALFEES, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left;">Transfers</td>
-          <td>
-            <xsl:value-of select='format-number(TRANSFER, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(TRANSFER, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left;">Daily Licenses</td>
-          <td>
-            <xsl:value-of select='format-number(DAILYLICENSES, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(DAILYLICENSES, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left;">Catering Permits</td>
-          <td>
-            <xsl:value-of select='format-number(CATEVENTPERMITS, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(CATEVENTPERMITS, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Caterer's Authorization</td>
-          <td>
-            <xsl:value-of select='format-number(CATEVENTAUTH, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(CATEVENTAUTH, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left;">Other</td>
-          <td>
-            <xsl:value-of select='format-number(OTHER, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(OTHER, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td>Total Licensing Revenue</td>
-          <td>
-            <xsl:value-of select='format-number(TOTAL, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(TOTAL, "$###,##0")'/></td>
         </tr>
-
+        
         <tr>
-          <td style="width:  .2in">
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td style="width:  .2in"><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td colspan="2" style="text-align: left;">Offers in Compromise Accepted:</td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Amount</td>
-          <td>
-            <xsl:value-of select='format-number(POICACCEPTED, "$###,##0")'/>
-          </td>
+          <td><xsl:value-of select='format-number(POICACCEPTED, "$###,##0")'/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align:left; text-indent: 3em;">Number</td>
-          <td>
-            <xsl:value-of select='POICCOUNT'/>
-          </td>
+          <td><xsl:value-of select='POICCOUNT'/></td>
         </tr>
         <tr>
           <td colspan="3" style="height:1em;; border: none">
@@ -763,78 +508,52 @@
           <td colspan="2" class="td-dec" style="text-align: left;">DECISIONS</td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align: left">Proposed Decisions Adopted</td>
-          <td>
-            <xsl:value-of select='PRODECADOPT'/>
-          </td>
+          <td><xsl:value-of select='PRODECADOPT'/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align: left">Proposed Decisions Rejected Under Section 11517(c)</td>
-          <td>
-            <xsl:value-of select='PRODECREJECT'/>
-          </td>
+          <td><xsl:value-of select='PRODECREJECT'/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align: left;">Suspensions</td>
-          <td>
-            <xsl:value-of select='SUSPENSIONS'/>
-          </td>
+          <td><xsl:value-of select='SUSPENSIONS'/></td>
         </tr>
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align: left">Revocations Including Those Stayed</td>
-          <td>
-            <xsl:value-of select='REVOCATIONS'/>
-          </td>
+          <td><xsl:value-of select='REVOCATIONS'/></td>
         </tr>
 
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align: left; padding-top: 1.5em;">APPEALS FILED TO APPEALS BOARD</td>
-          <td>
-            <xsl:value-of select='APPEALSFILED'/>
-          </td>
+          <td><xsl:value-of select='APPEALSFILED'/></td>
         </tr>
 
         <tr>
           <td style="text-align: right; padding-top:1.5em;padding-right:.0em;">*</td>
           <td style="text-align: left; padding-top:1.5em;">COURT ACTIONS FILED/PENDING</td>
-          <td>
-            <xsl:value-of select='ACTIONSFILEDPENDING'/>
-          </td>
+          <td><xsl:value-of select='ACTIONSFILEDPENDING'/></td>
         </tr>
 
         <tr>
-          <td>
-            <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
-          </td>
+          <td><xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;</td>
           <td style="text-align: left; padding-top:1.5em;">Stip and Waiver Received after ATTY Assignment</td>
-          <td>
-            <xsl:value-of select='SWATTY'/>
-          </td>
+          <td><xsl:value-of select='SWATTY'/></td>
         </tr>
         <tr>
           <td colspan="3" style="text-align:left;padding-top:2em;border: none; ">
-            * Due to the automation of this category, data prior to August 01, 2018 will not be reflected in this total.
+              * Due to the automation of this category, data prior to August 01, 2018 will not be reflected in this total.
           </td>
         </tr>
       </tbody>
     </table>
   </xsl:template>
-
+  
 
   <!-- ********************************************************************************** -->
   <!--   Template layout Application and Licensing Investigations Report Layout Part 1    -->
@@ -880,12 +599,10 @@
       </tr>
     </thead>
   </xsl:template>
-
+  
   <xsl:template match="SECTION_3">
     <p>
-      <h3>
-        <xsl:value-of select="@HEADING"/>
-      </h3>
+      <h3><xsl:value-of select="@HEADING"/></h3>
     </p>
     <table id="section-3" style="border-collapse: collapse;">
       <!--   Section details called for each division group   -->
@@ -896,42 +613,24 @@
       <!--   Section totals   -->
       <tr>
         <td>STATEWIDE TOTALS</td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/RECEIVED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/RECEIVED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/COMPLETED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/APPROVED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/DENIED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/WITHDRAWN)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/VOIDED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/NOCRDWDRN)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/ORIGINAL/PENDEND)"/>
-        </td>
+        <td><xsl:value-of select="sum(OFFICE/RECEIVED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/RECEIVED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/COMPLETED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/APPROVED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/DENIED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/WITHDRAWN)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/VOIDED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/NOCRDWDRN)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/ORIGINAL/PENDEND)"/></td>
       </tr>
     </table>
-
+    
     <p class='padding' style="page-break-before: always">
       <h3>
         <xsl:value-of select="@HEADING"/>
       </h3>
     </p>
-
+    
     <!--PER TO PER Heading Section-->
     <table id="section-3" style="border-collapse: collapse;">
       <!--   Section details called for each division group   -->
@@ -942,69 +641,48 @@
       <!--   Section totals   -->
       <tr>
         <td>STATEWIDE TOTALS</td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/RECEIVED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/COMPLETED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/APPROVED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/DENIED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/WITHDRAWN)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/VOIDED)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/NOCRDWDRN)"/>
-        </td>
-        <td>
-          <xsl:value-of select="sum(OFFICE/PERTOPER/PENDEND)"/>
-        </td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/RECEIVED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/COMPLETED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/APPROVED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/DENIED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/WITHDRAWN)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/VOIDED)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/NOCRDWDRN)"/></td>
+        <td><xsl:value-of select="sum(OFFICE/PERTOPER/PENDEND)"/></td>
       </tr>
     </table>
-
+    
   </xsl:template>
 
   <!--   Section 3 part 1 details   -->
   <xsl:template match="SECTION_3/OFFICE">
     <xsl:param name="PART"></xsl:param>
     <xsl:variable name="currentGroup" select="."/>
-
+    
     <xsl:for-each select="key('groups', @DIVISION)">
       <xsl:sort select="@OFFICENAME"/>
 
       <xsl:if test="position() = 1">
         <xsl:variable name="CLASS">
-
-          <xsl:choose>
-            <xsl:when test="substring(@DIVISION, 1, 1) = 'N'">
-              <xsl:text>th-nd</xsl:text>
-            </xsl:when>
-            <xsl:when test="substring(@DIVISION, 1, 1) = 'S'">
-              <xsl:text>th-sd</xsl:text>
-            </xsl:when>
-            <xsl:otherwise>
-              <xsl:text>th-none</xsl:text>
-            </xsl:otherwise>
-          </xsl:choose>
+          
+        <xsl:choose>
+          <xsl:when test="substring(@DIVISION, 1, 1) = 'N'">
+            <xsl:text>th-nd</xsl:text>
+           </xsl:when>
+          <xsl:when test="substring(@DIVISION, 1, 1) = 'S'">
+            <xsl:text>th-sd</xsl:text>
+          </xsl:when>
+          <xsl:otherwise>
+            <xsl:text>th-none</xsl:text>
+          </xsl:otherwise>
+        </xsl:choose>
         </xsl:variable>
         <xsl:call-template name="SECTION_3_HD">
           <xsl:with-param name="CLASS" select="$CLASS"></xsl:with-param>
           <xsl:with-param name="PART" select="$PART"></xsl:with-param>
         </xsl:call-template>
       </xsl:if>
-      
- 
-        <xsl:choose>
-          <xsl:when test="$PART='1'">
-            <xsl:if test ="RECEIVED + ORIGINAL/RECEIVED + ORIGINAL/COMPLETED + ORIGINAL/APPROVED + ORIGINAL/DENIED + ORIGINAL/WITHDRAWN + ORIGINAL/VOIDED + ORIGINAL/NOCRDWDRN + ORIGINAL/PENDEND != 0">
-     <tr>
+      <tr>
         <td style="text-align: left; width: 1.5in;">
           <xsl:attribute name="class">
             <xsl:choose>
@@ -1021,163 +699,71 @@
           </xsl:attribute>
           <xsl:value-of select='@OFFICENAME'/>
         </td>
-            <td>
-              <xsl:value-of select='RECEIVED'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/RECEIVED'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/COMPLETED'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/APPROVED'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/DENIED'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/WITHDRAWN'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/VOIDED'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/NOCRDWDRN'/>
-            </td>
-            <td>
-              <xsl:value-of select='ORIGINAL/PENDEND'/>
-            </td>
-          </tr>
-              </xsl:if>
+
+        <xsl:choose>
+          <xsl:when test="$PART='1'">
+            <td><xsl:value-of select='RECEIVED'/></td>
+            <td><xsl:value-of select='ORIGINAL/RECEIVED'/></td>
+            <td><xsl:value-of select='ORIGINAL/COMPLETED'/></td>
+            <td><xsl:value-of select='ORIGINAL/APPROVED'/></td>
+            <td><xsl:value-of select='ORIGINAL/DENIED'/></td>
+            <td><xsl:value-of select='ORIGINAL/WITHDRAWN'/></td>
+            <td><xsl:value-of select='ORIGINAL/VOIDED'/></td>
+            <td><xsl:value-of select='ORIGINAL/NOCRDWDRN'/></td>
+            <td><xsl:value-of select='ORIGINAL/PENDEND'/></td>
           </xsl:when>
 
           <xsl:when test="$PART='2'">
-            <xsl:if test="PERTOPER/RECEIVED + PERTOPER/COMPLETED + PERTOPER/APPROVED + PERTOPER/DENIED + PERTOPER/WITHDRAWN + PERTOPER/VOIDED + PERTOPER/NOCRDWDRN + PERTOPER/PENDEND != 0">
-            <tr>
-
-              <td style="text-align: left; width: 1.5in;">
-                <xsl:attribute name="class">
-                  <xsl:choose>
-                    <xsl:when test="substring(@DIVISION, 1, 1) = 'N'">
-                      <xsl:text>td-nd</xsl:text>
-                    </xsl:when>
-                    <xsl:when test="substring(@DIVISION, 1, 1) = 'S'">
-                      <xsl:text>td-sd</xsl:text>
-                    </xsl:when>
-                    <xsl:otherwise>
-                      <xsl:text>td-none</xsl:text>
-                    </xsl:otherwise>
-                  </xsl:choose>
-                </xsl:attribute>
-                <xsl:value-of select='@OFFICENAME'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/RECEIVED'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/COMPLETED'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/APPROVED'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/DENIED'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/WITHDRAWN'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/VOIDED'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/NOCRDWDRN'/>
-              </td>
-              <td>
-                <xsl:value-of select='PERTOPER/PENDEND'/>
-              </td>
-            </tr>
-            </xsl:if>
+            <td><xsl:value-of select='PERTOPER/RECEIVED'/></td>
+            <td><xsl:value-of select='PERTOPER/COMPLETED'/></td>
+            <td><xsl:value-of select='PERTOPER/APPROVED'/></td>
+            <td><xsl:value-of select='PERTOPER/DENIED'/></td>
+            <td><xsl:value-of select='PERTOPER/WITHDRAWN'/></td>
+            <td><xsl:value-of select='PERTOPER/VOIDED'/></td>
+            <td><xsl:value-of select='PERTOPER/NOCRDWDRN'/></td>
+            <td><xsl:value-of select='PERTOPER/PENDEND'/></td>
           </xsl:when>
         </xsl:choose>
-   
+      </tr>
     </xsl:for-each>
 
     <!--   Group totals   -->
     <xsl:choose>
       <xsl:when test="$PART='1'">
         <tr>
-          <td>
-            <xsl:value-of select="@DIVISION"/> TOTALS
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/RECEIVED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/RECEIVED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/COMPLETED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/APPROVED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/DENIED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/WITHDRAWN)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/VOIDED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/NOCRDWDRN)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/PENDEND)"/>
-          </td>
+          <td><xsl:value-of select="@DIVISION"/> TOTALS</td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/RECEIVED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/RECEIVED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/COMPLETED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/APPROVED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/DENIED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/WITHDRAWN)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/VOIDED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/NOCRDWDRN)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/ORIGINAL/PENDEND)"/></td>
         </tr>
         <tr>
-          <td colspan="10" style="border:none;">
+          <td colspan="10" style="border:none;">  
             <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
           </td>
         </tr>
       </xsl:when>
 
       <xsl:when test="$PART='2'">
-        <tr>
-          <td>
-            <xsl:value-of select="@DIVISION"/> TOTALS
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/RECEIVED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/COMPLETED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/APPROVED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/DENIED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/WITHDRAWN)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/VOIDED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/NOCRDWDRN)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/PENDEND)"/>
-          </td>
+        <tr>    
+          <td><xsl:value-of select="@DIVISION"/> TOTALS</td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/RECEIVED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/COMPLETED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/APPROVED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/DENIED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/WITHDRAWN)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/VOIDED)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/NOCRDWDRN)"/></td>
+          <td><xsl:value-of select="sum(key('groups', @DIVISION)/PERTOPER/PENDEND)"/></td>
         </tr>
         <!--  Add row space between groups  -->
         <tr>
-          <td colspan="9" style="border:none;">
+          <td colspan="9" style="border:none;">  
             <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
           </td>
         </tr>
@@ -1216,7 +802,7 @@
       </tr>
     </thead>
   </xsl:template>
-
+  
   <xsl:template match="SECTION_4">
     <p>
       <h3>
@@ -1280,7 +866,6 @@
           <xsl:with-param name="CLASS" select="$CLASS"></xsl:with-param>
         </xsl:call-template>
       </xsl:if>
-      <xsl:if test="../PRIORITYRECD + ../PROAPPS + ../REGPRO + ../REGPET + ../TOTALPETPRO != 0">
       <tr>
         <td style="text-align: left; width: 1.5in;">
           <xsl:attribute name="class">
@@ -1321,7 +906,6 @@
           <xsl:value-of select='../TOTALPETPRO'/>
         </td>
       </tr>
-      </xsl:if>
     </xsl:for-each>
 
     <!--   Group totals   -->
@@ -1405,8 +989,8 @@
       </tr>
     </thead>
   </xsl:template>
-
-  <xsl:template match="SECTION_5">
+  
+    <xsl:template match="SECTION_5">
     <p>
       <h3>
         <xsl:value-of select="@HEADING"/>
@@ -1496,72 +1080,69 @@
           <xsl:with-param name="CLASS" select="$CLASS"></xsl:with-param>
         </xsl:call-template>
       </xsl:if>
-      <xsl:if test ="../LICENSINGRECEIVED + ../LICENSINGCOMPLETED + ../INVESTIGATIONCOMPLETED + ../INVESTIGATIONPENDINGENDING + ../ADMINISTRATIVERECEIVED + ../ADMINISTRATIVECOMPLETED + ../ADMINISTRATIVEPENDINGENDING + ../POLICEREPORTRECEIVED + ../POLICEREPORTCOMPLETED + ../POLICEREPORTPENDINGENDING + ../TRACERECEIVED + ../TRACECOMPLETED + ../TRACEPENDINGENDING != 0 ">
-        <tr>
-          <td style="text-align: left; width: 1.5in;">
-            <xsl:attribute name="class">
-              <xsl:choose>
-                <xsl:when test="substring(../DIVISION, 1, 1) = 'N'">
-                  <xsl:text>td-nd</xsl:text>
-                </xsl:when>
-                <xsl:when test="substring(../DIVISION, 1, 1) = 'S'">
-                  <xsl:text>td-sd</xsl:text>
-                </xsl:when>
-                <xsl:otherwise>
-                  <xsl:text>td-none</xsl:text>
-                </xsl:otherwise>
-              </xsl:choose>
-            </xsl:attribute>
-            <xsl:value-of select='../OFFICENAME'/>
-          </td>
-          <td>
-            <xsl:value-of select='../LICENSINGRECEIVED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../LICENSINGCOMPLETED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../LICENSINGPENDINGENDING'/>
-          </td>
-          <td>
-            <xsl:value-of select='../INVESTIGATIONRECEIVED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../INVESTIGATIONCOMPLETED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../INVESTIGATIONPENDINGENDING'/>
-          </td>
-          <td>
-            <xsl:value-of select='../ADMINISTRATIVERECEIVED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../ADMINISTRATIVECOMPLETED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../ADMINISTRATIVEPENDINGENDING'/>
-          </td>
-          <td>
-            <xsl:value-of select='../POLICEREPORTRECEIVED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../POLICEREPORTCOMPLETED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../POLICEREPORTPENDINGENDING'/>
-          </td>
-          <td>
-            <xsl:value-of select='../TRACERECEIVED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../TRACECOMPLETED'/>
-          </td>
-          <td>
-            <xsl:value-of select='../TRACEPENDINGENDING'/>
-          </td>
-        </tr>
-      </xsl:if>
-
+      <tr>
+        <td style="text-align: left; width: 1.5in;">
+          <xsl:attribute name="class">
+            <xsl:choose>
+              <xsl:when test="substring(../DIVISION, 1, 1) = 'N'">
+                <xsl:text>td-nd</xsl:text>
+              </xsl:when>
+              <xsl:when test="substring(../DIVISION, 1, 1) = 'S'">
+                <xsl:text>td-sd</xsl:text>
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:text>td-none</xsl:text>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:attribute>
+          <xsl:value-of select='../OFFICENAME'/>
+        </td>
+        <td>
+          <xsl:value-of select='../LICENSINGRECEIVED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../LICENSINGCOMPLETED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../LICENSINGPENDINGENDING'/>
+        </td>
+        <td>
+          <xsl:value-of select='../INVESTIGATIONRECEIVED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../INVESTIGATIONCOMPLETED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../INVESTIGATIONPENDINGENDING'/>
+        </td>
+        <td>
+          <xsl:value-of select='../ADMINISTRATIVERECEIVED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../ADMINISTRATIVECOMPLETED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../ADMINISTRATIVEPENDINGENDING'/>
+        </td>
+        <td>
+          <xsl:value-of select='../POLICEREPORTRECEIVED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../POLICEREPORTCOMPLETED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../POLICEREPORTPENDINGENDING'/>
+        </td>
+        <td>
+          <xsl:value-of select='../TRACERECEIVED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../TRACECOMPLETED'/>
+        </td>
+        <td>
+          <xsl:value-of select='../TRACEPENDINGENDING'/>
+        </td>
+      </tr>
     </xsl:for-each>
 
     <!--   Group totals   -->
@@ -1666,8 +1247,8 @@
       </tr>
     </thead>
   </xsl:template>
-
-  <xsl:template match="SECTION_6">
+  
+    <xsl:template match="SECTION_6">
     <p>
       <h3>
         <xsl:value-of select="@HEADING"/>
@@ -1695,10 +1276,10 @@
           <td>
             <xsl:value-of select="sum(OFFICE/MINORJOINT)"/>
           </td>
-          <td>
+           <td>
             <xsl:value-of select="sum(OFFICE/OTHERABC)"/>
           </td>
-          <td>
+         <td>
             <xsl:value-of select="sum(OFFICE/OTHERJOINT)"/>
           </td>
           <td>
@@ -1710,7 +1291,7 @@
           <td>
             <xsl:value-of select="sum(OFFICE/WARNINGLETTERSSENT)"/>
           </td>
-        </tr>
+         </tr>
       </tbody>
     </table>
   </xsl:template>
@@ -1738,7 +1319,6 @@
           <xsl:with-param name="CLASS" select="$CLASS"></xsl:with-param>
         </xsl:call-template>
       </xsl:if>
-        <xsl:if test="../PREMISESVISITEDLICENSING + ../PREMISESVISITEDENFORCEMENT + ../MINORABC + ../MINORJOINT + ../OTHERABC + ../OTHERJOINT + ../WARNINGLETTERSSENT != 0">
       <tr>
         <td style="text-align: left; width: 1.5in;">
           <xsl:attribute name="class">
@@ -1783,8 +1363,7 @@
         <td style="width: .75in">
           <xsl:value-of select='../WARNINGLETTERSSENT'/>
         </td>
-     </tr>
-         </xsl:if>
+      </tr>
     </xsl:for-each>
 
     <!--   Group totals   -->
@@ -1934,7 +1513,7 @@
       </tr>
     </thead>
   </xsl:template>
-
+  
   <xsl:template match="SECTION_7">
     <xsl:param name="PART"></xsl:param>
     <xsl:param name="ID"></xsl:param>
@@ -2113,8 +1692,7 @@
               <xsl:with-param name="PART" select="$PART"></xsl:with-param>
             </xsl:call-template>
           </xsl:if>
-
-          <xsl:if test="../TOTLREG != 0">
+        
           <tr>
             <td style="text-align: left; width: 1.5in;">
               <xsl:attribute name="class">
@@ -2185,74 +1763,72 @@
               <xsl:value-of select='../BTSTOLENPROPERTY'/>
             </td>
           </tr>
-          </xsl:if>
         </xsl:for-each>
 
-        <!--   Group totals   -->
-        <tr>
-          <td>
-            <xsl:value-of select="$currentGroup"/> TOTALS
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../TOTLREG)"/>
-            <!--<xsl:value-of select="sum(key('accusations', .)/../ABC) + sum(key('accusations', .)/../BT)"/>-->
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCMINOR)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTMINOR)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCDECOY)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTDECOY)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCOBVINTOXICATED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTOBVINTOXICATED)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCDRUGS)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTDRUGS)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCDISORDERLYPREM)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTDISORDERLYPREM)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCROSTF)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTROSTF)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCWEAPONSVIOLATIONS)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTWEAPONSVIOLATIONS)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../ABCSTOLENPROPERTY)"/>
-          </td>
-          <td>
-            <xsl:value-of select="sum(key('accusations', .)/../BTSTOLENPROPERTY)"/>
-          </td>
-        </tr>
+          <!--   Group totals   -->
+          <tr>
+            <td>
+              <xsl:value-of select="$currentGroup"/> TOTALS
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../TOTLREG)"/>
+              <!--<xsl:value-of select="sum(key('accusations', .)/../ABC) + sum(key('accusations', .)/../BT)"/>-->
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCMINOR)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTMINOR)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCDECOY)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTDECOY)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCOBVINTOXICATED)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTOBVINTOXICATED)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCDRUGS)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTDRUGS)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCDISORDERLYPREM)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTDISORDERLYPREM)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCROSTF)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTROSTF)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCWEAPONSVIOLATIONS)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTWEAPONSVIOLATIONS)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../ABCSTOLENPROPERTY)"/>
+            </td>
+            <td>
+              <xsl:value-of select="sum(key('accusations', .)/../BTSTOLENPROPERTY)"/>
+            </td>         </tr>
         <!--  Add row space between groups  -->
         <tr>
           <td colspan="14" style="border: none;">
             <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
           </td>
         </tr>
-
+ 
       </xsl:when>
       <xsl:when test="$PART='2'">
         <xsl:for-each select="key('accusations', $currentGroup)">
@@ -2276,7 +1852,6 @@
               <xsl:with-param name="PART" select="$PART"></xsl:with-param>
             </xsl:call-template>
           </xsl:if>
-          <xsl:if test="../TOTLREG != 0">
           <tr>
             <td style="text-align: left; width: 1.5in;">
               <xsl:attribute name="class">
@@ -2349,7 +1924,6 @@
               <xsl:value-of select='../BT'/>
             </td>
           </tr>
-          </xsl:if>
         </xsl:for-each>
 
         <!--   Group totals   -->
@@ -2419,7 +1993,7 @@
             <xsl:text disable-output-escaping="yes">&amp;</xsl:text>nbsp;
           </td>
         </tr>
-      </xsl:when>
+     </xsl:when>
     </xsl:choose>
 
   </xsl:template>
@@ -2454,7 +2028,7 @@
       </tr>
     </thead>
   </xsl:template>
-
+  
 
   <xsl:template match="SECTION_9">
     <p>
@@ -2511,7 +2085,6 @@
           <xsl:with-param name="CLASS" select="$CLASS"></xsl:with-param>
         </xsl:call-template>
       </xsl:if>
-      <xsl:if test="../PERMIT + ../TEMPBERRWINE + ../GENERAL + ../CATERING != 0">
       <tr>
         <td style="text-align: left; width: 2in;">
           <xsl:attribute name="class">
@@ -2542,7 +2115,6 @@
           <xsl:value-of select='../CATERING'/>
         </td>
       </tr>
-      </xsl:if>
     </xsl:for-each>
 
     <!--   Group totals   -->

@@ -13,7 +13,8 @@ CREATE OR REPLACE PACKAGE ABCREPORTS.RQS_UTILS AS
 -- History:
 -------------------------------------------------------------------------------
 --    Date                  Comment
--- 09/16/2015 TJL       Initial File created  
+-- 09/16/2015 TJL       Initial File created
+-- 10/04/2023 TJL       Added PROCEDURE UpdateSocketInfo  
 -- ****************************************************************************
 
 TYPE t_parms_tbl IS TABLE OF VARCHAR2(4000) INDEX BY VARCHAR2(100);
@@ -67,6 +68,8 @@ PROCEDURE upduser(p_userobjectid  IN  NUMBER,
 FUNCTION report_info_json(p_report_number IN NUMBER) RETURN VARCHAR2;
 
 PROCEDURE GetSocketInfo(p_data OUT NUMBER);
+
+PROCEDURE UpdateSocketInfo(p_host IN VARCHAR2, p_port IN NUMBER);
 
 FUNCTION clob2blob(p_clob IN CLOB) RETURN BLOB;
                                                                                                                                                                                                  

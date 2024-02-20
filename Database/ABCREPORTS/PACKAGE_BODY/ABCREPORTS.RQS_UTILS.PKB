@@ -623,6 +623,18 @@ PROCEDURE GetSocketInfo(p_data OUT NUMBER) IS
     
     END GetSocketInfo;                            
 
+PROCEDURE UpdateSocketInfo(p_host IN VARCHAR2, p_port IN NUMBER) IS
+    BEGIN
+        UPDATE report_ctrl_parameters
+           SET parameter_value = p_host
+         WHERE parameter_name = 'WND_SERVICE_HOST'; 
+        UPDATE report_ctrl_parameters
+           SET parameter_value = p_port
+         WHERE parameter_name = 'WND_SERVICE_PORT'; 
+         
+        COMMIT;
+    
+    END UpdateSocketInfo;
 FUNCTION clob2blob(p_clob IN CLOB) RETURN BLOB IS
 
     blob_           BLOB;

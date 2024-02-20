@@ -58,17 +58,17 @@ namespace RQSService
 				ManagementObjectCollection collection = searcher.Get();
 				m_name = (string)collection.Cast<ManagementBaseObject>().First()["Name"];
 				
-				key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + m_name);
-				tnsname = (string) key.GetValue("TNSNAME");
-				Environment.SetEnvironmentVariable("TNSNAME", tnsname, EnvironmentVariableTarget.Process);
+                //key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + m_name);
+                //tnsname = (string) key.GetValue("TNSNAME");
+                //Environment.SetEnvironmentVariable("TNSNAME", tnsname, EnvironmentVariableTarget.Process);
 
-				m_eventLog.WriteEntry("Service starting: " + m_name + " (" + processId.ToString() + ") : TNSNAME - " + tnsname);
+				m_eventLog.WriteEntry("Service starting: " + m_name + " (" + processId.ToString() + ") ");
 
 				serviceStatus.dwCurrentState = ServiceState.SERVICE_START_PENDING;
 				serviceStatus.dwWaitHint = 100000;
 				SetServiceStatus(this.ServiceHandle, ref serviceStatus);
 
-				m_listener = new ABCSockets.AsyncSocketListener(tnsname, m_eventLog, m_trace);
+				m_listener = new ABCSockets.AsyncSocketListener(m_eventLog, m_trace);
 				m_worker.DoWork += new DoWorkEventHandler(m_listener.start);
 				m_worker.RunWorkerAsync();
 			}

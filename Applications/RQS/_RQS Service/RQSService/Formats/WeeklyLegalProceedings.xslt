@@ -213,4 +213,94 @@
 			</table>
 		</p>
 	</xsl:template>
+
+	<!-- ******************************************************************** -->
+	<!--     Template layout for Licenses section of report                   -->
+	<!-- ******************************************************************** -->
+	<!--<xsl:template name="tmpl_license_types">
+		<xsl:param name="LicenseTypes"></xsl:param>
+
+		<table>
+			<xsl:for-each select="LicenseTypes">
+				<tr>
+					<td class="row5-1">
+						<xsl:if test="position() &gt; 1">
+							<xsl:text disable-output-escaping="yes">-  </xsl:text>
+						</xsl:if>
+						<xsl:if test="position()=1">
+							<b><xsl:text disable-output-escaping="yes">License Types: </xsl:text></b>
+						</xsl:if>
+					</td>
+					<td class="row5-2"><xsl:value-of select='./LicenseTypes' /></td>
+					<td class="row5-3"><b>MI: </b><xsl:value-of select='./MI' /></td>
+					<td class="row5-4"><b>Staus: </b><xsl:value-of select='./Status' /></td>
+					<td class="row5-5"><b>Date: </b><xsl:value-of select='./Date' /></td>
+					<td class="row5-6"><b>Expires: </b><xsl:value-of select='./Expires' /></td>
+					<td class="row5-7"><b>Dups: </b><xsl:value-of select='./Dups' /></td>
+					<td class="row5-8"><b>Term: </b><xsl:value-of select='./Term' /></td>
+				</tr>
+			</xsl:for-each>
+		</table>
+
+	</xsl:template>-->
+
+	<!-- ******************************************************************** -->
+	<!--     Template layout for charges section of report                    -->
+	<!-- ******************************************************************** -->
+	<!--<xsl:template name="tmpl_charges">
+		--><!--<xsl:param name="Charges"></xsl:param>--><!--
+		<table>
+			<xsl:for-each select="./Charges/Description">
+				<tr>
+					<td class="row6-1">
+						<xsl:if test="position() &gt; 1">
+							<xsl:text disable-output-escaping="yes"> </xsl:text>
+						</xsl:if>
+						<xsl:if test="position()=1">
+							<b>
+								<xsl:text disable-output-escaping="yes">Charges: </xsl:text>
+							</b>
+						</xsl:if>
+					</td>
+					<td class="row6-2">
+						<xsl:value-of select='.' />
+					</td>
+				</tr>
+			</xsl:for-each>
+		</table>
+	</xsl:template>-->
+
+	<!-- ******************************************************************** -->
+	<!--     Template layout for proceeding section of report                 -->
+	<!-- ******************************************************************** -->
+	<!--<xsl:template name="tmpl_proceedings">
+		<xsl:param name="Proceedings"></xsl:param>
+		<table>
+			<xsl:for-each select="Proceedings">
+				<tr>
+					<td class="row7-1">
+						<xsl:if test="position() &gt; 1">
+							<xsl:text disable-output-escaping="yes">-  </xsl:text>
+						</xsl:if>
+						<xsl:if test="position()=1">
+							<b>
+								<xsl:text disable-output-escaping="yes">Proceedings: </xsl:text>
+							</b>
+						</xsl:if>
+					</td>
+					<td class="row7-2"><xsl:value-of select='./ProceedingType' /></td>
+					<td class="row7-3"><xsl:value-of select='./ProceedingDate' /></td>
+					<td class="row7-4"><b>Status: </b><xsl:value-of select='./Status' /></td>
+					<td class="row7-5"><xsl:value-of select='./StatusDate' /></td>
+					<td class="row7-6"><b>Decision: </b><xsl:value-of select='./Decision' /></td>
+					<td class="row7-7"><b>POIC: $</b><xsl:value-of select='./POICAmount' /></td>
+				</tr>
+				<tr>
+					<td><xsl:text disable-output-escaping="yes"> </xsl:text></td>
+					<td colspan="6"><xsl:value-of select='./ProceedingsDetails' /></td>
+				</tr>
+			</xsl:for-each>
+		</table>
+	</xsl:template>-->
+
 </xsl:stylesheet>

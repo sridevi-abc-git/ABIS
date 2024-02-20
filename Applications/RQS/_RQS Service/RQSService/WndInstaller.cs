@@ -13,45 +13,51 @@ namespace RQSService
 	[RunInstaller(true)]
 	public class WndInstaller : Installer
 	{
-		string m_tnsname;
+		string m_dataSource;
 
         public WndInstaller()
         {
+            ABCRQSUtils.AppConfigurationSettings cnfg;
+            string[] connectionString;
+
 			ServiceProcessInstaller processInstaller = new ServiceProcessInstaller();
 			ServiceInstaller		serviceInstaller = new ServiceInstaller();
-			String[]				arguments		 = Environment.GetCommandLineArgs();
+            //String[]				arguments		 = Environment.GetCommandLineArgs();
 
-			m_tnsname = arguments[2];
+            //m_tnsname = arguments[2];
+            cnfg = ABCRQSUtils.AppConfigurationSettings.getConfigurationSection();
+            connectionString = cnfg.AppSettings["connection"].value.Split(';');
+            m_dataSource = connectionString[2].Split('=')[1];
 
-			serviceInstaller.AfterInstall += new InstallEventHandler(AfterInstallEventHandler);
+            //serviceInstaller.AfterInstall += new InstallEventHandler(AfterInstallEventHandler);
 
             //set the privileges
 			processInstaller.Account = ServiceAccount.LocalSystem; //  .LocalSystem;  // .User; // .LocalService;
             //processInstaller.Username = ".\\RQSSERVICE";
             //processInstaller.Password = "RQSSrvc@1";
 
-			serviceInstaller.DisplayName = "ABC RQS ProcSrvr (" + m_tnsname + ")";
+			serviceInstaller.DisplayName = "ABC RQS ProcSrvr (" + m_dataSource + ")";
             serviceInstaller.StartType	 = ServiceStartMode.Automatic;
 
             //must be the same as what was set in Program's constructor
-			serviceInstaller.ServiceName = "RQSProcSrvr" + m_tnsname;
+			serviceInstaller.ServiceName = "RQSProcSrvr" + m_dataSource;
 
             this.Installers.Add(processInstaller);
             this.Installers.Add(serviceInstaller);
         }
 
-		private void AfterInstallEventHandler(object sender, InstallEventArgs e)
-		{
-			ServiceInstaller		serviceInstaller = (ServiceInstaller)sender;
-			RegistryKey				key;
+        //private void AfterInstallEventHandler(object sender, InstallEventArgs e)
+        //{
+        //    ServiceInstaller		serviceInstaller = (ServiceInstaller)sender;
+        //    RegistryKey				key;
 
-			key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + serviceInstaller.ServiceName, true);
-			if (key != null)
-			{
-				key.SetValue("TNSNAME", m_tnsname, RegistryValueKind.String);
-				key.Close();
-			}
-		}
+        //    key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + serviceInstaller.ServiceName, true);
+        //    if (key != null)
+        //    {
+        //        key.SetValue("TNSNAME", m_tnsname, RegistryValueKind.String);
+        //        key.Close();
+        //    }
+        //}
 
 	}
 }

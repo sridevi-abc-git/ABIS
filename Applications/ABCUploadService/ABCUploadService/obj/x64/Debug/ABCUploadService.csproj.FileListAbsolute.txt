@@ -21,8 +21,6 @@ C:\Development_2\ConsolApplications\ABCUploadService-19C\ABCUploadService\obj\x6
 C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\bin\x64\Debug\ABCUploadService.exe.config
 C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\obj\x64\Debug\ABCUploadService.exe
 C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\obj\x64\Debug\ABCUploadService.pdb
-C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\bin\x64\Debug\WndInstaller.cs
-C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\bin\x64\Debug\Configuration.JSON
 C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\bin\x64\Debug\ABCUploadService.exe
 C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\bin\x64\Debug\ABCUploadService.pdb
 C:\Development\ABIS\Applications\ABCUploadService\ABCUploadService\obj\x64\Debug\ABCUploadService.csprojResolveAssemblyReference.cache

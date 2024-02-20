@@ -52,12 +52,11 @@
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="Microsoft.VisualBasic" />
-    <Reference Include="Oracle.DataAccess, Version=4.121.2.0, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\client\TLord\product\19.0.0\client_1\ODP.NET\bin\4\Oracle.DataAccess.dll</HintPath>
+    <Reference Include="Oracle.DataAccess">
+      <HintPath>..\..\..\..\..\..\Oracle\product\19.0.0\client_1\ODP.NET\bin\4\Oracle.DataAccess.dll</HintPath>
     </Reference>
     <Reference Include="Renci.SshNet">
-      <HintPath>..\..\..\Library\Renci.SshNet.dll</HintPath>
+      <HintPath>..\SFTP\RQSFTP2\RQSFTP2\bin\Debug\Renci.SshNet.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />

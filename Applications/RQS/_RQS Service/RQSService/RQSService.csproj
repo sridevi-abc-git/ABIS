@@ -112,13 +112,8 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="abcdev.config">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <SubType>Designer</SubType>
-    </None>
-    <None Include="abcprod.config">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <SubType>Designer</SubType>
+    <None Include="abisst1.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Formats\miscfees.dat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -150,15 +145,9 @@
     <None Include="Formats\PRJUS750.dat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="abcsb.config">
-      <SubType>Designer</SubType>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    <None Include="App.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="abctest.config">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <SubType>Designer</SubType>
-    </None>
-    <None Include="App.config" />
     <None Include="Formats\HL.dat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -203,10 +192,6 @@
     </None>
     <None Include="Formats\WS_9_MISCELLANEOUS.dat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="local.config">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <SubType>Designer</SubType>
     </None>
     <None Include="Properties\app.manifest" />
     <None Include="RQSService_TemporaryKey.pfx" />

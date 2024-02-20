@@ -14,6 +14,7 @@ IS
     --          04/13/2022  TJL             Initial Package Created for 19C Database
     --          12/09/2022  TJL             Implemented for eservices after 19C upgrad
     --    3.0   08/07/2023  TJL BIZ-11961   Add CVR to AWFREQUIRED status field for message number 14
+    --          11/07/2023  JS BIZ-13008    Added premise zip and state to return packet
     -- ****************************************************************************
     FUNCTION secondary(a_licensetypejobid IN NUMBER)
         RETURN CLOB
@@ -72,8 +73,8 @@ IS
                     'AWFREQUIRED' VALUE
                         CASE
                             WHEN o.licensetypecode IN ('02', '22')
-                            THEN 
-                                case nvl(utl_licenseinfo.awfrequired(o.objectid), 0) 
+                            THEN
+                                case nvl(utl_licenseinfo.awfrequired(o.objectid), 0)
                                   when 0 then 'Y'
                                   when 8 then 'NA'
                                   when 14 then 'CVR'
@@ -124,6 +125,12 @@ BEGIN
                     'PREMISECITY' VALUE
                         api.pkg_columnquery.VALUE(l.objectid,
                                                   'PremAddressUSCity'), -- Business City
+                    'PREMISEZIP' VALUE
+                        api.pkg_columnquery.VALUE(l.objectid,
+                                                  'PremAddressZipCode'), -- Business Zip
+                    'PREMISESTATE' VALUE
+                        api.pkg_columnquery.VALUE(l.objectid,
+                                                  'PremAddressState'), -- Business State
                     'BUSINESSNAME' VALUE
                         api.pkg_columnquery.VALUE(l.objectid, 'PrimaryDBA'), -- DBA
                     'LICENSE_TYPES' VALUE
