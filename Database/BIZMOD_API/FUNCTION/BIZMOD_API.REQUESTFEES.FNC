@@ -450,7 +450,7 @@ IS
                        (SELECT 1
                           FROM bizmod_api.e_payments_t p
                          WHERE p.feeobjid = fees.feeobjid
-                           AND p.depositbatchdate IS NOT NULL); -- 02/21/2024  TJL  BIZ-14521 
+                           AND p.issued IS NOT NULL); -- 02/21/2024  TJL  BIZ-14521 
 
             IF (fees_tmp.COUNT > 0)
             THEN
