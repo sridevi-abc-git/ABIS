@@ -13,6 +13,8 @@ IS
     -- 06/30/2023  TJL             Fixed bug with incorrect message number.
     -- 01/29/2024  APD             Ordered lic view in main loop to make sure j_license row is first
     -- 02/13/2024  APD  BIZ-14426  Fixed bug in getting renewal fees
+    -- 02/21/2024  TJL  BIZ-14521  Corrected so payment received message is displayed until
+    --                               licenses is issued
     -- ****************************************************************************
 
     FUNCTION get_awf(a_licensetypejobid IN NUMBER)
@@ -448,7 +450,7 @@ IS
                        (SELECT 1
                           FROM bizmod_api.e_payments_t p
                          WHERE p.feeobjid = fees.feeobjid
-                           AND p.depositbatchdate IS NOT NULL);
+                           AND p.depositbatchdate IS NOT NULL); -- 02/21/2024  TJL  BIZ-14521 
 
             IF (fees_tmp.COUNT > 0)
             THEN
