@@ -11,11 +11,11 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Date              Comment
-    --  05/12/2021 TJL   Initial Package Created
-    --  11/29/2022 TJL   Added filters to prevent duplicate payments being
-    --                     added to payment table.
-    --  12/09/2022 TJL   Added call to create a ABIS Payment Job
-    --  12/07/2023 TJL   Added commit before creating payment job
+    --        05/12/2021  TJL             Initial Package Created
+    --        11/29/2022  TJL             Added filters to prevent duplicate payments being
+    --                                      added to payment table.
+    --        12/09/2022  TJL             Added call to create a ABIS Payment Job
+    --        12/07/2023  TJL             Added commit before creating payment job
     --   3.0  02/26/2024  TJL  BIZ-14645  Added status filter to license type select
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
