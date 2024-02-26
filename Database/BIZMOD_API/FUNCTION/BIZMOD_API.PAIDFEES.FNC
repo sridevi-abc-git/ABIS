@@ -16,6 +16,7 @@ IS
     --                     added to payment table.
     --  12/09/2022 TJL   Added call to create a ABIS Payment Job
     --  12/07/2023 TJL   Added commit before creating payment job
+    --   3.0  02/26/2024  TJL  BIZ-14645  Added status filter to license type select
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
     t_packet       CLOB := EMPTY_CLOB();
@@ -141,7 +142,10 @@ BEGIN
                                    WHERE api.pkg_columnquery.VALUE(
                                              o.objectid,
                                              'LicenseTypeCode') =
-                                         paidfees.licensetypecode))
+                                         paidfees.licensetypecode
+                                     AND api.pkg_columnquery.VALUE( --   3.0  02/26/2024  TJL  BIZ-14645 
+                                             o.objectid,
+                                             'StatusName') != 'CANCEL')) 
                             LOG ERRORS INTO bizmod_api.err$_e_payments_t
                                     ('INSERT')
                                     REJECT LIMIT UNLIMITED;
