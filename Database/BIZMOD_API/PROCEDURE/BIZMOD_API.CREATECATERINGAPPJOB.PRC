@@ -577,11 +577,11 @@ BEGIN
     t_results := json_object('feeObjectId' VALUE t_feeobjid);
 
     -- 02/13/2024 TJL  BIZ-13081
---    t_response :=
---        bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url2,
---                                           a_method    => 'PATCH',
---                                           a_content   => NULL,
---                                           a_file      => NULL);
+    t_response :=
+        bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url2,
+                                           a_method    => 'PATCH',
+                                           a_content   => NULL,
+                                           a_file      => NULL);
 
     IF (t_response IS NULL)
     THEN
