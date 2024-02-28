@@ -24,7 +24,7 @@ IS
     --                                          Addres
     --   2.1     01/10/2024 TJL  BIZ-14162    Remove allowing REV PENDING licenses to create application
     --   3.0     02/07/2024 APD  BIZ-14339    Change how to find an existing event address
-    --   4.0     02/13/2024 TJL  BIZ-13081    Added in exception handling sending sending to LSP
+    --   4.1     02/13/2024 TJL  BIZ-13081    Added in exception handling sending sending to LSP
     --                                          application status 'Errored'
     -- ****************************************************************************
     --************************
@@ -156,7 +156,7 @@ BEGIN
             '<<applicationId>>',
             t_applicationid)
         || CHR(63)
-        || 'status=Recovered';
+        || 'status=Posted';
 
     --RAISE VALUE_ERROR;
 
@@ -716,7 +716,7 @@ EXCEPTION
 
         BEGIN
             -- 02/13/2024 TJL  BIZ-13081
-            t_url2 := REPLACE(t_url2, 'status=Recovered', 'status=Errored');
+            t_url2 := REPLACE(t_url2, 'status=Posted', 'status=Errored');
             t_response :=
                 bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url2,
                                                    a_method    => 'PATCH',
