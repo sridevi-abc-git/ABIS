@@ -24,6 +24,8 @@ IS
     --                                          Addres
     --   2.1     01/10/2024 TJL  BIZ-14162    Remove allowing REV PENDING licenses to create application
     --   3.0     02/07/2024 APD  BIZ-14339    Change how to find an existing event address
+    --   4.0     02/13/2024 TJL  BIZ-13081    Added in exception handling sending sending to LSP
+    --                                          application status 'Errored'
     -- ****************************************************************************
     --************************
     --Object Id
@@ -93,6 +95,8 @@ IS
     --*****
     t_url          VARCHAR2(1000)
         := '<<path>>/api/licensing/internal/catering/payments/<<lsppaymentid>>/fees'; -- TJL
+    t_url2         VARCHAR2(1000)
+        := '<<path>>/api/licensing/internal/catering/applications/<<applicationId>>'; -- TJL
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000);
@@ -115,15 +119,53 @@ BEGIN
       FROM bizmod_api.eservices_log_t
      WHERE seq = a_seq;
 
+    t_applicationid :=
+        json_value(t_packet, '$.DATA.APPLICATION.APPLICATIONID');
+    t_lsppaymentid := 
+        json_value(t_packet, '$.DATA.APPLICATION.LSPPAYMENTID');
+
+    -- 12/06/2023 TJL added updating url for different LSP environment
+    t_url :=
+        REPLACE(
+            REPLACE(
+                t_url,
+                '<<path>>',
+                CASE ora_database_name
+                    WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
+                    WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
+                    WHEN 'ABISQA1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISD1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
+                    ELSE 'https://unknown'
+                END),
+            '<<lsppaymentid>>',
+            t_lsppaymentid);
+
+    -- 02/13/2024 TJL  BIZ-13081
+    t_url2 :=
+        REPLACE(
+            REPLACE(
+                t_url2,
+                '<<path>>',
+                CASE ora_database_name
+                    WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
+                    WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
+                    WHEN 'ABISQA1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
+                    WHEN 'ABISD1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
+                    ELSE 'https://unknown'
+                END),
+            '<<applicationId>>',
+            t_applicationid)
+        || CHR(63)
+        || 'status=Recovered';
+
+    --RAISE VALUE_ERROR;
+
     --**********************
     --Extract data from JSON
     --**********************
 
     t_licensenumber :=
         json_value(t_packet, '$.DATA.APPLICATION.LICENSENUMBER');
-    t_lsppaymentid := json_value(t_packet, '$.DATA.APPLICATION.LSPPAYMENTID');
-    t_applicationid :=
-        json_value(t_packet, '$.DATA.APPLICATION.APPLICATIONID');
     t_dateofeventfrom :=
         TO_TIMESTAMP(
             json_value(t_packet, '$.DATA.APPLICATION.EVENTSTARTDATE'),
@@ -207,23 +249,6 @@ BEGIN
             '\D');
     t_contactemail := json_value(t_packet, '$.DATA.APPLICATION.CONTACTEMAIL');
 
-    -- 12/06/2023 TJL added updating url for different LSP environment
-    t_url :=
-        REPLACE(
-            REPLACE(
-                t_url,
-                '<<path>>',
-                CASE ora_database_name
-                    WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
-                    WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
-                    WHEN 'ABISQA1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
-                    WHEN 'ABISD1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
-                    ELSE 'https://unknown'
-                END),
-            '<<lsppaymentid>>',
-            t_lsppaymentid);
-
-
     --*************************
     --Format Sponsoring Addres
     --*************************
@@ -283,30 +308,35 @@ BEGIN
         --**************************
         -- 02/07/2024 APD  BIZ-14339
         FOR rec
-          IN (SELECT objectid
-                FROM TABLE(
-                         CAST(
-                             api.pkg_simplesearch.castableobjectsbyindex(
-                                 a_objectdefname => 'o_Address',
-                                 a_columnname => 'dup_UniqueAddress',
-                                 a_value     =>
-                                     t_eventlocationaddressline1
-                                     || '%'
-                                     || t_eventlocationaddressline2
-                                     || '%'
-                                     || t_eventlocationcity
-                                     || '%') AS api.udt_objectlist)))
+            IN (SELECT objectid
+                  FROM TABLE(
+                           CAST(
+                               api.pkg_simplesearch.castableobjectsbyindex(
+                                   a_objectdefname => 'o_Address',
+                                   a_columnname => 'dup_UniqueAddress',
+                                   a_value     =>
+                                       t_eventlocationaddressline1
+                                       || '%'
+                                       || t_eventlocationaddressline2
+                                       || '%'
+                                       || t_eventlocationcity
+                                       || '%') AS api.udt_objectlist)))
         LOOP
-              IF (UPPER(t_eventlocationaddressline1) =
-                  UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'addressline1'))
-              AND UPPER(nvl(t_eventlocationaddressline2,'X')) =
-                  UPPER(nvl(api.pkg_columnquery.VALUE(rec.objectid, 'addressline2'), 'X'))
-              AND UPPER(t_eventlocationcity) =
-                  UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'CACity')))
-              THEN
-                  t_addressobjectid := rec.objectid;
-                  EXIT WHEN t_addressobjectid IS NOT NULL;
-              END IF;
+            IF (UPPER(t_eventlocationaddressline1) =
+                UPPER(
+                    api.pkg_columnquery.VALUE(rec.objectid, 'addressline1'))
+            AND UPPER(NVL(t_eventlocationaddressline2, 'X')) =
+                UPPER(
+                    NVL(
+                        api.pkg_columnquery.VALUE(rec.objectid,
+                                                  'addressline2'),
+                        'X'))
+            AND UPPER(t_eventlocationcity) =
+                UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'CACity')))
+            THEN
+                t_addressobjectid := rec.objectid;
+                EXIT WHEN t_addressobjectid IS NOT NULL;
+            END IF;
         END LOOP;
 
         IF (t_addressobjectid IS NULL)
@@ -545,11 +575,22 @@ BEGIN
     --Format data packet and use CallLSP
     --**********************************
     t_results := json_object('feeObjectId' VALUE t_feeobjid);
-    t_response :=
-        bizmod_api.utl_licenseinfo.calllsp(t_url,
-                                           'PATCH',
-                                           t_results,
-                                           NULL); -- 12/07/2023 TJL
+
+    -- 02/13/2024 TJL  BIZ-13081
+--    t_response :=
+--        bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url2,
+--                                           a_method    => 'PATCH',
+--                                           a_content   => NULL,
+--                                           a_file      => NULL);
+
+    IF (t_response IS NULL)
+    THEN
+        t_response :=
+            bizmod_api.utl_licenseinfo.calllsp(t_url,
+                                               'PATCH',
+                                               t_results,
+                                               NULL); -- 12/07/2023 TJL
+    END IF;
 
     -- 12/06/2023 TJL add log update
     INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -569,8 +610,11 @@ BEGIN
                  || 'p_IssueCatererEventAuth: '
                  || t_isscatobjid
                  || CHR(13)
-                 || 'URL: '
-                 || t_url,
+                 || 'URL1: '
+                 || t_url
+                 || CHR(13)
+                 || 'URL2: '
+                 || t_url2,
                  CASE
                      WHEN t_response IS NOT NULL
                      THEN
@@ -618,8 +662,11 @@ EXCEPTION
                      || 'p_IssueCatererEventAuth: '
                      || t_isscatobjid
                      || CHR(13)
-                     || 'URL: '
-                     || t_url,
+                     || 'URL1: '
+                     || t_url
+                     || CHR(13)
+                     || 'URL2: '
+                     || t_url2,
                      t_sqlerrm,
                      t_trace,
                      t_results);
@@ -651,7 +698,6 @@ EXCEPTION
                      'Application Id: '
                      || t_applicationid
                      || CHR(13)
-                     || CHR(13)
                      || 'License Number: '
                      || t_licensenumber
                      || 'p_IssueCatererEventAuth: '
@@ -667,6 +713,77 @@ EXCEPTION
          WHERE seq = a_seq;
 
         COMMIT;
+
+        BEGIN
+            -- 02/13/2024 TJL  BIZ-13081
+            t_url2 := REPLACE(t_url2, 'status=Recovered', 'status=Errored');
+            t_response :=
+                bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url2,
+                                                   a_method    => 'PATCH',
+                                                   a_content   => NULL,
+                                                   a_file      => NULL);
+        EXCEPTION
+            WHEN UTL_HTTP.request_failed
+            THEN
+                t_sqlerrm :=
+                    'HTTP: '
+                    || UTL_HTTP.get_detailed_sqlerrm
+                    || CHR(13)
+                    || SQLERRM;
+                t_trace := DBMS_UTILITY.format_error_backtrace;
+
+                INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                       processjob,
+                                                       info,
+                                                       errmsg,
+                                                       bktrace,
+                                                       packet)
+                         VALUES (
+                             0,
+                             'CREATECATERINGAPPJOB',
+                             'Application Id: '
+                             || t_applicationid
+                             || CHR(13)
+                             || 'License Number: '
+                             || t_licensenumber
+                             || CHR(13)
+                             || 'Catering Object Id: '
+                             || t_isscatobjid
+                             || CHR(13)
+                             || 'Status Update'
+                             || CHR(13)
+                             || 'URL2: '
+                             || t_url2,
+                             t_sqlerrm,
+                             t_trace,
+                             'status=Errored');
+
+                COMMIT;
+            WHEN OTHERS
+            THEN
+                t_sqlerrm := SQLERRM;
+                t_trace := DBMS_UTILITY.format_error_backtrace;
+
+                INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                       processjob,
+                                                       info,
+                                                       errmsg,
+                                                       bktrace)
+                         VALUES (
+                             0,
+                             'CREATECATERINGAPPJOB',
+                             'Application Id: '
+                             || t_applicationid
+                             || CHR(13)
+                             || 'Outcome: Errored'
+                             || CHR(13)
+                             || 'URL: '
+                             || t_url2,
+                             t_sqlerrm,
+                             t_trace);
+
+                COMMIT;
+        END;
 END;
 /
 
