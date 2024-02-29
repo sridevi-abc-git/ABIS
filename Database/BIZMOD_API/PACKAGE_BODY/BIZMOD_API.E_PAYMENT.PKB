@@ -24,8 +24,9 @@ AS
     --                                        would fail with no data found.
     --     3.0  12/15/2023 TJL  BIZ-13929   Added additional logging to createtransmitta function
     --     3.0  12/20/2023 TJL              Fixed bug in payment process
-    --     3.1  01/11/2024 TJL  BIZ-14091   Removed createtransmittal and createawfpayments 
-    --                                        functions from package body.        
+    --     3.1  01/11/2024 TJL  BIZ-14091   Removed createtransmittal and createawfpayments
+    --                                        functions from package body.
+    --     4.0  02/29/2024 TJL  BIZ-14645   Added filter to getting licensetype for receipt payments
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -380,7 +381,9 @@ AS
                             AND slt.endpointid =
                                 api.pkg_configquery.endpointidforname(
                                     'j_LicenseType',
-                                    'LicTypeCatSecondary')))
+                                    'LicTypeCatSecondary'))
+                  WHERE api.pkg_columnquery.VALUE(objectid, 'StatusName') NOT IN
+                            ('CANCEL', 'WTHDRN'))
         SELECT lt.objectid
           INTO t_jobid
           FROM bizmod_api.e_payments_t  p
@@ -681,6 +684,7 @@ AS
             api.pkg_columnupdate.setvalue(t_processid,
                                           'ReceiptNumber',
                                           t_receiptnumber);
+
             api.pkg_columnupdate.setvalue(t_processid, 'Outcome', 'Receipt');
 
             api.pkg_logicaltransactionupdate.endtransaction;
@@ -717,7 +721,6 @@ AS
 
             RETURN -1;
     END payfees;
-
 END;
 /
 
