@@ -10,9 +10,10 @@ IS
     --
     -- History:
     -------------------------------------------------------------------------------
-    --              Date          Ticket      Comment
-    --   1.0     01/16/2024  TJL BIZ-14091  Process created from e_payment.createtransmittal
+    --            Date          Ticket      Comment
+    --   1.0   01/16/2024  TJL BIZ-14091  Process created from e_payment.createtransmittal
     --                                          function.
+    --   2.0   03/06/2024  TJL BIZ-14725  Corrected format problem in email body 
     -- ************************************************************************
     t_transmittal  api.pkg_definition.udt_id;
     t_objectlist   api.udt_objectlist;
@@ -256,7 +257,7 @@ BEGIN
                        TO_CHAR(
                            api.pkg_columnquery.VALUE(rec.objectid,
                                                      'PaymentTotalAmount'),
-                           'fm99G999D00'),
+                           'fm9G999G999D00'),
                        10,
                        ' ')
                 || CHR(13);

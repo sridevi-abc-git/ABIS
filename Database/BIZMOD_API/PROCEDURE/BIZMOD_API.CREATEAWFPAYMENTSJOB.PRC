@@ -16,6 +16,11 @@ IS
     --              Date          Ticket      Comment
     --   1.0     01/16/2024  TJL BIZ-14091  Process created from e_payment.createawfpayments
     --                                          function.
+    --   2.0     02/06/2024  TJL BIZ-14393  Change how AWF records are selected
+    --   3.0     02/13/2024  TJL BIZ-14393  Corrected bug in selecting payment records
+    --   4.0     03/06/2024  TJL BIZ-14725  Added updating payment table with process sequence
+    --                                        and date processed. Fixed bug payment batch not
+    --                                        updating payment object id
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -39,20 +44,16 @@ IS
     t_endpointid   api.pkg_definition.udt_id;
     t_relid        api.pkg_definition.udt_id;
 
-    --        t_feeamount    NUMBER;
     t_totalfees    NUMBER;
     t_checkcount   NUMBER;
     t_receiptnumber NUMBER;
     t_batchid      VARCHAR2(30);
     t_licensetypecode VARCHAR2(3);
     t_licensenumber VARCHAR2(10);
-    t_sequenceid   api.pkg_definition.udt_id;
-    t_info         VARCHAR2(4000);
+    t_seq          NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
+    t_info         VARCHAR2(4000 BYTE);
     t_paymenttype  VARCHAR2(25)
         := CASE a_makepayments WHEN 0 THEN 'Check' ELSE 'Credit Card' END;
-    --        t_cnt          NUMBER;
-    --        t_loop         NUMBER := 2;
-    --        t_limit        NUMBER := 200;
     t_sqlerrm      VARCHAR2(4000);
     t_backtrace    VARCHAR2(4000);
     t_to           VARCHAR2(4000);
@@ -66,47 +67,55 @@ BEGIN
     BEGIN
         WHILE t_paymenttype IS NOT NULL
         LOOP
-            SELECT (SELECT seq
-                      FROM bizmod_api.e_payments_t p
-                     WHERE p.description = 'AWF'
-                       AND pp.licensenumber = p.licensenumber
-                       AND pp.confirmationnumber = p.confirmationid
-                       AND pp.paymenttype = 'Primary')    seq,
-                   a.licensenumber,
-                   a.licensetypecode,
-                   NVL(pp.paymentamount, 0)               paymentamount,
-                   a.gallonage261                         gallonage,
-                   pp.confirmationnumber                  confirmationnumber,
-                   a.ROWID                                rowkey
-              BULK COLLECT INTO t_awf
-              FROM bizmod_api.awf_t  a
-                   LEFT OUTER JOIN bizmod_api.e_payments_processed_t pp
-                       ON (a.licensenumber = pp.licensenumber
-                       AND pp.paymenttype = 'Primary'
-                       AND pp.paymentmedium = t_paymenttype
-                       AND a_makepayments = 1)
-             WHERE a.completed IS NULL
-               AND a.paymentbatch IS NULL
-               AND a.submitteddate IS NOT NULL
-               AND ((a_makepayments = 0 -- AWF batch for no change and refund
-                 AND a.awffeeamount <= 0)
-                 OR (a_makepayments = 1 -- AWF batch for payments
-                 AND a.awffeeamount > 0
-                 AND EXISTS
-                         (SELECT 1
-                            FROM bizmod_api.e_payments_t p
-                           WHERE pp.licensenumber = p.licensenumber
-                             AND pp.confirmationnumber = p.confirmationid
-                             AND p.paymentobjectid IS NULL)));
-
-            --            DBMS_OUTPUT.put_line(t_loop || '  to process ' || t_awf.COUNT);
+            -- 02/06/2024  TJL BIZ-14393
+            IF (a_makepayments = 1)
+            THEN
+                SELECT p.seq,
+                       a.licensenumber,
+                       a.licensetypecode,
+                       NVL(pp.paymentamount, 0)
+                           paymentamount,
+                       a.gallonage261
+                           gallonage,
+                       pp.confirmationnumber
+                           confirmationnumber,
+                       a.ROWID
+                           rowkey
+                  BULK COLLECT INTO t_awf
+                  FROM bizmod_api.e_payments_processed_t  pp
+                       JOIN bizmod_api.e_payments_t p
+                           ON (pp.confirmationnumber = p.confirmationid)
+                       JOIN bizmod_api.awf_t a
+                           ON (a.licensenumber = p.licensenumber)
+                 WHERE a.paymentbatch IS NULL
+                   AND pp.paymentmedium IS NOT NULL
+                   AND pp.paymenttype = 'Primary'
+                   AND p.description = 'AWF'
+                   AND CASE pp.paymentmedium
+                           WHEN 'E-Check' THEN 'ECheck'
+                           ELSE pp.paymentmedium
+                       END =
+                       t_paymenttype;
+            ELSE
+                SELECT NULL               seq,
+                       a.licensenumber,
+                       a.licensetypecode,
+                       0                  paymentamount,
+                       a.gallonage261     gallonage,
+                       NULL               confirmationnumber,
+                       a.ROWID            rowkey
+                  BULK COLLECT INTO t_awf
+                  FROM bizmod_api.awf_t a
+                 WHERE a.awffeeamount <= 0
+                   AND a.paymentbatch IS NULL
+                   AND a.submitteddate IS NOT NULL;
+            END IF;
 
             IF (t_awf.COUNT > 0)
             THEN
                 -- *****************************************************************
                 -- Initialize batch variables at begining of each batch loop
                 -- *****************************************************************
-                --                t_feeamount := 0;
                 t_totalfees := 0;
                 t_checkcount := 0;
                 t_batchid :=
@@ -363,7 +372,9 @@ BEGIN
                     IF t_awf(inx).seq IS NOT NULL
                     THEN
                         UPDATE bizmod_api.e_payments_t p
-                           SET p.paymentobjectid = t_paymentbatchobjectid
+                           SET p.paymentobjectid = t_paymentbatchobjectid,
+                               p.processdate = SYSDATE,
+                               p.processid = t_seq
                          WHERE p.seq = t_awf(inx).seq;
                     END IF;
 
@@ -396,7 +407,7 @@ BEGIN
                     || 'Batch Type: '
                     || CASE a_makepayments
                            WHEN 1 THEN 'First Data AWF Payment Batch'
-                           ELSE 'AWF no payment required Payment Batch'
+                           ELSE 'AWF no payment required'
                        END
                     || CHR(13)
                     || 'Payment Type: '
@@ -406,7 +417,7 @@ BEGIN
                     || t_checkcount
                     || CHR(13)
                     || 'Total Payment Amount: '
-                    || TO_CHAR(t_totalfees, 'fm99G999D00')
+                    || TO_CHAR(t_totalfees, 'fm9G999G999D00')
                     || CASE
                            WHEN t_sqlerrm IS NOT NULL
                            THEN
@@ -426,10 +437,10 @@ BEGIN
                     t_info
                     || 'No AWF Payment Batch created'
                     || CHR(13)
-                    || 'Type: '
+                    || 'Batch Type: '
                     || CASE a_makepayments
                            WHEN 1 THEN 'First Data AWF Payment Batch'
-                           ELSE 'AWF no payment required Payment Batch'
+                           ELSE 'AWF no payment required'
                        END
                     || CHR(13)
                     || 'Payment Type: '
@@ -466,7 +477,8 @@ BEGIN
                  t_info,
                  t_sqlerrm,
                  t_backtrace);
-
+    COMMIT;
+    
     -- Generate email of completion of first data processing
     SELECT pto,
            pfrom,

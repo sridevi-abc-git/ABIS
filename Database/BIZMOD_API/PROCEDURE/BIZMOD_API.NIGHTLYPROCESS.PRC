@@ -14,6 +14,8 @@ IS
     --   3.0    01/11/2024  TJL             Added call to create AWF payment batches for zero
     --                                        amount due. Added updating new process log.
     --                                      Corrected bug in updating AWF fee object id.
+    --   4.0    03/06/2024  TJL  BIZ-14725  Added getting AWF Payment Batch and updating payment
+    --                                        record with payment batch job id when missing
     -- ****************************************************************************
     t_refunded     VARCHAR2(1);
     t_feetransfer  NUMBER;
@@ -27,9 +29,13 @@ IS
     t_bcc          VARCHAR2(4000);
     t_rowcount     NUMBER;
 
-    t_error        VARCHAR2(4000);
+    t_error        VARCHAR2(32000);
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
+    t_payment      NUMBER;
+    t_paymentbatch NUMBER;
+    t_seq          NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
+    t_errorcnt     NUMBER := 0;
 BEGIN
     -- ********************************************************************
     t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
@@ -255,14 +261,127 @@ BEGIN
 
         IF (SQL%ROWCOUNT > 0)
         THEN
-            t_body :=
-                t_body
-                || 'AWF Processed (None Refunded): '
-                || SQL%ROWCOUNT
-                || CHR(13);
+            t_body := t_body || 'AWF Processed: ' || SQL%ROWCOUNT || CHR(13);
         END IF;
 
         COMMIT;
+
+        -- ********************************************************************
+        --  03/06/2024  TJL  BIZ-14725
+        --  Update AWF payment batch when missing from payment table
+        -- ********************************************************************
+        FOR rec IN (SELECT p.feeobjid, p.seq
+                      FROM bizmod_api.e_payments_t p
+                     WHERE p.feeobjid IS NOT NULL
+                       AND NVL(p.paymentobjectid, 0) = 0
+                       AND p.description LIKE '%AWF%')
+        LOOP
+            BEGIN
+                t_payment := NULL;
+
+                SELECT api.pkg_simplesearch.objectbyindex(
+                           'o_Payment',
+                           'Paymentid',
+                           api.pkg_columnquery.VALUE(reo.objectid,
+                                                     'PaymentId'))
+                  INTO t_payment
+                  FROM api.registeredexternalobjects reo
+                 WHERE reo.objectdefid =
+                       api.pkg_configquery.objectdefidforname(
+                           'o_PaymentTransactions')
+                   AND reo.linkvalue =
+                       (SELECT TO_CHAR(transactionid)
+                          FROM api.feetransactions t
+                         WHERE feeid =
+                               api.pkg_columnquery.numericvalue(rec.feeobjid,
+                                                                'FeeId'));
+
+                SELECT r.toobjectid
+                  INTO t_paymentbatch
+                  FROM api.relationships r
+                 WHERE r.endpointid =
+                       api.pkg_configquery.endpointidforname('o_Payment',
+                                                             'PaymentBatch')
+                   AND r.fromobjectid = t_payment;
+
+                UPDATE bizmod_api.e_payments_t p
+                   SET p.paymentobjectid = t_paymentbatch,
+                       p.processdate = SYSDATE,
+                       p.processid = t_seq
+                 WHERE seq = rec.seq;
+            EXCEPTION
+                WHEN NO_DATA_FOUND
+                THEN
+                    UPDATE bizmod_api.e_payments_t p
+                       SET p.paymentobjectid = 0,
+                           p.processdate = SYSDATE,
+                           p.processid = t_seq
+                     WHERE seq = rec.seq;
+
+                    t_errorcnt := t_errorcnt + 1;
+            END;
+
+            COMMIT;
+        END LOOP;
+
+        FOR rec IN (SELECT a.awffeeid feeid, ROWID seq
+                      FROM bizmod_api.awf_t a
+                     WHERE a.awffeeid IS NOT NULL
+                       AND a.paymentbatch IS NULL)
+        LOOP
+            BEGIN
+                t_payment := NULL;
+
+                SELECT api.pkg_simplesearch.objectbyindex(
+                           'o_Payment',
+                           'Paymentid',
+                           api.pkg_columnquery.VALUE(reo.objectid,
+                                                     'PaymentId'))
+                  INTO t_payment
+                  FROM api.registeredexternalobjects reo
+                 WHERE reo.objectdefid =
+                       api.pkg_configquery.objectdefidforname(
+                           'o_PaymentTransactions')
+                   AND reo.linkvalue = (SELECT TO_CHAR(transactionid)
+                                          FROM api.feetransactions t
+                                         WHERE feeid = rec.feeid);
+
+                SELECT r.toobjectid
+                  INTO t_paymentbatch
+                  FROM api.relationships r
+                 WHERE r.endpointid =
+                       api.pkg_configquery.endpointidforname('o_Payment',
+                                                             'PaymentBatch')
+                   AND r.fromobjectid = t_payment;
+
+                UPDATE bizmod_api.awf_t a
+                   SET a.paymentbatch = t_paymentbatch,
+                       a.paymentbatchdate =
+                           api.pkg_columnquery.datevalue(t_paymentbatch,
+                                                         'CreatedDate')
+                 WHERE ROWID = rec.seq;
+            EXCEPTION
+                WHEN NO_DATA_FOUND
+                THEN
+                    UPDATE bizmod_api.awf_t a
+                       SET a.paymentbatch = 0, a.paymentbatchdate = SYSDATE
+                     WHERE ROWID = rec.seq;
+
+                    t_errorcnt := t_errorcnt + 1;
+            END;
+
+            COMMIT;
+        END LOOP;
+
+        IF (t_errorcnt > 0)
+        THEN
+            t_error :=
+                t_error
+                || CHR(13)
+                || 'AWF Process Errors: '
+                || t_errorcnt
+                || CHR(13);
+        END IF;
 
         -- ********************************************************************
         --  check to see if AWF Refund has been completed
@@ -351,16 +470,11 @@ BEGIN
             t_error :=
                 t_error
                 || CHR(13)
-                || SUBSTR(
-                       'Nightly Processing ERROR'
-                       || CHR(13)
-                       || t_sqlerrm
-                       || CHR(13)
-                       || t_trace,
-                       1,
-                       4000);
-
-            t_body := t_body || CHR(13) || t_sqlerrm || CHR(13) || t_trace;
+                || 'Nightly Processing ERROR'
+                || CHR(13)
+                || t_sqlerrm
+                || CHR(13)
+                || t_trace;
     END;
 
     -- Generate email of completion of first data processing
