@@ -37,6 +37,8 @@ IS
   -- 12/10/2019 TJL    20023  Added printing of Section Code at end of Conditions
   -- 10/02/2020 TJL    22891 Added check to pervent divide by 0 error in allocationreport2
   -- 04/28/2023 PK     WO31613 - Additional Condition Code Request Condition E - COND E (Section 24072.3 - type 75 exchange to 47)
+  -- 06/14/2023 NZA    CX 030043 - Changed accountinghistoryreport for maxobjectid issue
+  -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
   -- **************************************************************************
   /**************************************************************************
   * Global variables declared
@@ -2741,6 +2743,8 @@ IS
       || CHR (13), NULL)
       || DECODE (lt.condm, 'Y', 'M'
       || CHR (13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
+      || DECODE (lt.conds, 'Y', 'S' 
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
       || DECODE (lt.cond1c, 'Y', '1C'
       || CHR (13), NULL)
       || DECODE (lt.cond7, 'Y', '7'
@@ -2757,7 +2761,7 @@ IS
       || CHR (13), NULL)
       || DECODE (lt.cond9, 'Y', '9'
       || CHR (13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023   
+	  || lt.sectioncodelist --12/10/2019 TJL  20023
 	   )) condi,
       lb.runid,
       lb.batchtype,
@@ -2907,6 +2911,8 @@ IS
       || CHR (13), NULL)
       || DECODE (lt.condm, 'Y', 'M'
       || CHR (13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
+      || DECODE (lt.conds, 'Y', 'S' 
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
       || DECODE (lt.cond1c, 'Y', '1C'
       || CHR (13), NULL)
       || DECODE (lt.cond7, 'Y', '7'
@@ -2923,7 +2929,7 @@ IS
       || CHR (13), NULL)
       || DECODE (lt.cond9, 'Y', '9'
       || CHR (13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023  
+	  || lt.sectioncodelist --12/10/2019 TJL  20023
 	   )) condi,
       lb.runid,
       lb.batchtype,
@@ -3168,6 +3174,8 @@ end if;
       || CHR(13), NULL)
       || DECODE(lt.condm, 'Y', 'M'
       || CHR(13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
+      || DECODE (lt.conds, 'Y', 'S' 
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
       || DECODE(lt.cond1c, 'Y', '1C'
       || CHR(13), NULL)
       || DECODE(lt.cond7, 'Y', '7'
@@ -3184,7 +3192,7 @@ end if;
       || CHR(13), NULL)
       || DECODE(lt.cond9, 'Y', '9'
       || CHR(13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023  
+	  || lt.sectioncodelist --12/10/2019 TJL  20023
 	   )) condi,
       NULL runid,
       NULL batchtype,
@@ -3249,6 +3257,8 @@ end if;
       || CHR(13), NULL)
       || DECODE(lt.condm, 'Y', 'M'
       || CHR(13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
+      || DECODE (lt.conds, 'Y', 'S' 
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
       || DECODE(lt.cond1c, 'Y', '1C'
       || CHR(13), NULL)
       || DECODE(lt.cond7, 'Y', '7'
@@ -3265,7 +3275,7 @@ end if;
       || CHR(13), NULL)
       || DECODE(lt.cond9, 'Y', '9'
       || CHR(13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023 
+	  || lt.sectioncodelist --12/10/2019 TJL  20023
 	  )) condi,
       NULL runid,
       NULL batchtype,
@@ -3643,10 +3653,21 @@ end if;
     DELETE sitespecific.accountinghistoryreport_gt;
     --Grab the Payment Transactions for this License
     sitespecific.pkg_reports.getpaytransforacchist(a_objectid, NULL, t_ptobjectlist);
+
     --Grab the Most Recent Payment Transaction Date of Payments Related to this report
-    SELECT MAX(objectid)
+    -- This query was changed due to the max object id issue.
+    -- We are now taking the results from getpaytransforacchist and then filtering them
+    -- This will find us the most recent objectid.
+    SELECT x.objectid
     INTO t_maxptobjectid
-    FROM TABLE(CAST(t_ptobjectlist AS api.udt_objectlist));
+    FROM TABLE(CAST(t_ptobjectlist AS api.udt_objectlist)) x
+    join api.registeredexternalobjects reo
+      on reo.objectid = x.objectid
+    join  api.feetransactions ft
+      on reo.linkvalue    = TO_CHAR(ft.transactionid)
+    order by logicaltransactionid desc,  x.objectid desc
+    fetch first 1 rows only;
+
     SELECT MAX(alt.createddate)
     INTO t_maxptdate
     FROM query.o_paymenttransactions ap
