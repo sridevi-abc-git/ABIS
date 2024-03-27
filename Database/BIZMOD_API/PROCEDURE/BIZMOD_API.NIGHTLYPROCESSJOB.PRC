@@ -16,7 +16,7 @@ IS
     --                                      Corrected bug in updating AWF fee object id.
     --   4.0    03/06/2024  TJL  BIZ-14725  Added getting AWF Payment Batch and updating payment
     --                                        record with payment batch job id when missing
-    --   5.0    03/22/2024  TJL  BIZ-14833  Changed process name from nightlyprocess to
+    --   5.1    03/22/2024  TJL  BIZ-14833  Changed process name from nightlyprocess to
     --                                        nightlyprocessjob. Added new functionality to
     --                                        handle AWF reports.
     -- ****************************************************************************
@@ -1139,35 +1139,35 @@ BEGIN
                PIVOT (MAX(parametervalue)
                      FOR parametername
                      IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
-    --        IF (t_from IS NOT NULL)
-    --        THEN
-    --            sitespecific.pkg_tlemail.sendemail(
-    --                p_fromaddress => t_from,
-    --                p_toaddress => t_to,
-    --                p_cc        => t_cc,
-    --                p_bcc       => t_bcc,
-    --                p_subject   =>
-    --                    'Nightly Job Completed '
-    --                    || CASE
-    --                           WHEN t_error IS NOT NULL THEN 'with errors'
-    --                           ELSE NULL
-    --                       END,
-    --                p_body      => t_body || CHR(13) || t_error,
-    --                p_mimetype  => 'text/plain');
-    --        END IF;
+            IF (t_from IS NOT NULL)
+            THEN
+                sitespecific.pkg_tlemail.sendemail(
+                    p_fromaddress => t_from,
+                    p_toaddress => t_to,
+                    p_cc        => t_cc,
+                    p_bcc       => t_bcc,
+                    p_subject   =>
+                        'Nightly Job Completed '
+                        || CASE
+                               WHEN t_error IS NOT NULL THEN 'with errors'
+                               ELSE NULL
+                           END,
+                    p_body      => t_body || CHR(13) || t_error,
+                    p_mimetype  => 'text/plain');
+            END IF;
 
-    --        INSERT INTO bizmod_api.e_process_log_t(seq,
-    --                                               processjob,
-    --                                               info,
-    --                                               errmsg,
-    --                                               bktrace)
-    --             VALUES (0,
-    --                     'NIGHTLYPROCESSJOB',
-    --                     t_body,
-    --                     t_sqlerrm,
-    --                     t_trace);
-    --
-    --        COMMIT;
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                 VALUES (0,
+                         'NIGHTLYPROCESSJOB',
+                         t_body,
+                         t_sqlerrm,
+                         t_trace);
+    
+            COMMIT;
     END;
 END nightlyprocessjob;
 /
