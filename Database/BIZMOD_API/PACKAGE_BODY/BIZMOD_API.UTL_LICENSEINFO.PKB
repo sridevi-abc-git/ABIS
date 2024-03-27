@@ -30,6 +30,7 @@ AS
     --   4.1    12/07/2023  TJL  BIZ-12802    Removed old CALLLSP function
     --   4.2    12/14/2023  TJL  BIZ-13929    Added logging to ESERVICES_LOT_T to calllsp function
     --   5.0    02/06/2024  TJL  BIZ-14444    Change how Wallet path is created.
+    --   6.0    03/26/2024  TJL  BIZ-14833    Added new functions (get_application and checkpayment
     -- ****************************************************************************
 
     FUNCTION calllsp(a_url          IN VARCHAR2,
@@ -267,6 +268,89 @@ AS
             END IF;
         END IF;
     END;
+
+    FUNCTION get_application(a_jobid        IN NUMBER,
+                             a_licensetypecode IN VARCHAR2)
+        RETURN NUMBER
+    AS
+        t_applicationjobid NUMBER;
+
+        t_cnt          NUMBER := 0;
+    BEGIN
+        SELECT DISTINCT applicationobjectid
+          INTO t_applicationjobid
+          FROM (  SELECT lic.fromobjectid
+                             licensetypejobid,
+                         app.toobjectid
+                             applicationobjectid,
+                         api.pkg_columnquery.VALUE(plt.toobjectid,
+                                                   'LicenseTypeCode')
+                             licensetypecode,
+                         api.pkg_columnquery.VALUE(app.toobjectid,
+                                                   'CreatedDate')
+                             createddate,
+                         RANK()
+                             OVER(
+                                 PARTITION BY lic.fromobjectid
+                                 ORDER BY
+                                     api.pkg_columnquery.VALUE(app.toobjectid,
+                                                               'CreatedDate') DESC)
+                             rnk
+                    -- point to license (lic.toobjectid) from license type object id
+                    FROM api.relationships lic
+                         -- point to application (app.toobjectid) from license object id
+                         JOIN api.relationships app
+                             ON (app.endpointid =
+                                 api.pkg_configquery.endpointidforname(
+                                     'j_License',
+                                     'ApplicationLicense')
+                             AND app.fromobjectid = lic.toobjectid)
+                         -- point to primary license type (plt.toobjectid) from application object id
+                         JOIN api.relationships plt
+                             ON (plt.fromobjectid = app.toobjectid
+                             AND plt.endpointid =
+                                 api.pkg_configquery.endpointidforname(
+                                     'j_application',
+                                     'PrimaryLicenseType'))
+                   WHERE lic.endpointid =
+                         api.pkg_configquery.endpointidforname('j_LicenseType',
+                                                               'License')
+                     AND lic.fromobjectid = a_jobid -- 1646815
+                     AND REGEXP_LIKE(
+                             api.pkg_columnquery.VALUE(plt.toobjectid,
+                                                       'LicenseTypeCode'),
+                             a_licensetypecode)
+                ORDER BY createddate) app
+         WHERE app.rnk = 1
+           AND createddate IS NOT NULL;
+
+        RETURN t_applicationjobid;
+    END;
+
+
+    FUNCTION checkpayment(a_licensenumber IN VARCHAR2,
+                          a_licensetypecode IN VARCHAR2,
+                          a_renewalfeedate IN DATE)
+        RETURN VARCHAR2
+    AS
+        t_awfflag      VARCHAR2(10);
+    BEGIN
+        SELECT CASE COUNT(1) WHEN 0 THEN 'Y' ELSE 'N' END     awfflag
+          INTO t_awfflag
+          FROM (SELECT p.*,
+                       RANK()
+                           OVER(PARTITION BY p.jobid
+                                ORDER BY p.datepaid DESC)    rnk
+                  FROM bizmod_api.e_payments_t p
+                 WHERE p.description = 'AWF'
+                   AND p.licensenumber = a_licensenumber
+                   AND p.licensetypecode = a_licensetypecode
+                   AND p.datepaid > a_renewalfeedate) lic
+         WHERE lic.rnk = 1;
+
+        RETURN t_awfflag;
+    END;
+
 
     -- ****************************************************************************
     -- This function is called to check if a license type 02 or 22 have not reported
@@ -761,5 +845,7 @@ END;
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO LORDT;
 
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;
