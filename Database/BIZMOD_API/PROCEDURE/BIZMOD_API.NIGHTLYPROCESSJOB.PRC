@@ -19,6 +19,7 @@ IS
     --   5.1    03/22/2024  TJL  BIZ-14833  Changed process name from nightlyprocess to
     --                                        nightlyprocessjob. Added new functionality to
     --                                        handle AWF reports.
+    --   5.2    03/28/2024  TJL  BIZ-14833  Fix bug in not sending emails    
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -1135,7 +1136,7 @@ BEGIN
                t_bcc
           FROM (SELECT m.parametername, m.parametervalue
                   FROM abc.email_parameters m
-                 WHERE app = 'EPAYMENTxx')
+                 WHERE app = 'EPAYMENT')
                PIVOT (MAX(parametervalue)
                      FOR parametername
                      IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
