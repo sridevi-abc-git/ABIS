@@ -26,6 +26,7 @@ IS
     --   3.0     02/07/2024 APD  BIZ-14339    Change how to find an existing event address
     --   4.1     02/13/2024 TJL  BIZ-13081    Added in exception handling sending sending to LSP
     --                                          application status 'Errored'
+    --   5.0     03/26/2024 APD  BIZ-14849    Increased email limit to 320 chars
     -- ****************************************************************************
     --************************
     --Object Id
@@ -68,7 +69,7 @@ IS
     t_personinchargephonenumber VARCHAR2(10);
     t_contactname  VARCHAR2(45);
     t_contactphonenumber VARCHAR2(10);
-    t_contactemail VARCHAR2(45);
+    t_contactemail VARCHAR2(320);
     t_eventlocationaddressline1 VARCHAR2(50);
     t_eventlocationaddressline2 VARCHAR2(50);
     t_eventlocationcity VARCHAR2(50);
@@ -121,7 +122,7 @@ BEGIN
 
     t_applicationid :=
         json_value(t_packet, '$.DATA.APPLICATION.APPLICATIONID');
-    t_lsppaymentid := 
+    t_lsppaymentid :=
         json_value(t_packet, '$.DATA.APPLICATION.LSPPAYMENTID');
 
     -- 12/06/2023 TJL added updating url for different LSP environment
