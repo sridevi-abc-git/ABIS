@@ -14,6 +14,7 @@ AS
     --                                          HTTPS endpoints. Function CALLLSP
     --   4.1    12/07/2023  TJL  BIZ-12802    Removed old CALLLSP function
     --   6.0    03/26/2024  TJL  BIZ-14833    Added new functions (get_application and checkpayment
+    --   6.1    03/28/2024  TJL  BIZ-14833    Remove functions (awfrequired and get_awfreninfo)
     -- ****************************************************************************
 
     FUNCTION calllsp(a_url           IN VARCHAR2,
@@ -35,11 +36,11 @@ AS
                           a_renewalfeedate IN DATE)
     RETURN VARCHAR2;
 
-    FUNCTION awfrequired(a_licensetypeobjectid IN NUMBER)
-        RETURN NUMBER;
-
-    FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
-        RETURN NUMBER;
+--    FUNCTION awfrequired(a_licensetypeobjectid IN NUMBER)
+--        RETURN NUMBER;
+--
+--    FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
+--        RETURN NUMBER;
 END;
 /
 
