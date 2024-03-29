@@ -30,6 +30,7 @@ IS
     --   3.0    08/09/2023 TJL  BIZ-11857   Change code to return licensee names instead of primary licensee
     --   3.0    09/10/2023 TJL  BIZ-12315   Corrected bug in getting paid amount when ren50 and ren100
     --   4.0    03/26/2024 TJL  BIZ-14833   Change where and how information is retrieve for AWF Report
+    --   4.1    03/29/2024 TJL  BIZ-14833   Fix bug of not getting renew fee activity
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -88,17 +89,6 @@ BEGIN
                    api.pkg_columnquery.numericvalue(lt.renfeeobjid,
                                                     'FeeId')
                        renfeeid,
-                   REGEXP_SUBSTR(
-                       api.pkg_columnquery.VALUE(
-                           lt.renfeeobjid,
-                           'FeeScheduleDescription'),
-                       '[^ ]+',
-                       1,
-                       3)
-                       x,
-                   api.pkg_columnquery.VALUE(lt.renfeeobjid,
-                                             'Description')
-                       displaydes,
                    api.pkg_columnquery.datevalue(lt.renfeeobjid,
                                                  'TransactionDate')
                        awfdate,
@@ -207,7 +197,7 @@ BEGIN
                         rec.licensetypecode,
                         rec.expirationdate,
                         rec.awfdate,
-                        t_renfeeactivity,
+                        rec.renfeeactivity,
                         CASE api.pkg_columnquery.VALUE(rec.feeobjid,
                                                        'FeeCode')
                             WHEN 'GL5K'
