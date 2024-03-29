@@ -35,12 +35,6 @@ AS
                           a_licensetypecode IN VARCHAR2,
                           a_renewalfeedate IN DATE)
     RETURN VARCHAR2;
-
---    FUNCTION awfrequired(a_licensetypeobjectid IN NUMBER)
---        RETURN NUMBER;
---
---    FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
---        RETURN NUMBER;
 END;
 /
 
