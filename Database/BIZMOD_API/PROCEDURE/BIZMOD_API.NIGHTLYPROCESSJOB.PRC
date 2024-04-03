@@ -20,8 +20,10 @@ IS
     --                                        nightlyprocessjob. Added new functionality to
     --                                        handle AWF reports.
     --   5.2    03/28/2024  TJL  BIZ-14833  Fix bug in not sending emails
-    --   5.3    04/02/2024  TJL  Biz-14833  fix bub in updating expiration date in table
+    --   5.3    04/02/2024  TJL  BIZ-14833  fix bug in updating expiration date in table
     --                                        licensetype_t table.
+    --   5.4    04/03/2024  TJL  BIZ-14833  Fix bug in figuring out AWF when AWF report
+    --                                        is after expiration date
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -296,12 +298,18 @@ IS
             api.pkg_columnquery.datevalue(a_licensetypeobjectid, 'IssueDate');
 
         SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
-          INTO t_msgno -- t_awfrequired
+          INTO t_msgno 
           FROM (SELECT COUNT(1)     cnt
-                  FROM api.fees f
+                  FROM api.fees  f
+                       LEFT OUTER JOIN bizmod_api.awf_t a
+                           ON (f.feeid = a.awffeeid)
                  WHERE f.jobid = a_licensetypeobjectid
-                   AND TRUNC(f.transactiondate) > t_start_date
                    AND f.description LIKE '%AWF%'
+                   AND (api.pkg_columnquery.datevalue(f.jobid,
+                                                      'expirationdate') =
+                        a.expirationdate
+                     OR a.expirationdate IS NULL)
+                   AND TRUNC(f.transactiondate) > t_start_date
                 UNION
                 SELECT COUNT(1)     cnt
                   FROM bizmod_api.e_payments_t p
@@ -311,6 +319,23 @@ IS
                     AND p.licensetypecode IN ('02', '22')
                     AND p.description LIKE '%AWF%'
                     AND TRUNC(p.createddate) > t_start_date));
+
+        --        SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
+        --          INTO t_msgno -- t_awfrequired
+        --          FROM (SELECT COUNT(1)     cnt
+        --                  FROM api.fees f
+        --                 WHERE f.jobid = a_licensetypeobjectid
+        --                   AND TRUNC(f.transactiondate) > t_start_date
+        --                   AND f.description LIKE '%AWF%'
+        --                UNION
+        --                SELECT COUNT(1)     cnt
+        --                  FROM bizmod_api.e_payments_t p
+        --                 WHERE (p.licensenumber =
+        --                        api.pkg_columnquery.VALUE(a_licensetypeobjectid,
+        --                                                  'LicenseNumber')
+        --                    AND p.licensetypecode IN ('02', '22')
+        --                    AND p.description LIKE '%AWF%'
+        --                    AND TRUNC(p.createddate) > t_start_date));
 
         -- check if this was liense was just issued or was transfered
         IF (t_msgno IS NULL
