@@ -143,18 +143,13 @@ IS
                                  '02|22')
                     ORDER BY issuedate)
             LOOP
-                IF (t_transferfromobjectid IS NULL)
+                -- check to make sure transfer not pointing back to current
+                --   license when another transer from license has already been selected
+                IF (rec.licenseobjectid !=
+                    api.pkg_columnquery.numericvalue(a_jobid,
+                                                     'LicenseJobId'))
                 THEN
                     t_transferfromobjectid := rec.transferfromobjectid;
-                ELSE
-                    -- check to make sure transfer not pointing back to current
-                    --   license when another transer from license has already been selected
-                    IF (rec.licenseobjectid !=
-                        api.pkg_columnquery.numericvalue(a_jobid,
-                                                         'LicenseJobId'))
-                    THEN
-                        t_transferfromobjectid := rec.transferfromobjectid;
-                    END IF;
                 END IF;
             END LOOP;
         END IF;
