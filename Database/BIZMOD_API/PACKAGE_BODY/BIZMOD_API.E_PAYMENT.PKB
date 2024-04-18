@@ -28,6 +28,8 @@ AS
     --                                        functions from package body.
     --     4.0  02/29/2024 TJL  BIZ-14645   Added filter to getting licensetype for receipt payments
     --     5.0  04/09/2024 TJL  BIZ-15003   In payfees function changed how fees to be paid is validate
+    --     5.1  04/18/2024 TJL  BIZ-15003   Corrected bug of receipting payments not paid by paid fees
+    --                                        process
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -413,7 +415,8 @@ AS
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
-dbms_output.put_line('proposed job ' || t_paymentprocessid);
+            DBMS_OUTPUT.put_line('proposed job ' || t_paymentprocessid);
+
             -- ****************************************************************************************
             -- Get payments from payment table and Fees that are available to pay for selected license
             --  Number.
@@ -459,8 +462,8 @@ dbms_output.put_line('proposed job ' || t_paymentprocessid);
                                            'feescheduletransactionfeeactiv')) >
                                    0))
             LOOP
-            dbms_output.put_line('feeobjid 2: ' || rec.feeobjid);
-            
+                DBMS_OUTPUT.put_line('feeobjid 2: ' || rec.feeobjid);
+
                 t_match := FALSE;
                 t_relationshipid := NULL;
 
@@ -474,7 +477,8 @@ dbms_output.put_line('proposed job ' || t_paymentprocessid);
                                    'Fee')
                            AND r.fromobjectid = t_paymentprocessid)
                 LOOP
-            dbms_output.put_line('feeobjid 3: ' || pp.feeobjid);
+                    DBMS_OUTPUT.put_line('feeobjid 3: ' || pp.feeobjid);
+
                     IF (rec.feeobjid = pp.feeobjid)
                     THEN
                         -- match found and exit loop on match found
@@ -620,7 +624,8 @@ dbms_output.put_line('proposed job ' || t_paymentprocessid);
                                'Fee')
                        AND r.fromobjectid = t_paymentprocessid)
             LOOP
-dbms_output.put_line('feeobjid: ' || rec.feeobjid);            
+                DBMS_OUTPUT.put_line('feeobjid: ' || rec.feeobjid);
+
                 SELECT amountpaid
                   INTO t_amountpaid
                   FROM bizmod_api.e_payments_t p
@@ -655,6 +660,14 @@ dbms_output.put_line('feeobjid: ' || rec.feeobjid);
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
 
+            SELECT r.toobjectid
+              INTO t_paymentobjectid
+              FROM api.relationships r
+             WHERE r.endpointid =
+                   api.pkg_configquery.endpointidforname('j_ProposedPayment',
+                                                         'Payment')
+               AND r.fromobjectid = t_paymentprocessid;
+
             -- create receipt payment process
             t_processdefid :=
                 api.pkg_configquery.objectdefidforname('p_ReceiptPayments');
@@ -666,6 +679,22 @@ dbms_output.put_line('feeobjid: ' || rec.feeobjid);
                     a_scheduledstartdate => SYSDATE,
                     a_scheduledenddate => SYSDATE,
                     a_actualstartdate => SYSDATE);
+
+            -- remove payments not paid by this process
+            FOR rec
+                IN (SELECT r.*,
+                           api.pkg_columnquery.VALUE(r.toobjectid,
+                                                     'objectdefname')    nam
+                      FROM api.relationships r
+                     WHERE r.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'p_ReceiptPayments',
+                               'Payment')
+                       AND r.fromobjectid = t_processid
+                       AND r.toobjectid != t_paymentobjectid)
+            LOOP
+                api.pkg_relationshipupdate.remove(rec.relationshipid);
+            END LOOP;
 
             SELECT s.sequenceid
               INTO t_sequenceid
@@ -683,14 +712,6 @@ dbms_output.put_line('feeobjid: ' || rec.feeobjid);
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
-
-            SELECT r.toobjectid
-              INTO t_paymentobjectid
-              FROM api.relationships r
-             WHERE r.endpointid =
-                   api.pkg_configquery.endpointidforname('j_ProposedPayment',
-                                                         'Payment')
-               AND r.fromobjectid = t_paymentprocessid;
         ELSE
             -- remove perpose payment job (no fees to pay)
             api.pkg_jobupdate.remove(t_paymentprocessid);
