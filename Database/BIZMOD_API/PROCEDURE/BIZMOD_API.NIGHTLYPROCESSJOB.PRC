@@ -24,6 +24,9 @@ IS
     --                                        licensetype_t table.
     --   5.4    04/03/2024  TJL  BIZ-14833  Fix bug in figuring out AWF when AWF report
     --                                        is after expiration date
+    --   6.0    04/18/2024  TJL  BIZ-15102  Fix bug in get_awfreninfo where transfer points
+    --                                         back to itself which caused a recursion loop
+    --                                         that eventually failed.
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -320,23 +323,6 @@ IS
                     AND p.description LIKE '%AWF%'
                     AND TRUNC(p.createddate) > t_start_date));
 
-        --        SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
-        --          INTO t_msgno -- t_awfrequired
-        --          FROM (SELECT COUNT(1)     cnt
-        --                  FROM api.fees f
-        --                 WHERE f.jobid = a_licensetypeobjectid
-        --                   AND TRUNC(f.transactiondate) > t_start_date
-        --                   AND f.description LIKE '%AWF%'
-        --                UNION
-        --                SELECT COUNT(1)     cnt
-        --                  FROM bizmod_api.e_payments_t p
-        --                 WHERE (p.licensenumber =
-        --                        api.pkg_columnquery.VALUE(a_licensetypeobjectid,
-        --                                                  'LicenseNumber')
-        --                    AND p.licensetypecode IN ('02', '22')
-        --                    AND p.description LIKE '%AWF%'
-        --                    AND TRUNC(p.createddate) > t_start_date));
-
         -- check if this was liense was just issued or was transfered
         IF (t_msgno IS NULL
         AND t_issuedate > ADD_MONTHS(t_expiration, -24))
@@ -408,25 +394,30 @@ IS
                         END IF;
                     END LOOP;
 
-                    SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
-                      INTO t_msgno
-                      FROM (SELECT COUNT(1)     cnt
-                              FROM api.fees f
-                             WHERE f.jobid = t_transferfromobjectid
-                               AND TRUNC(f.transactiondate) BETWEEN t_start_date
+                    IF (t_transferfromobjectid IS NOT NULL)
+                    THEN
+                        SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
+                          INTO t_msgno
+                          FROM (SELECT COUNT(1)     cnt
+                                  FROM api.fees f
+                                 WHERE f.jobid = t_transferfromobjectid
+                                   AND TRUNC(f.transactiondate) BETWEEN t_start_date
+                                                                    AND t_end_date
+                                   AND f.description LIKE '%AWF%'
+                                UNION
+                                SELECT COUNT(1)     cnt
+                                  FROM bizmod_api.e_payments_t p
+                                 WHERE p.licensenumber =
+                                       api.pkg_columnquery.VALUE(
+                                           t_transferfromobjectid,
+                                           'LicenseNumber')
+                                   AND p.licensetypecode IN ('02', '22')
+                                   AND TRUNC(p.createddate) BETWEEN t_start_date
                                                                 AND t_end_date
-                               AND f.description LIKE '%AWF%'
-                            UNION
-                            SELECT COUNT(1)     cnt
-                              FROM bizmod_api.e_payments_t p
-                             WHERE p.licensenumber =
-                                   api.pkg_columnquery.VALUE(
-                                       t_transferfromobjectid,
-                                       'LicenseNumber')
-                               AND p.licensetypecode IN ('02', '22')
-                               AND TRUNC(p.createddate) BETWEEN t_start_date
-                                                            AND t_end_date
-                               AND p.description LIKE '%AWF%');
+                                   AND p.description LIKE '%AWF%');
+                    ELSE
+                        t_msgno := 10;
+                    END IF;
                 ELSE
                     NULL;
             END CASE;
