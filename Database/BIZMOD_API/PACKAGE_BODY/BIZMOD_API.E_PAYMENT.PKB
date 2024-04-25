@@ -30,8 +30,11 @@ AS
     --     5.0  04/09/2024 TJL  BIZ-15003   In payfees function changed how fees to be paid is validate
     --     5.1  04/18/2024 TJL  BIZ-15003   Corrected bug of receipting payments not paid by paid fees
     --                                        process
+    --     6.0  04/24/2024 TJL  BIZ-15142   Corrected bug in payfees function where payment applied to
+    --                                        wrong fee record when multiple fees available for same
+    --                                        license with different confirmation number.
     -- **************************************************************************
-    PROCEDURE makepayment(a_licensenumber    VARCHAR2,
+    PROCEDURE makepayment(a_confirmationid   VARCHAR2,
                           a_asofdate         DATE,
                           a_error        OUT VARCHAR2)
     IS
@@ -40,34 +43,56 @@ AS
         t_id           api.pkg_definition.udt_id;
         t_processid    NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
         t_processdate  DATE := SYSDATE;
+        t_paymentmethod bizmod_api.e_payments_t.paymentmethod%TYPE;
+        t_confirmationid bizmod_api.e_payments_t.confirmationid%TYPE;
+        t_payeename    bizmod_api.e_payments_t.payeename%TYPE;
+        t_datepaid     bizmod_api.e_payments_t.datepaid%TYPE;
+        t_jobid        api.pkg_definition.udt_id;
+        t_licensenumber bizmod_api.e_payments_t.licensenumber%TYPE;
+        t_feeobjidlst  api.udt_objectlist;
     BEGIN
-        FOR rec
-            IN (  SELECT paymentmethod,
-                         licensenumber,
-                         confirmationid,
-                         payeename,
-                         datepaid,
-                         SUM(amountpaid)                                payamount,
-                         LISTAGG(licensetypecode, ',')
-                             WITHIN GROUP (ORDER BY licensetypecode)    licensetypecodes
-                    FROM bizmod_api.e_payments_t p
-                   WHERE p.paymentobjectid IS NULL
-                     AND p.licensenumber = a_licensenumber
-                GROUP BY paymentmethod,
-                         licensenumber,
-                         confirmationid,
-                         payeename,
-                         datepaid)
-        LOOP
+        SELECT api.udt_object(p.feeobjid)
+          BULK COLLECT INTO t_feeobjidlst
+          FROM bizmod_api.e_payments_t p
+         WHERE p.paymentobjectid IS NULL
+           AND p.confirmationid = a_confirmationid
+           AND (  NVL(
+                      api.pkg_columnquery.numericvalue(p.feeobjid,
+                                                       'paidamount'),
+                      0)
+                + NVL(api.pkg_columnquery.numericvalue(p.feeobjid, 'amount'),
+                      0)
+                + NVL(
+                      api.pkg_columnquery.numericvalue(p.feeobjid,
+                                                       'adjustedamount'),
+                      0)) >
+               0;
+
+        IF (t_feeobjidlst.COUNT > 0)
+        THEN
+            SELECT paymentmethod,
+                   confirmationid,
+                   payeename,
+                   datepaid,
+                   api.pkg_columnquery.numericvalue(p.feeobjid, 'JobId'),
+                   licensenumber
+              INTO t_paymentmethod,
+                   t_confirmationid,
+                   t_payeename,
+                   t_datepaid,
+                   t_jobid,
+                   t_licensenumber
+              FROM bizmod_api.e_payments_t p
+             WHERE p.feeobjid = t_feeobjidlst(1).objectid;
+
             t_id :=
                 bizmod_api.e_payment.payfees(
-                    a_paymentmethod => rec.paymentmethod,
-                    a_licensenumber => rec.licensenumber,
-                    a_licensetypecodes => rec.licensetypecodes,
-                    a_payamount => rec.payamount,
-                    a_payeereference => rec.confirmationid,
-                    a_payeename => rec.payeename,
-                    a_paymentdate => rec.datepaid,
+                    a_feeobjidlst => t_feeobjidlst,
+                    a_paymentmethod => t_paymentmethod,
+                    a_payeereference => t_confirmationid,
+                    a_payeename => t_payeename,
+                    a_paymentdate => t_datepaid,
+                    a_jobid     => t_jobid,
                     a_sqlerrm   => t_sqlerrm,
                     a_backtrace => t_backtrace);
 
@@ -79,8 +104,7 @@ AS
                        END,
                    p.processid = t_processid,
                    p.processdate = t_processdate
-             WHERE p.licensenumber = rec.licensenumber
-               AND p.confirmationid = rec.confirmationid
+             WHERE p.confirmationid = t_confirmationid
                AND NVL(p.paymentobjectid, 0) = 0;
 
             IF (t_sqlerrm IS NOT NULL)
@@ -91,14 +115,11 @@ AS
                                                             ep.seq)
                      VALUES (t_sqlerrm,
                              t_backtrace,
-                             rec.licensenumber,
+                             t_licensenumber,
                              t_processid);
 
                 a_error := t_sqlerrm;
             END IF;
-
-            --        t_sqlerrm := SQLERRM;
-            --        t_backtrace := DBMS_UTILITY.format_error_backtrace;
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
@@ -109,22 +130,22 @@ AS
                          0,
                          'MAKEPAYMENT',
                          'LicenseNumber: '
-                         || rec.licensenumber
+                         || t_licensenumber
                          || CHR(13)
                          || 'Confirmation Id: '
-                         || rec.confirmationid,
+                         || t_confirmationid,
                          t_sqlerrm,
                          t_backtrace);
 
             COMMIT;
-        END LOOP;
+        END IF;
     END;
 
-    PROCEDURE makepayment(a_licensenumber VARCHAR2, a_asofdate DATE)
+    PROCEDURE makepayment(a_confirmationid VARCHAR2, a_asofdate DATE)
     IS
         t_sqlerrm      VARCHAR2(4000);
     BEGIN
-        makepayment(a_licensenumber, a_asofdate, t_sqlerrm);
+        makepayment(a_confirmationid, a_asofdate, t_sqlerrm);
     END;
 
 
@@ -179,14 +200,6 @@ AS
                api.pkg_configquery.endpointidforname('o_Fee',
                                                      'LicenseFeeSchedule')
            AND r.fromobjectid = a_feeobjid;
-
-        DBMS_OUTPUT.put_line(
-            'master: '
-            || t_ismaster
-            || '  sec count: '
-            || t_secondarycount
-            || '  masterlt: '
-            || t_masterlt);
 
         t_loop :=
             CASE
@@ -322,19 +335,18 @@ AS
     *   license.  It will add any fees that were created that were not created
     *   by test scripts.
     ***************************************************************************/
-    FUNCTION payfees(a_paymentmethod IN    VARCHAR2,
-                     a_licensenumber IN    VARCHAR2,
-                     a_licensetypecodes IN VARCHAR2,
-                     a_payamount    IN     NUMBER,
+    FUNCTION payfees(a_feeobjidlst  IN     api.udt_objectlist,
+                     a_paymentmethod IN    VARCHAR2,
                      a_payeereference IN   VARCHAR2,
                      a_payeename    IN     VARCHAR2,
                      a_paymentdate  IN     DATE,
+                     a_jobid        IN     NUMBER,
                      a_sqlerrm         OUT VARCHAR2,
                      a_backtrace       OUT VARCHAR2)
         RETURN NUMBER
     IS
         t_amountpaid   NUMBER;
-        t_amountleft   NUMBER := a_payamount;
+        t_amountleft   NUMBER; -- := a_payamount;
         t_feecount     NUMBER := 0;
 
         t_paymentprocessid api.pkg_definition.udt_id;
@@ -342,8 +354,6 @@ AS
         t_processid    api.pkg_definition.udt_id;
         t_processdefid api.pkg_definition.udt_id;
         t_relationshipid api.pkg_definition.udt_id;
-        t_jobid        api.pkg_definition.udt_id;
-        lst            api.udt_objectlist;
         t_rel          NUMBER;
 
         t_receiptnumber VARCHAR2(40);
@@ -357,205 +367,116 @@ AS
         api.pkg_logicaltransactionupdate.resettransaction;
         ROLLBACK;
 
-        DBMS_OUTPUT.put_line(a_licensenumber || ' : ' || a_payeereference);
-
-        -- From License number get first license type job for creating proposed payment job
-        --  and generate any required penalties
-        BEGIN
-            SELECT api.pkg_columnquery.VALUE(p.feeobjid, 'jobid')     jobid
-              INTO t_jobid
-              FROM bizmod_api.e_payments_t p
-             WHERE p.licensenumber = a_licensenumber
-               AND p.paymentobjectid IS NULL
-               AND ROWNUM = 1;
-        EXCEPTION
-            WHEN NO_DATA_FOUND
+        --*************************************************************************************
+        -- add penalty fees if needed
+        FOR rec
+            IN (SELECT p.feeobjid, p.description
+                  FROM bizmod_api.e_payments_t  p
+                       JOIN TABLE(a_feeobjidlst) f
+                           ON (p.feeobjid = f.objectid)
+                 WHERE p.description LIKE '%REN%')
+        LOOP
+            -- check if penalty fee needs to be created
+            IF (rec.description !=
+                api.pkg_columnquery.VALUE(rec.feeobjid, 'Description'))
             THEN
-                NULL; -- do nothing
-        END;
+                createpenaltyfee(a_jobid     => a_jobid,
+                                 a_feeobjid  => rec.feeobjid,
+                                 a_description => rec.description);
+            END IF;
+        END LOOP;
 
-        IF (t_jobid IS NOT NULL)
-        THEN
-            --*************************************************************************************
-            -- add penalty fees if needed
-            FOR rec IN (SELECT p.feeobjid, p.description
-                          FROM bizmod_api.e_payments_t p
-                         WHERE p.licensenumber = a_licensenumber
-                           AND p.confirmationid = a_payeereference
-                           AND p.description LIKE '%REN%'
-                           AND p.paymentobjectid IS NULL)
-            LOOP
-                -- check if penalty fee needs to be created
-                IF (rec.description !=
-                    api.pkg_columnquery.VALUE(rec.feeobjid, 'Description'))
-                THEN
-                    createpenaltyfee(a_jobid     => t_jobid,
-                                     a_feeobjid  => rec.feeobjid,
-                                     a_description => rec.description);
-                END IF;
-            END LOOP;
+        --*************************************************************************************
 
-            --*************************************************************************************
+        -- *****************************************************************************************
+        -- Create Proposed Payment Job
+        -- *****************************************************************************************
+        INSERT INTO abc.tmp_jobid(objectid)
+             VALUES (a_jobid);
 
+        -- create payment process
+        t_paymentprocessid :=
+            api.pkg_jobupdate.new(
+                api.pkg_configquery.objectdefidforname('j_ProposedPayment'),
+                'ProposedPayment',
+                NULL,
+                a_jobid);
 
-            -- *****************************************************************************************
-            -- Create Proposed Payment Job
-            -- *****************************************************************************************
-            INSERT INTO abc.tmp_jobid(objectid)
-                 VALUES (t_jobid);
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
 
-            -- create payment process
-            t_paymentprocessid :=
-                api.pkg_jobupdate.new(
-                    api.pkg_configquery.objectdefidforname(
-                        'j_ProposedPayment'),
-                    'ProposedPayment',
-                    NULL,
-                    t_jobid);
+        SELECT COUNT(r.toobjectid)
+          INTO t_feecount
+          FROM api.relationships r
+         WHERE r.endpointid =
+               api.pkg_configquery.endpointidforname('j_ProposedPayment',
+                                                     'Fee')
+           AND r.fromobjectid = t_paymentprocessid;
+
+        -- remove default Payment Method
+        SELECT r.relationshipid
+          INTO t_rel
+          FROM api.relationships r
+         WHERE r.endpointid =
+               api.pkg_configquery.endpointidforname('j_ProposedPayment',
+                                                     'PaymentMethod')
+           AND r.fromobjectid = t_paymentprocessid;
+
+        api.pkg_relationshipupdate.remove(t_rel);
+
+        -- remove all payments that were added to proposed payment when created
+        FOR pp
+            IN (SELECT r.toobjectid feeobjid, r.relationshipid
+                  FROM api.relationships r
+                 WHERE r.endpointid =
+                       api.pkg_configquery.endpointidforname(
+                           'j_ProposedPayment',
+                           'Fee')
+                   AND r.fromobjectid = t_paymentprocessid)
+        LOOP
+            api.pkg_relationshipupdate.remove(pp.relationshipid);
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
+        END LOOP;
+
+        -- ****************************************************************************************
+        -- Get payments from payment table and Fees that are available to pay for selected license
+        --  Number and Confirmation Number.
+        -- Add any fees to be paid not in proposed payment job (usually fees on another license type
+        --   associated to selected license
+        -- ****************************************************************************************
+        FOR rec
+            IN ( -- 04/24/2024 TJL  BIZ-15142
+                SELECT p.feeobjid, p.seq, p.amountpaid
+                  FROM bizmod_api.e_payments_t  p
+                       JOIN TABLE(a_feeobjidlst) f
+                           ON (p.feeobjid = f.objectid))
+        LOOP
+            -- 04/24/2024 TJL  BIZ-15142
+            -- not paid
+            t_totalpaid := t_totalpaid + rec.amountpaid;
+
+            -- added fee to be paid   add new relationship (endpointid, fromobjectid, toobjectid)
+            t_rel :=
+                api.pkg_relationshipupdate.new(
+                    api.pkg_configquery.endpointidforname(
+                        'j_ProposedPayment',
+                        'Fee'),
+                    t_paymentprocessid,
+                    rec.feeobjid);
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
-            DBMS_OUTPUT.put_line('proposed job ' || t_paymentprocessid);
+        END LOOP;
 
-            -- ****************************************************************************************
-            -- Get payments from payment table and Fees that are available to pay for selected license
-            --  Number.
-            -- Remove any fees not to be paid from proposed payment job
-            -- Add any fees to be paid not in proposed payment job (usually fees on another license type
-            --   associated to selected license
-            -- ****************************************************************************************
-            FOR rec
-                IN (WITH
-                        feeids
-                        AS
-                            (SELECT p.feeobjid     feeobjid
-                               FROM bizmod_api.e_payments_t p
-                              WHERE p.licensenumber = a_licensenumber
-                                AND paymentobjectid IS NULL
-                             UNION
-                             SELECT reo.objectid     feeobjid
-                               FROM TABLE(
-                                        CAST(
-                                            api.pkg_simplesearch.castableobjectsbyindex(
-                                                a_objectdefname =>
-                                                    'j_licensetype',
-                                                a_columnname =>
-                                                    'dup_LicenseExternalFileNum',
-                                                a_value     =>
-                                                    a_licensenumber)
-                                                AS api.udt_objectlist)) o
-                                    JOIN api.fees f ON (f.jobid = o.objectid)
-                                    JOIN api.registeredexternalobjects reo
-                                        ON (reo.objectdefid =
-                                            api.pkg_configquery.objectdefidforname(
-                                                'o_fee')
-                                        AND reo.linkvalue = TO_CHAR(f.feeid))
-                              WHERE paidamount + amount + adjustedamount > 0)
-                    SELECT f.feeobjid, p.seq, p.amountpaid
-                      FROM feeids  f
-                           LEFT JOIN bizmod_api.e_payments_t p
-                               ON (f.feeobjid = NVL(p.feeobjid, 0)
-                               AND INSTR(
-                                       p.description,
-                                       api.pkg_columnquery.VALUE(
-                                           f.feeobjid,
-                                           'feescheduletransactionfeeactiv')) >
-                                   0))
-            LOOP
-                DBMS_OUTPUT.put_line('feeobjid 2: ' || rec.feeobjid);
-
-                t_match := FALSE;
-                t_relationshipid := NULL;
-
-                -- loop thru perposed payment job looking for feeobjid matches
-                FOR pp
-                    IN (SELECT r.toobjectid feeobjid, r.relationshipid
-                          FROM api.relationships r
-                         WHERE r.endpointid =
-                               api.pkg_configquery.endpointidforname(
-                                   'j_ProposedPayment',
-                                   'Fee')
-                           AND r.fromobjectid = t_paymentprocessid)
-                LOOP
-                    DBMS_OUTPUT.put_line('feeobjid 3: ' || pp.feeobjid);
-
-                    IF (rec.feeobjid = pp.feeobjid)
-                    THEN
-                        -- match found and exit loop on match found
-                        t_match := TRUE;
-                        t_relationshipid := pp.relationshipid;
-                        EXIT WHEN t_match;
-                    END IF;
-                END LOOP;
-
-                IF (t_match)
-                THEN
-                    -- match found, check if fee to pay is in payment table
-                    IF (rec.seq IS NULL)
-                    THEN
-                        -- selected fee is not to be paid, remove from proposed payment job
-                        api.pkg_relationshipupdate.remove(t_relationshipid);
-                        api.pkg_logicaltransactionupdate.endtransaction;
-                        COMMIT;
-
-                        DBMS_OUTPUT.put_line(rec.feeobjid || '  DELETE');
-                    ELSE
-                        DBMS_OUTPUT.put_line(
-                            rec.feeobjid || '  DO NOTHING (MATCH) ');
-                        t_totalpaid := t_totalpaid + rec.amountpaid;
-                    END IF;
-                ELSE
-                    IF (rec.seq IS NOT NULL)
-                    THEN
-                        -- check if payment has not already been paid
-                        IF (  api.pkg_columnquery.numericvalue(rec.feeobjid,
-                                                               'paidamount')
-                            + api.pkg_columnquery.numericvalue(rec.feeobjid,
-                                                               'amount')
-                            + api.pkg_columnquery.numericvalue(
-                                  rec.feeobjid,
-                                  'adjustedamount') >
-                            0)
-                        THEN
-                            DBMS_OUTPUT.put_line(rec.feeobjid || '  ADD');
-                            t_totalpaid := t_totalpaid + rec.amountpaid;
-
-                            -- added fee to be paid
-                            -- add new relationship                (endpointid, fromobjectid, toobjectid)
-                            t_rel :=
-                                api.pkg_relationshipupdate.new(
-                                    api.pkg_configquery.endpointidforname(
-                                        'j_ProposedPayment',
-                                        'Fee'),
-                                    t_paymentprocessid,
-                                    rec.feeobjid);
-
-                            api.pkg_logicaltransactionupdate.endtransaction;
-                            COMMIT;
-                        ELSE
-                            DBMS_OUTPUT.put_line(
-                                rec.feeobjid || '  ALREADY PAID');
-
-                            -- flag as error in payment
-                            -- update payment table with 0 for no payment
-                            -- indicate non payment on payment record
-                            UPDATE bizmod_api.e_payments_t p
-                               SET p.paymentobjectid = 0
-                             WHERE p.feeobjid = rec.feeobjid;
-                        END IF;
-                    END IF;
-                END IF;
-            END LOOP;
-
-            -- get number of fee records to pay
-            SELECT COUNT(r.toobjectid)
-              INTO t_feecount
-              FROM api.relationships r
-             WHERE r.endpointid =
-                   api.pkg_configquery.endpointidforname('j_ProposedPayment',
-                                                         'Fee')
-               AND r.fromobjectid = t_paymentprocessid;
-        END IF;
+        -- get number of fee records to pay
+        SELECT COUNT(r.toobjectid)
+          INTO t_feecount
+          FROM api.relationships r
+         WHERE r.endpointid =
+               api.pkg_configquery.endpointidforname('j_ProposedPayment',
+                                                     'Fee')
+           AND r.fromobjectid = t_paymentprocessid;
 
         IF (t_feecount > 0)
         THEN
@@ -563,17 +484,6 @@ AS
             -- Pay the fees
             -- *****************************************************************************************
             t_amountleft := t_totalpaid;
-
-            -- remove default Payment Method
-            SELECT r.relationshipid
-              INTO t_rel
-              FROM api.relationships r
-             WHERE r.endpointid =
-                   api.pkg_configquery.endpointidforname('j_ProposedPayment',
-                                                         'PaymentMethod')
-               AND r.fromobjectid = t_paymentprocessid;
-
-            api.pkg_relationshipupdate.remove(t_rel);
 
             -- add Credit Card or E-Check payment method relationship to Proposed Payment job
             -- add new relationship                (endpointid, fromobjectid, toobjectid)
@@ -624,8 +534,6 @@ AS
                                'Fee')
                        AND r.fromobjectid = t_paymentprocessid)
             LOOP
-                DBMS_OUTPUT.put_line('feeobjid: ' || rec.feeobjid);
-
                 SELECT amountpaid
                   INTO t_amountpaid
                   FROM bizmod_api.e_payments_t p
@@ -673,7 +581,7 @@ AS
                 api.pkg_configquery.objectdefidforname('p_ReceiptPayments');
             t_processid :=
                 api.pkg_processupdate.new(
-                    a_job       => t_jobid,
+                    a_job       => a_jobid,
                     a_processtype => t_processdefid,
                     a_description => 'Receipt Payments',
                     a_scheduledstartdate => SYSDATE,
@@ -730,7 +638,6 @@ AS
             a_backtrace :=
                 SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-            DBMS_OUTPUT.put_line(a_sqlerrm || '  ' || a_backtrace);
             api.pkg_logicaltransactionupdate.resettransaction;
             ROLLBACK;
 
