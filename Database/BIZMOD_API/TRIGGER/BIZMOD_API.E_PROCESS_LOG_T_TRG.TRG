@@ -1,4 +1,4 @@
-CREATE OR REPLACE TRIGGER BIZMOD_API.e_process_log_t_trg
+CREATE OR REPLACE TRIGGER BIZMOD_API.E_PROCESS_LOG_T_TRG
     AFTER INSERT
     ON BIZMOD_API.E_PROCESS_LOG_T
     FOR EACH ROW
@@ -42,7 +42,7 @@ BEGIN
                      FOR parametername
                      IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
 
-        IF (t_to IS NOT NULL)
+        IF (t_from IS NOT NULL)
         THEN
             sitespecific.pkg_tlemail.sendemail(
                 p_fromaddress => t_from,

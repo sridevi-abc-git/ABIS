@@ -10,7 +10,7 @@ DECLARE
 BEGIN
     FOR rec IN (SELECT ep.parametername, ep.parametervalue
                   FROM abc.email_parameters ep
-                 WHERE ep.app = 'EPAYMENT')
+                 WHERE ep.app = 'EPAYMENT_ERR')
     LOOP
         CASE rec.parametername
             WHEN 'TO' THEN
