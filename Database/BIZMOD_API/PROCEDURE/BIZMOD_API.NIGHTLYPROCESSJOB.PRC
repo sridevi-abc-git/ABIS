@@ -27,6 +27,8 @@ IS
     --   6.0    04/18/2024  TJL  BIZ-15102  Fix bug in get_awfreninfo where transfer points
     --                                         back to itself which caused a recursion loop
     --                                         that eventually failed.
+    --   7.0    04/26/2024  TJL  BIZ-15142  Fixed bug in AWF process in trying to reprocess
+    --                                         Fee that failed
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -932,7 +934,7 @@ BEGIN
             FOR rec IN (SELECT p.feeobjid, p.seq
                           FROM bizmod_api.e_payments_t p
                          WHERE p.feeobjid IS NOT NULL
-                           AND NVL(p.paymentobjectid, 0) = 0
+                           AND NVL(p.paymentobjectid, 1) > 0  -- 04/26/2024 TJL BIZ-15142 
                            AND p.description LIKE '%AWF%')
             LOOP
                 BEGIN
