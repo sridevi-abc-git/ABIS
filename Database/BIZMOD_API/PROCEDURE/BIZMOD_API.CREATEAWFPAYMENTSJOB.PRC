@@ -21,6 +21,7 @@ IS
     --   4.0     03/06/2024  TJL BIZ-14725  Added updating payment table with process sequence
     --                                        and date processed. Fixed bug payment batch not
     --                                        updating payment object id
+    --   5.0     04/23/2024  TJL BIZ-15138  Corrected bug in duplicating AWF payment records
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -86,7 +87,8 @@ BEGIN
                        JOIN bizmod_api.e_payments_t p
                            ON (pp.confirmationnumber = p.confirmationid)
                        JOIN bizmod_api.awf_t a
-                           ON (a.licensenumber = p.licensenumber)
+                           ON (a.licensenumber = p.licensenumber
+                                and a.licensetypecode = p.licensetypecode)  -- 04/23/2024  TJL BIZ-15138
                  WHERE a.paymentbatch IS NULL
                    AND pp.paymentmedium IS NOT NULL
                    AND pp.paymenttype = 'Primary'

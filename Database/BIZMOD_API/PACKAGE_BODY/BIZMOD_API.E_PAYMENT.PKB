@@ -27,6 +27,9 @@ AS
     --     3.1  01/11/2024 TJL  BIZ-14091   Removed createtransmittal and createawfpayments
     --                                        functions from package body.
     --     4.0  02/29/2024 TJL  BIZ-14645   Added filter to getting licensetype for receipt payments
+    --     5.0  04/09/2024 TJL  BIZ-15003   In payfees function changed how fees to be paid is validate
+    --     5.1  04/18/2024 TJL  BIZ-15003   Corrected bug of receipting payments not paid by paid fees
+    --                                        process
     -- **************************************************************************
     PROCEDURE makepayment(a_licensenumber    VARCHAR2,
                           a_asofdate         DATE,
@@ -313,7 +316,6 @@ AS
     END;
 
 
-
     /***************************************************************************
     * Payfees
     *   This script will create payment for fees that have not paid on a
@@ -349,6 +351,8 @@ AS
         t_paymentmethodobjectid api.pkg_definition.udt_id;
         t_description  VARCHAR2(20);
         t_feeobjid     api.pkg_definition.udt_id;
+        t_match        BOOLEAN;
+        t_totalpaid    NUMBER := 0;
     BEGIN
         api.pkg_logicaltransactionupdate.resettransaction;
         ROLLBACK;
@@ -357,189 +361,209 @@ AS
 
         -- From License number get first license type job for creating proposed payment job
         --  and generate any required penalties
-        WITH
-            ltobjid
-            AS
-                (SELECT /*+ materialize */
-                        objectid,
-                        api.pkg_columnquery.VALUE(objectid,
-                                                  'LicenseTypeCode')
-                            licensetypecode,
-                        api.pkg_columnquery.VALUE(slt.toobjectid,
-                                                  'LicenseTypeCode')
-                            secondarylicensetypecode
-                   FROM TABLE(
-                            CAST(
-                                api.pkg_simplesearch.castableobjectsbyindex(
-                                    a_objectdefname => 'j_licensetype',
-                                    a_columnname =>
-                                        'dup_LicenseExternalFileNum',
-                                    a_value     => a_licensenumber)
-                                    AS api.udt_objectlist)) o
-                        LEFT OUTER JOIN api.relationships slt
-                            ON (o.objectid = slt.fromobjectid
-                            AND slt.endpointid =
-                                api.pkg_configquery.endpointidforname(
-                                    'j_LicenseType',
-                                    'LicTypeCatSecondary'))
-                  WHERE api.pkg_columnquery.VALUE(objectid, 'StatusName') NOT IN
-                            ('CANCEL', 'WTHDRN'))
-        SELECT lt.objectid
-          INTO t_jobid
-          FROM bizmod_api.e_payments_t  p
-               JOIN ltobjid lt
-                   ON ((lt.licensetypecode = p.licensetypecode
-                     OR lt.secondarylicensetypecode = p.licensetypecode))
-         WHERE p.licensenumber = a_licensenumber
-           AND p.confirmationid = a_payeereference
-           AND p.paymentobjectid IS NULL
-           AND ROWNUM = 1;
-
-        --*************************************************************************************
-        -- add penalty fees if needed
-        FOR rec IN (SELECT p.feeobjid, p.description
-                      FROM bizmod_api.e_payments_t p
-                     WHERE p.licensenumber = a_licensenumber
-                       AND p.confirmationid = a_payeereference
-                       AND p.description LIKE '%REN%'
-                       AND p.paymentobjectid IS NULL)
-        LOOP
-            -- check if penalty fee needs to be created
-            IF (rec.description !=
-                api.pkg_columnquery.VALUE(rec.feeobjid, 'Description'))
+        BEGIN
+            SELECT api.pkg_columnquery.VALUE(p.feeobjid, 'jobid')     jobid
+              INTO t_jobid
+              FROM bizmod_api.e_payments_t p
+             WHERE p.licensenumber = a_licensenumber
+               AND p.paymentobjectid IS NULL
+               AND ROWNUM = 1;
+        EXCEPTION
+            WHEN NO_DATA_FOUND
             THEN
-                createpenaltyfee(a_jobid     => t_jobid,
-                                 a_feeobjid  => rec.feeobjid,
-                                 a_description => rec.description);
-            END IF;
-        END LOOP;
+                NULL; -- do nothing
+        END;
 
-        --*************************************************************************************
+        IF (t_jobid IS NOT NULL)
+        THEN
+            --*************************************************************************************
+            -- add penalty fees if needed
+            FOR rec IN (SELECT p.feeobjid, p.description
+                          FROM bizmod_api.e_payments_t p
+                         WHERE p.licensenumber = a_licensenumber
+                           AND p.confirmationid = a_payeereference
+                           AND p.description LIKE '%REN%'
+                           AND p.paymentobjectid IS NULL)
+            LOOP
+                -- check if penalty fee needs to be created
+                IF (rec.description !=
+                    api.pkg_columnquery.VALUE(rec.feeobjid, 'Description'))
+                THEN
+                    createpenaltyfee(a_jobid     => t_jobid,
+                                     a_feeobjid  => rec.feeobjid,
+                                     a_description => rec.description);
+                END IF;
+            END LOOP;
+
+            --*************************************************************************************
 
 
-        -- *****************************************************************************************
-        -- Create Proposed Payment Job
-        -- *****************************************************************************************
-        INSERT INTO abc.tmp_jobid(objectid)
-             VALUES (t_jobid);
+            -- *****************************************************************************************
+            -- Create Proposed Payment Job
+            -- *****************************************************************************************
+            INSERT INTO abc.tmp_jobid(objectid)
+                 VALUES (t_jobid);
 
-        -- create payment process
-        t_paymentprocessid :=
-            api.pkg_jobupdate.new(
-                api.pkg_configquery.objectdefidforname('j_ProposedPayment'),
-                'ProposedPayment',
-                NULL,
-                t_jobid);
+            -- create payment process
+            t_paymentprocessid :=
+                api.pkg_jobupdate.new(
+                    api.pkg_configquery.objectdefidforname(
+                        'j_ProposedPayment'),
+                    'ProposedPayment',
+                    NULL,
+                    t_jobid);
 
-        api.pkg_logicaltransactionupdate.endtransaction;
-        COMMIT;
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
+            DBMS_OUTPUT.put_line('proposed job ' || t_paymentprocessid);
 
-        -- *****************************************************************************************
-        -- Add any additional fees for selected license not found on current license type
-        -- *****************************************************************************************
-        SELECT api.udt_object(reo.objectid)
-          BULK COLLECT INTO lst
-          FROM TABLE(
-                   CAST(
-                       api.pkg_simplesearch.castableobjectsbyindex(
-                           a_objectdefname => 'j_licensetype',
-                           a_columnname => 'dup_LicenseExternalFileNum',
-                           a_value     => a_licensenumber)
-                           AS api.udt_objectlist)) o
-               JOIN api.fees f ON (f.jobid = o.objectid)
-               JOIN api.registeredexternalobjects reo
-                   ON (reo.objectdefid =
-                       api.pkg_configquery.objectdefidforname('o_fee')
-                   AND reo.linkvalue = TO_CHAR(f.feeid))
-               JOIN bizmod_api.e_payments_t p
-                   ON reo.objectid = p.feeobjid
-                  AND paidamount + amount + adjustedamount > 0;
+            -- ****************************************************************************************
+            -- Get payments from payment table and Fees that are available to pay for selected license
+            --  Number.
+            -- Remove any fees not to be paid from proposed payment job
+            -- Add any fees to be paid not in proposed payment job (usually fees on another license type
+            --   associated to selected license
+            -- ****************************************************************************************
+            FOR rec
+                IN (WITH
+                        feeids
+                        AS
+                            (SELECT p.feeobjid     feeobjid
+                               FROM bizmod_api.e_payments_t p
+                              WHERE p.licensenumber = a_licensenumber
+                                AND paymentobjectid IS NULL
+                             UNION
+                             SELECT reo.objectid     feeobjid
+                               FROM TABLE(
+                                        CAST(
+                                            api.pkg_simplesearch.castableobjectsbyindex(
+                                                a_objectdefname =>
+                                                    'j_licensetype',
+                                                a_columnname =>
+                                                    'dup_LicenseExternalFileNum',
+                                                a_value     =>
+                                                    a_licensenumber)
+                                                AS api.udt_objectlist)) o
+                                    JOIN api.fees f ON (f.jobid = o.objectid)
+                                    JOIN api.registeredexternalobjects reo
+                                        ON (reo.objectdefid =
+                                            api.pkg_configquery.objectdefidforname(
+                                                'o_fee')
+                                        AND reo.linkvalue = TO_CHAR(f.feeid))
+                              WHERE paidamount + amount + adjustedamount > 0)
+                    SELECT f.feeobjid, p.seq, p.amountpaid
+                      FROM feeids  f
+                           LEFT JOIN bizmod_api.e_payments_t p
+                               ON (f.feeobjid = NVL(p.feeobjid, 0)
+                               AND INSTR(
+                                       p.description,
+                                       api.pkg_columnquery.VALUE(
+                                           f.feeobjid,
+                                           'feescheduletransactionfeeactiv')) >
+                                   0))
+            LOOP
+                DBMS_OUTPUT.put_line('feeobjid 2: ' || rec.feeobjid);
 
-        FOR rec
-            IN (SELECT f.objectid     feeobjid
-                  FROM (SELECT r.toobjectid     feeobjid
+                t_match := FALSE;
+                t_relationshipid := NULL;
+
+                -- loop thru perposed payment job looking for feeobjid matches
+                FOR pp
+                    IN (SELECT r.toobjectid feeobjid, r.relationshipid
                           FROM api.relationships r
                          WHERE r.endpointid =
                                api.pkg_configquery.endpointidforname(
                                    'j_ProposedPayment',
                                    'Fee')
-                           AND r.fromobjectid = t_paymentprocessid) y
-                       RIGHT OUTER JOIN TABLE(lst) f
-                           ON f.objectid = NVL(y.feeobjid, f.objectid)
-                 WHERE y.feeobjid IS NULL)
-        LOOP
-            -- add new relationship                (endpointid, fromobjectid, toobjectid)
-            t_rel :=
-                api.pkg_relationshipupdate.new(
-                    api.pkg_configquery.endpointidforname(
-                        'j_ProposedPayment',
-                        'Fee'),
-                    t_paymentprocessid,
-                    rec.feeobjid);
+                           AND r.fromobjectid = t_paymentprocessid)
+                LOOP
+                    DBMS_OUTPUT.put_line('feeobjid 3: ' || pp.feeobjid);
 
-            api.pkg_logicaltransactionupdate.endtransaction;
-            COMMIT;
-        END LOOP;
+                    IF (rec.feeobjid = pp.feeobjid)
+                    THEN
+                        -- match found and exit loop on match found
+                        t_match := TRUE;
+                        t_relationshipid := pp.relationshipid;
+                        EXIT WHEN t_match;
+                    END IF;
+                END LOOP;
 
-        -- *****************************************************************************************
-        -- Validate fees that are to be paid are in Proposed Payment List
-        -- *****************************************************************************************
-        -- This result set only returns records not found in the proposed payment list to pay
+                IF (t_match)
+                THEN
+                    -- match found, check if fee to pay is in payment table
+                    IF (rec.seq IS NULL)
+                    THEN
+                        -- selected fee is not to be paid, remove from proposed payment job
+                        api.pkg_relationshipupdate.remove(t_relationshipid);
+                        api.pkg_logicaltransactionupdate.endtransaction;
+                        COMMIT;
 
-        FOR rec
-            IN (SELECT p.ROWID     rid
-                  FROM bizmod_api.e_payments_t p
-                 WHERE NVL(p.feeobjid, 0) NOT IN
-                           (SELECT r.toobjectid
-                              FROM api.relationships r
-                             WHERE r.endpointid =
-                                   api.pkg_configquery.endpointidforname(
-                                       'j_ProposedPayment',
-                                       'Fee')
-                               AND r.fromobjectid = t_paymentprocessid)
-                   AND p.confirmationid = a_payeereference)
-        LOOP
-            -- indicate non payment on payment record
-            UPDATE bizmod_api.e_payments_t p
-               SET p.paymentobjectid = 0
-             WHERE p.ROWID = rec.rid;
-        END LOOP;
+                        DBMS_OUTPUT.put_line(rec.feeobjid || '  DELETE');
+                    ELSE
+                        DBMS_OUTPUT.put_line(
+                            rec.feeobjid || '  DO NOTHING (MATCH) ');
+                        t_totalpaid := t_totalpaid + rec.amountpaid;
+                    END IF;
+                ELSE
+                    IF (rec.seq IS NOT NULL)
+                    THEN
+                        -- check if payment has not already been paid
+                        IF (  api.pkg_columnquery.numericvalue(rec.feeobjid,
+                                                               'paidamount')
+                            + api.pkg_columnquery.numericvalue(rec.feeobjid,
+                                                               'amount')
+                            + api.pkg_columnquery.numericvalue(
+                                  rec.feeobjid,
+                                  'adjustedamount') >
+                            0)
+                        THEN
+                            DBMS_OUTPUT.put_line(rec.feeobjid || '  ADD');
+                            t_totalpaid := t_totalpaid + rec.amountpaid;
 
-        -- *****************************************************************************************
-        -- Remove any fees not selected to be paid from the proposed payment list
-        -- *****************************************************************************************
-        FOR rec
-            IN (SELECT r.relationshipid
-                  FROM api.relationships  r
-                       LEFT OUTER JOIN bizmod_api.e_payments_t p
-                           ON (r.toobjectid = NVL(p.feeobjid, 0))
-                 WHERE r.endpointid =
-                       api.pkg_configquery.endpointidforname(
-                           'j_ProposedPayment',
-                           'Fee')
-                   AND r.fromobjectid = t_paymentprocessid
-                   AND (p.feeobjid IS NULL
-                     OR p.paymentobjectid IS NOT NULL))
-        LOOP
-            api.pkg_relationshipupdate.remove(rec.relationshipid);
-            api.pkg_logicaltransactionupdate.endtransaction;
-            COMMIT;
-        END LOOP;
+                            -- added fee to be paid
+                            -- add new relationship                (endpointid, fromobjectid, toobjectid)
+                            t_rel :=
+                                api.pkg_relationshipupdate.new(
+                                    api.pkg_configquery.endpointidforname(
+                                        'j_ProposedPayment',
+                                        'Fee'),
+                                    t_paymentprocessid,
+                                    rec.feeobjid);
 
-        -- *****************************************************************************************
-        -- Pay the fees
-        -- *****************************************************************************************
-        -- get number of fee records to pay
-        SELECT COUNT(r.toobjectid)
-          INTO t_feecount
-          FROM api.relationships r
-         WHERE r.endpointid =
-               api.pkg_configquery.endpointidforname('j_ProposedPayment',
-                                                     'Fee')
-           AND r.fromobjectid = t_paymentprocessid;
+                            api.pkg_logicaltransactionupdate.endtransaction;
+                            COMMIT;
+                        ELSE
+                            DBMS_OUTPUT.put_line(
+                                rec.feeobjid || '  ALREADY PAID');
+
+                            -- flag as error in payment
+                            -- update payment table with 0 for no payment
+                            -- indicate non payment on payment record
+                            UPDATE bizmod_api.e_payments_t p
+                               SET p.paymentobjectid = 0
+                             WHERE p.feeobjid = rec.feeobjid;
+                        END IF;
+                    END IF;
+                END IF;
+            END LOOP;
+
+            -- get number of fee records to pay
+            SELECT COUNT(r.toobjectid)
+              INTO t_feecount
+              FROM api.relationships r
+             WHERE r.endpointid =
+                   api.pkg_configquery.endpointidforname('j_ProposedPayment',
+                                                         'Fee')
+               AND r.fromobjectid = t_paymentprocessid;
+        END IF;
 
         IF (t_feecount > 0)
         THEN
+            -- *****************************************************************************************
+            -- Pay the fees
+            -- *****************************************************************************************
+            t_amountleft := t_totalpaid;
+
             -- remove default Payment Method
             SELECT r.relationshipid
               INTO t_rel
@@ -600,37 +624,12 @@ AS
                                'Fee')
                        AND r.fromobjectid = t_paymentprocessid)
             LOOP
-                BEGIN
-                    SELECT amountpaid
-                      INTO t_amountpaid
-                      FROM bizmod_api.e_payments_t p
-                     WHERE p.licensenumber = a_licensenumber
-                       AND p.licensetypecode =
-                           api.pkg_columnquery.VALUE(rec.feescheduleobjectid,
-                                                     'LicenseTypeCode')
-                       AND p.paymentobjectid IS NULL
-                       AND p.confirmationid = a_payeereference
-                       AND REGEXP_SUBSTR(p.description,
-                                         '[^ ]+',
-                                         1,
-                                         3) =
-                           api.pkg_columnquery.VALUE(rec.feescheduleobjectid,
-                                                     'FeeActivity');
-                EXCEPTION
-                    WHEN NO_DATA_FOUND
-                    THEN
-                        t_amountpaid := 0;
-                        DBMS_OUTPUT.put_line(
-                            'Not Found '
-                            || '  fee schedule: '
-                            || api.pkg_columnquery.VALUE(
-                                   rec.feescheduleobjectid,
-                                   'FeeActivity')
-                            || ' lt: '
-                            || api.pkg_columnquery.VALUE(
-                                   rec.feescheduleobjectid,
-                                   'LicenseTypeCode'));
-                END;
+                DBMS_OUTPUT.put_line('feeobjid: ' || rec.feeobjid);
+
+                SELECT amountpaid
+                  INTO t_amountpaid
+                  FROM bizmod_api.e_payments_t p
+                 WHERE p.feeobjid = rec.feeobjid;
 
                 CASE
                     WHEN (t_amountleft <= t_amountpaid)
@@ -661,6 +660,14 @@ AS
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
 
+            SELECT r.toobjectid
+              INTO t_paymentobjectid
+              FROM api.relationships r
+             WHERE r.endpointid =
+                   api.pkg_configquery.endpointidforname('j_ProposedPayment',
+                                                         'Payment')
+               AND r.fromobjectid = t_paymentprocessid;
+
             -- create receipt payment process
             t_processdefid :=
                 api.pkg_configquery.objectdefidforname('p_ReceiptPayments');
@@ -672,6 +679,22 @@ AS
                     a_scheduledstartdate => SYSDATE,
                     a_scheduledenddate => SYSDATE,
                     a_actualstartdate => SYSDATE);
+
+            -- remove payments not paid by this process
+            FOR rec
+                IN (SELECT r.*,
+                           api.pkg_columnquery.VALUE(r.toobjectid,
+                                                     'objectdefname')    nam
+                      FROM api.relationships r
+                     WHERE r.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'p_ReceiptPayments',
+                               'Payment')
+                       AND r.fromobjectid = t_processid
+                       AND r.toobjectid != t_paymentobjectid)
+            LOOP
+                api.pkg_relationshipupdate.remove(rec.relationshipid);
+            END LOOP;
 
             SELECT s.sequenceid
               INTO t_sequenceid
@@ -689,14 +712,6 @@ AS
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
-
-            SELECT r.toobjectid
-              INTO t_paymentobjectid
-              FROM api.relationships r
-             WHERE r.endpointid =
-                   api.pkg_configquery.endpointidforname('j_ProposedPayment',
-                                                         'Payment')
-               AND r.fromobjectid = t_paymentprocessid;
         ELSE
             -- remove perpose payment job (no fees to pay)
             api.pkg_jobupdate.remove(t_paymentprocessid);

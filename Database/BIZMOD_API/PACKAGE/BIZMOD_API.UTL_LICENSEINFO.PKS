@@ -13,6 +13,8 @@ AS
     --   4.0    10/18/2023  TJL  BIZ-12887    Added new function to allow ABIS to send information to LSP
     --                                          HTTPS endpoints. Function CALLLSP
     --   4.1    12/07/2023  TJL  BIZ-12802    Removed old CALLLSP function
+    --   6.0    03/26/2024  TJL  BIZ-14833    Added new functions (get_application and checkpayment
+    --   6.1    03/28/2024  TJL  BIZ-14833    Remove functions (awfrequired and get_awfreninfo)
     -- ****************************************************************************
 
     FUNCTION calllsp(a_url           IN VARCHAR2,
@@ -26,11 +28,13 @@ AS
 
     PROCEDURE clean(a_json IN OUT json_object_t);
 
-    FUNCTION awfrequired(a_licensetypeobjectid IN NUMBER)
+    FUNCTION get_application(a_jobid IN NUMBER, a_licensetypecode IN VARCHAR2)
         RETURN NUMBER;
 
-    FUNCTION get_awfreninfo(a_fiscalend IN DATE, a_jobid IN NUMBER)
-        RETURN NUMBER;
+    FUNCTION checkpayment(a_licensenumber IN VARCHAR2,
+                          a_licensetypecode IN VARCHAR2,
+                          a_renewalfeedate IN DATE)
+    RETURN VARCHAR2;
 END;
 /
 
@@ -38,5 +42,7 @@ END;
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO LORDT;
 
 GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;
