@@ -18,7 +18,7 @@ IS
     --        12/07/2023  TJL             Added commit before creating payment job
     --   3.1  02/26/2024  TJL  BIZ-14645  Added status filter to license type select
     --   4.0  04/24/2024  TJL  BIZ-15142  Added extra validation and enhance error logging
-    --   4.1  05/13/2024  TJL  BIZ-15461  Corrected bug in AWF payment returning a message
+    --   4.1  05/13/2024  TJL  BIZ-15465  Corrected bug in AWF payment returning a message
     --                                      that fees already paid.
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
@@ -69,7 +69,7 @@ BEGIN
     LOOP
         t_count := 0;
         t_licensenumber := paidfees.licensenumber;
-        t_paid := 'N';      -- 05/13/2024 TJL BIZ-15421
+        t_paid := 'N';      -- 05/13/2024 TJL BIZ-15465
         
         BEGIN
             -- check if entry already their (duplicate payment)
@@ -87,7 +87,7 @@ BEGIN
                 CONTINUE WHEN paidfees.paymentobjectid IS NOT NULL;
             END IF;
 
-            IF (paidfees.feeobjid is not null)      -- 05/13/2024 TJL BIZ-15421
+            IF (paidfees.feeobjid is not null)      -- 05/13/2024 TJL BIZ-15465
             then
             -- check if fee already paid
             t_paid :=
