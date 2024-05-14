@@ -18,6 +18,8 @@ IS
     --        12/07/2023  TJL             Added commit before creating payment job
     --   3.1  02/26/2024  TJL  BIZ-14645  Added status filter to license type select
     --   4.0  04/24/2024  TJL  BIZ-15142  Added extra validation and enhance error logging
+    --   4.1  05/13/2024  TJL  BIZ-15461  Corrected bug in AWF payment returning a message
+    --                                      that fees already paid.
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
     t_packet       CLOB := EMPTY_CLOB();
@@ -67,7 +69,8 @@ BEGIN
     LOOP
         t_count := 0;
         t_licensenumber := paidfees.licensenumber;
-
+        t_paid := 'N';      -- 05/13/2024 TJL BIZ-15421
+        
         BEGIN
             -- check if entry already their (duplicate payment)
             IF (paidfees.seq IS NOT NULL)
@@ -84,6 +87,8 @@ BEGIN
                 CONTINUE WHEN paidfees.paymentobjectid IS NOT NULL;
             END IF;
 
+            IF (paidfees.feeobjid is not null)      -- 05/13/2024 TJL BIZ-15421
+            then
             -- check if fee already paid
             t_paid :=
                 CASE
@@ -108,7 +113,8 @@ BEGIN
                     ELSE
                         'N'
                 END;
-
+            END IF;
+            
             IF (paidfees.seq IS NULL)
             THEN
                 -- add payment record
@@ -151,10 +157,12 @@ BEGIN
                     SELECT e.ora_err_mesg$
                       INTO t_err_mesg
                       FROM bizmod_api.err$_e_payments_t e
-                     WHERE e.feeobjid = paidfees.feeobjid
+                     WHERE (e.feeobjid = paidfees.feeobjid
+                           or e.licensenumber = paidfees.licensenumber)
                        AND e.seq = (SELECT MAX(seq)
                                       FROM bizmod_api.err$_e_payments_t e2
-                                     WHERE e2.feeobjid = e.feeobjid);
+                                     WHERE e2.feeobjid = e.feeobjid
+                                        or e2.licensenumber = e.licensenumber);
 
                     t_payresult.EXTEND(1);
                     t_payresult(t_payresult.COUNT) :=
