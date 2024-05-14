@@ -29,6 +29,8 @@ IS
     --                                         that eventually failed.
     --   7.0    04/26/2024  TJL  BIZ-15142  Fixed bug in AWF process in trying to reprocess
     --                                         Fee that failed
+    --   7.1    05/14/2024  TJL  BIZ-15461  Fixed bug that indicated branch 02 required AWF
+    --                                         Report in LSP.
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -148,8 +150,7 @@ IS
                 -- check to make sure transfer not pointing back to current
                 --   license when another transer from license has already been selected
                 IF (rec.licenseobjectid !=
-                    api.pkg_columnquery.numericvalue(a_jobid,
-                                                     'LicenseJobId'))
+                    api.pkg_columnquery.numericvalue(a_jobid, 'LicenseJobId'))
                 THEN
                     t_transferfromobjectid := rec.transferfromobjectid;
                 END IF;
@@ -298,7 +299,7 @@ IS
             api.pkg_columnquery.datevalue(a_licensetypeobjectid, 'IssueDate');
 
         SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
-          INTO t_msgno 
+          INTO t_msgno
           FROM (SELECT COUNT(1)     cnt
                   FROM api.fees  f
                        LEFT OUTER JOIN bizmod_api.awf_t a
@@ -541,8 +542,9 @@ IS
 
             -- check if new 02 and 22 was a branch license
             UPDATE bizmod_api.licensetype_t lt
-               SET lt.awfflag =
-                       (SELECT CASE WHEN COUNT(1) > 0 THEN 'NA' ELSE NULL END    req
+               SET (lt.awfflag, lt.awfstatusnumber) =
+                       (SELECT CASE WHEN COUNT(1) > 0 THEN 'NA' ELSE NULL END,
+                               CASE WHEN COUNT(1) > 0 THEN 8 ELSE NULL END -- 05/14/2024  TJL  BIZ-15461
                           FROM api.relationships r
                          WHERE (r.endpointid =
                                 api.pkg_configquery.endpointidforname(
@@ -585,6 +587,7 @@ IS
                          FROM bizmod_api.licensetype_t lt
                         WHERE lt.licensetypecode IN ('02', '22')
                           AND lt.renfeeobjid IS NULL
+                          AND NVL(lt.awfflag, 'Y') != 'NA'  -- 05/14/2024  TJL  BIZ-15461
                           AND lt.statusname IN ('ACTIVE',
                                                 'SUREND',
                                                 'SUSPEN',
@@ -640,13 +643,6 @@ IS
                                ELSE 'N'
                            END
                  WHERE lic.licensetypejobid = lt.licensetypejobid;
-
-                DBMS_OUTPUT.put_line(
-                    'feeobjid: '
-                    || t_feeobjid
-                    || ' - '
-                    || api.pkg_columnquery.datevalue(t_feeobjid,
-                                                     'TransactionDate'));
             END LOOP;
 
             COMMIT;
@@ -934,7 +930,7 @@ BEGIN
             FOR rec IN (SELECT p.feeobjid, p.seq
                           FROM bizmod_api.e_payments_t p
                          WHERE p.feeobjid IS NOT NULL
-                           AND NVL(p.paymentobjectid, 1) > 0  -- 04/26/2024 TJL BIZ-15142 
+                           AND NVL(p.paymentobjectid, 1) > 0 -- 04/26/2024 TJL BIZ-15142
                            AND p.description LIKE '%AWF%')
             LOOP
                 BEGIN
