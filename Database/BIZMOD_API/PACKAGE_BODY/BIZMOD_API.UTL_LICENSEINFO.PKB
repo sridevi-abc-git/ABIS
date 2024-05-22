@@ -32,6 +32,7 @@ AS
     --   5.0    02/06/2024  TJL  BIZ-14444    Change how Wallet path is created.
     --   6.0    03/26/2024  TJL  BIZ-14833    Added new functions (get_application and checkpayment)
     --   6.1    03/28/2024  TJL  BIZ-14833    Remove functions (awfrequired and get_awfreninfo)
+    --   6.2    05/20/2024  APD  BIZ-15210    Fix bug to send UTF content and Content-Length for multi-byte chars
     -- ****************************************************************************
 
     FUNCTION calllsp(a_url          IN VARCHAR2,
@@ -68,6 +69,7 @@ AS
         t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
         t_wallet       VARCHAR2(1000);
+        t_length       NUMBER;
     BEGIN
         INSERT INTO eservices_log_t(request,
                                     packet,
@@ -99,17 +101,20 @@ AS
         t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
 
         UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
+        UTL_HTTP.set_body_charset(t_request,'UTF-8') ;
 
         IF (a_file IS NULL)
         THEN
             IF (a_content IS NOT NULL)
             THEN
+                t_length :=
+                utl_raw.length(utl_raw.convert(utl_raw.cast_to_raw(a_content),'american_america.al32utf8','AMERICAN_america.WE8MSWIN1252')) ;
                 UTL_HTTP.set_header(t_request,
                                     'content-type',
                                     'application/json');
                 UTL_HTTP.set_header(t_request,
                                     'Content-Length',
-                                    LENGTH(a_content));
+                                    t_length) ;
 
                 UTL_HTTP.write_text(t_request, a_content);
             END IF;
