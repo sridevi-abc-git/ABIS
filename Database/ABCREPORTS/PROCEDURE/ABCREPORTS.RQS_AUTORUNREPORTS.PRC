@@ -303,10 +303,10 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                                                                            
                                                                          
                 END LOOP;  
-                             for test2 in 1.. lt_parameters.count loop
-          dbms_Output.put_Line('perameters: ' ||  lt_parameters(test2));
+                             
+          dbms_Output.put_Line('perameters: ' ||  lt_parameters);
            
-        end loop;                                                   
+                                                        
                 
                 -- queue up the report(s) to be executed.
                 create_queue_rec(p_parms      => lt_parameters, 
