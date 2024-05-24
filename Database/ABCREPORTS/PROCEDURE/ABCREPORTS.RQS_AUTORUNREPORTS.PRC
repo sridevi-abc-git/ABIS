@@ -266,7 +266,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                         report_day,
                         finalize_id
                    FROM v_scheduled_reports
-                  WHERE report_number = NVL(p_report_number, report_number)
+                  WHERE  report_number = NVL(p_report_number, report_number)
                   ORDER BY report_number)
             LOOP
                 -- create report parameters from report schedule data
@@ -291,7 +291,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                             parameter_value                     
                             FROM report_parameters de  
                            WHERE (parameter_type IN ('A', 'F'))
-                             AND ( report_number = reports.report_number)
+                             AND (report_number = 0 OR report_number = reports.report_number)
                              AND NOT EXISTS (SELECT * FROM report_parameters 
                                               WHERE de.report_number = 0 AND report_number = reports.report_number 
                                                 AND (parameter_type IN ('A', 'F')) 
