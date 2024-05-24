@@ -284,6 +284,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                 lt_parameters.add_value('REPORT_DAY', reports.report_day);            
                 lt_parameters.add_value('OVERRIDE', UPPER(p_override));
                   dbms_output.put_line(l_job_id);
+                  dbms_output.put_line( reports.by_office_flg);
                 -- get the rest of the parameters for reports.  These value can
                 --  override the standard paramters if required
                 FOR parameter IN 
