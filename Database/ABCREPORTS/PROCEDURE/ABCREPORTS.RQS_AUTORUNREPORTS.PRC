@@ -1,5 +1,5 @@
 CREATE OR REPLACE PROCEDURE ABCREPORTS.RQS_AUTORUNREPORTS(p_override      IN VARCHAR := 'N',
-                                               p_report_number IN NUMBER := NULL) IS
+                                               p_report_number IN NUMBER := 46) IS
 -- ****************************************************************************
 -- File:        rqs_autorunreports_v2.prc  
 -- Author:      Timothy J. Lord
@@ -283,8 +283,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                 lt_parameters.add_value('FINALIZE_ID', reports.finalize_id);            
                 lt_parameters.add_value('REPORT_DAY', reports.report_day);            
                 lt_parameters.add_value('OVERRIDE', UPPER(p_override));
-                  dbms_output.put_line(l_job_id);
-                  dbms_output.put_line( reports.by_office_flg);
+                
                 -- get the rest of the parameters for reports.  These value can
                 --  override the standard paramters if required
                 FOR parameter IN 
@@ -292,7 +291,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                             parameter_value                     
                             FROM report_parameters de  
                            WHERE (parameter_type IN ('A', 'F'))
-                             AND (report_number = 0 OR report_number = reports.report_number)
+                             AND ( report_number = reports.report_number)
                              AND NOT EXISTS (SELECT * FROM report_parameters 
                                               WHERE de.report_number = 0 AND report_number = reports.report_number 
                                                 AND (parameter_type IN ('A', 'F')) 
