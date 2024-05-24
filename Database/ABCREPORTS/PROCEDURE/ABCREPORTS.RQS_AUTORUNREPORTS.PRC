@@ -312,7 +312,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                 create_queue_rec(p_parms      => lt_parameters, 
                                  p_job_id     => ln_, 
                                  p_status_msg => lv_status_msg); 
-            dbms_Output.put_Line(lt_parameters);
+         --   dbms_Output.put_Line(lt_parameters);
                 -- check if error in handling queueing
                 
                 -- remove any old reports over month old
