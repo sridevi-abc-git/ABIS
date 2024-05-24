@@ -301,11 +301,12 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                                             rqs_process_parameters.process(parameter.parameter_value, 
                                                                            lt_parameters));    
                                                                            
-                      for test2 in 1.. t_parameters.count loop
-            dbms_Output.put_Line('perameters: ' ||  t_parameters(test2));
+                                                                         
+                END LOOP;  
+                         --     for test2 in 1.. t_parameters.count loop
+       --     dbms_Output.put_Line('perameters: ' ||  t_parameters(test2));
            
-          end loop;                                                                 
-                END LOOP;                                                     
+       --   end loop;                                                   
                 
                 -- queue up the report(s) to be executed.
                 create_queue_rec(p_parms      => lt_parameters, 
