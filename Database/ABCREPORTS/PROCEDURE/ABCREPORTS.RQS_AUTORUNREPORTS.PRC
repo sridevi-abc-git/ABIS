@@ -1,5 +1,5 @@
 CREATE OR REPLACE PROCEDURE ABCREPORTS.RQS_AUTORUNREPORTS(p_override      IN VARCHAR := 'N',
-                                               p_report_number IN NUMBER := 46) IS
+                                               p_report_number IN NUMBER := NULL) IS
 -- ****************************************************************************
 -- File:        rqs_autorunreports_v2.prc  
 -- Author:      Timothy J. Lord
