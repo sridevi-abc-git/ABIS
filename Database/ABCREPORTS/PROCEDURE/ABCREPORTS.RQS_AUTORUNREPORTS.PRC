@@ -300,7 +300,10 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                     lt_parameters.upd_value(parameter.parameter_name,
                                             rqs_process_parameters.process(parameter.parameter_value, 
                                                                            lt_parameters));    
-                                                                           
+                           for i in 1.. lt_parameters.count loop
+                     
+          dbms_Output.put_Line('perameters: ' ||  lt_parameters.parameter_name);  
+          end loop;                                               
                                                                          
                 END LOOP;  
                -- Begin
