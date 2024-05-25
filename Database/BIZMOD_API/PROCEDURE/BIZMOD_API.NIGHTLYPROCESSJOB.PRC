@@ -32,6 +32,7 @@ IS
     --   7.1    05/14/2024  TJL  BIZ-15461  Fixed bug that indicated branch 02 required AWF
     --                                         Report in LSP.
     --   8.0    05/20/2024  TJL  BIZ-15523  Added test to see if AWF batch needs to be created
+    --   8.1    05/24/2024  TJL  BIZ-15485  Removed sending emails on job being completed
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -675,10 +676,6 @@ BEGIN
         t_awfbatch     NUMBER;
 
         t_body         VARCHAR2(32000);
-        t_to           VARCHAR2(4000);
-        t_from         VARCHAR2(4000);
-        t_cc           VARCHAR2(4000);
-        t_bcc          VARCHAR2(4000);
         t_rowcount     NUMBER;
 
         t_error        VARCHAR2(32000);
@@ -693,13 +690,7 @@ BEGIN
         t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
 
         -- ********************************************************************
-        -- ************************************************************
-        -- Update AWF
-        -- ************************************************************
         BEGIN
-            awfupdateinfo;
-
-            -- ********************************************************************
             -- ************************************************************
             -- Check for payments being removed from original transmittal and
             --   updating payment record with new transmittal batch id or
@@ -881,6 +872,12 @@ BEGIN
                     || CHR(13);
             END IF;
 
+            -- ************************************************************
+            -- Update AWF
+            -- ************************************************************
+            awfupdateinfo;
+
+            -- ********************************************************************
             -- ********************************************************************
             --  Update awf fee id and fee object id after payments have been completed
             -- ********************************************************************
@@ -1140,49 +1137,8 @@ BEGIN
             THEN
                 t_sqlerrm := SQLERRM;
                 t_trace := DBMS_UTILITY.format_error_backtrace;
-
-                t_error :=
-                    t_error
-                    || CHR(13)
-                    || 'Nightly Processing ERROR'
-                    || CHR(13)
-                    || t_sqlerrm
-                    || CHR(13)
-                    || t_trace;
+                
         END;
-
-        -- Generate email of completion of first data processing
-        SELECT pto,
-               pfrom,
-               pcc,
-               pbcc
-          INTO t_to,
-               t_from,
-               t_cc,
-               t_bcc
-          FROM (SELECT m.parametername, m.parametervalue
-                  FROM abc.email_parameters m
-                 WHERE app = 'EPAYMENT')
-               PIVOT (MAX(parametervalue)
-                     FOR parametername
-                     IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
-
-        IF (t_from IS NOT NULL)
-        THEN
-            sitespecific.pkg_tlemail.sendemail(
-                p_fromaddress => t_from,
-                p_toaddress => t_to,
-                p_cc        => t_cc,
-                p_bcc       => t_bcc,
-                p_subject   =>
-                    'Nightly Job Completed '
-                    || CASE
-                           WHEN t_error IS NOT NULL THEN 'with errors'
-                           ELSE NULL
-                       END,
-                p_body      => t_body || CHR(13) || t_error,
-                p_mimetype  => 'text/plain');
-        END IF;
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
@@ -1196,7 +1152,7 @@ BEGIN
                      t_trace);
 
         COMMIT;
-    END;
+        end;
 END nightlyprocessjob;
 /
 
