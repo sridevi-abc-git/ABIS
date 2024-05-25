@@ -17,6 +17,7 @@ AS
     --   6.1    03/28/2024  TJL  BIZ-14833    Remove functions (awfrequired and get_awfreninfo)
     --   7.0    05/09/2024  TJL  BIZ-15444    Added global types used for license application
     --                                          function and process job
+    --   7.1    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(appl_type VARCHAR2(50),
@@ -58,6 +59,16 @@ AS
                           a_licensetypecode IN VARCHAR2,
                           a_renewalfeedate IN DATE)
     RETURN VARCHAR2;
+    
+    PROCEDURE sendemail(a_process      IN VARCHAR2 DEFAULT 'EMAIL',
+                        a_subject      IN VARCHAR2,
+                        a_body         IN VARCHAR2,
+                        a_file_name    IN VARCHAR2 DEFAULT NULL,
+                        a_clob         IN CLOB DEFAULT NULL,
+                        a_encoding        VARCHAR2 DEFAULT 'text/plain',
+                        a_mimetype        VARCHAR2 DEFAULT 'text/plain');
+
+
 END;
 /
 

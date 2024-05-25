@@ -33,7 +33,19 @@ AS
     --   6.0    03/26/2024  TJL  BIZ-14833    Added new functions (get_application and checkpayment)
     --   6.1    03/28/2024  TJL  BIZ-14833    Remove functions (awfrequired and get_awfreninfo)
     --   6.2    05/20/2024  APD  BIZ-15210    Fix bug to send UTF content and Content-Length for multi-byte chars
+    --   6.3    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table
     -- ****************************************************************************
+    gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
+
+    boundary CONSTANT VARCHAR2(256) := '-----7D81B75CCC90D2974F7A1CBD';
+    first_boundary CONSTANT VARCHAR2(256) := '--' || boundary || gc_newline;
+    last_boundary CONSTANT VARCHAR2(256)
+                       := '--' || boundary || '--' || gc_newline ;
+
+    multipart_mime_type CONSTANT VARCHAR2(256)
+                       := 'multipart/mixed; boundary="' || boundary || '"' ;
+
+    TYPE t_recp IS TABLE OF VARCHAR(512);
 
     FUNCTION calllsp(a_url          IN VARCHAR2,
                      a_method       IN VARCHAR2,
@@ -101,20 +113,21 @@ AS
         t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
 
         UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
-        UTL_HTTP.set_body_charset(t_request,'UTF-8') ;
+        UTL_HTTP.set_body_charset(t_request, 'UTF-8');
 
         IF (a_file IS NULL)
         THEN
             IF (a_content IS NOT NULL)
             THEN
                 t_length :=
-                utl_raw.length(utl_raw.convert(utl_raw.cast_to_raw(a_content),'american_america.al32utf8','AMERICAN_america.WE8MSWIN1252')) ;
+                    UTL_RAW.LENGTH(
+                        UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(a_content),
+                                        'american_america.al32utf8',
+                                        'AMERICAN_america.WE8MSWIN1252'));
                 UTL_HTTP.set_header(t_request,
                                     'content-type',
                                     'application/json');
-                UTL_HTTP.set_header(t_request,
-                                    'Content-Length',
-                                    t_length) ;
+                UTL_HTTP.set_header(t_request, 'Content-Length', t_length);
 
                 UTL_HTTP.write_text(t_request, a_content);
             END IF;
@@ -357,6 +370,182 @@ AS
         RETURN t_awfflag;
     END;
 
+    PROCEDURE sendemail(a_process      IN VARCHAR2 DEFAULT 'EMAIL',
+                        a_subject      IN VARCHAR2,
+                        a_body         IN VARCHAR2,
+                        a_file_name    IN VARCHAR2 DEFAULT NULL,
+                        a_clob         IN CLOB DEFAULT NULL,
+                        a_encoding        VARCHAR2 DEFAULT 'text/plain',
+                        a_mimetype        VARCHAR2 DEFAULT 'text/plain')
+    IS
+        CURSOR cur_rcpt(p_to IN VARCHAR2)
+        IS
+                SELECT REGEXP_SUBSTR(p_to,
+                                     '[^;]+',
+                                     1,
+                                     LEVEL)    txt
+                  FROM DUAL
+            CONNECT BY REGEXP_SUBSTR(p_to,
+                                     '[^;]+',
+                                     1,
+                                     LEVEL)
+                           IS NOT NULL;
+
+        t_from         VARCHAR2(512);
+        t_to           VARCHAR2(512);
+        t_cc           VARCHAR2(512);
+        t_bcc          VARCHAR2(512);
+        t_subject      VARCHAR2(512) := a_subject;
+        t_conn         UTL_SMTP.connection;
+        t_host         VARCHAR2(512); -- := '134.186.202.119';
+        t_len          INTEGER;
+        t_index        INTEGER;
+        t_file_type    VARCHAR2(50);
+        t_body         VARCHAR2(32000) := a_body;
+        t_rcpt         t_recp;
+    BEGIN
+        -- Generate email of completion of first data processing
+        SELECT pto,
+               pfrom,
+               pcc,
+               pbcc
+          INTO t_to,
+               t_from,
+               t_cc,
+               t_bcc
+          FROM (SELECT c.parametername, c.parametervalue
+                  FROM bizmod_api.eservices_config_t c
+                 WHERE c.process = a_process
+                   AND c.dbname = UPPER(ora_database_name))
+               PIVOT (MAX(parametervalue)
+                     FOR parametername
+                     IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
+
+        IF (t_from IS NULL)
+        THEN
+            RETURN;
+        END IF;
+
+        IF (a_file_name IS NOT NULL)
+        THEN
+            SELECT CASE LOWER(REGEXP_SUBSTR(a_file_name, '\.[^\.]*$'))
+                       WHEN 'doc' THEN 'application/msword'
+                       WHEN 'xls' THEN 'application/excel'
+                       WHEN 'xlsx' THEN 'application/excel'
+                       WHEN 'pdf' THEN 'application/pdf'
+                       WHEN 'zip' THEN 'application/zip'
+                       WHEN 'bmp' THEN 'image/bmp'
+                       WHEN 'jpg' THEN 'image/jpg'
+                       WHEN 'jpeg' THEN 'image/jpg'
+                       WHEN 'gif' THEN 'image/gif'
+                       WHEN 'htm' THEN 'text/html'
+                       WHEN 'html' THEN 'text/html'
+                       WHEN 'txt' THEN 'text/plain'
+                       WHEN 'log' THEN 'text/plain'
+                       WHEN 'csv' THEN 'text/plain'
+                       WHEN 'text' THEN 'text/plain'
+                       ELSE 'text/plain'
+                   END    CASE
+              INTO t_file_type
+              FROM DUAL;
+        ELSE
+            t_file_type := a_mimetype;
+        END IF;
+
+        OPEN cur_rcpt(t_to || ';' || t_cc || ';' || t_bcc);
+
+        FETCH cur_rcpt BULK COLLECT INTO t_rcpt LIMIT 30;
+
+        CLOSE cur_rcpt;
+
+        SELECT VALUE
+          INTO t_host
+          FROM api.constants
+         WHERE name = 'SMTPSERVER';
+
+        IF (UPPER(ora_database_name) != 'ABISP1')
+        THEN -- Changed DB name to ABISP1 by pawan on 10/26/2022
+            t_body :=
+                '*** ('
+                || UPPER(ora_database_name)
+                || ') THIS IS A TEST *** '
+                || UTL_TCP.crlf
+                || UTL_TCP.crlf
+                || t_body;
+            t_subject := '(' || UPPER(ora_database_name) || ') ' || t_subject;
+        END IF;
+
+        t_conn := UTL_SMTP.open_connection(t_host, 25);
+        UTL_SMTP.helo(t_conn, t_host);
+
+        UTL_SMTP.mail(t_conn, t_from);
+
+        -- loop through the to address list
+        FOR inx IN 1 .. t_rcpt.COUNT
+        LOOP
+            UTL_SMTP.rcpt(t_conn, t_rcpt(inx));
+        END LOOP;
+
+        UTL_SMTP.open_data(t_conn);
+        UTL_SMTP.write_data(t_conn,
+                            'From: ' || t_from || UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, 'To: ' || t_to || UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, 'Cc: ' || t_cc || UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, 'Subject: ' || t_subject || UTL_TCP.crlf);
+
+        UTL_SMTP.write_data(
+            t_conn,
+            'Content-Type: ' || multipart_mime_type || UTL_TCP.crlf);
+
+        UTL_SMTP.write_data(t_conn, UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, first_boundary);
+        UTL_SMTP.write_data(t_conn,
+                            'Content-Type: ' || a_mimetype || UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, t_body || UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, UTL_TCP.crlf);
+
+        IF (a_clob IS NOT NULL
+        AND a_file_name IS NOT NULL)
+        THEN
+            UTL_SMTP.write_data(t_conn, first_boundary);
+            UTL_SMTP.write_data(
+                t_conn,
+                'Content-Type: ' || t_file_type || UTL_TCP.crlf);
+
+            -- Set up attachment header
+            UTL_SMTP.write_data(
+                t_conn,
+                'Content-Disposition: attachment; filename="'
+                || a_file_name
+                || '"'
+                || UTL_TCP.crlf);
+
+            UTL_SMTP.write_data(
+                t_conn,
+                'Content-Transfer-Encoding: ' || a_encoding || UTL_TCP.crlf);
+            UTL_SMTP.write_data(t_conn, UTL_TCP.crlf);
+
+            -- Write attachment contents
+            t_len := DBMS_LOB.getlength(a_clob);
+            t_index := 1;
+
+            WHILE t_index <= t_len
+            LOOP
+                UTL_SMTP.write_data(t_conn,
+                                    DBMS_LOB.SUBSTR(a_clob, 32000, t_index));
+                t_index := t_index + 32000;
+            END LOOP;
+
+            -- End attachment
+            UTL_SMTP.write_data(t_conn, UTL_TCP.crlf);
+        END IF;
+
+        UTL_SMTP.write_data(t_conn, last_boundary);
+
+        UTL_SMTP.close_data(t_conn);
+        UTL_SMTP.quit(t_conn);
+    END sendemail;
 END;
 /
 
