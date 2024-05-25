@@ -31,6 +31,7 @@ IS
     --                                         Fee that failed
     --   7.1    05/14/2024  TJL  BIZ-15461  Fixed bug that indicated branch 02 required AWF
     --                                         Report in LSP.
+    --   8.0    05/20/2024  TJL  BIZ-15523  Added test to see if AWF batch needs to be created
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -438,9 +439,21 @@ IS
                 := TO_DATE(
                        '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)));
             t_old          NUMBER;
+            t_cnt          NUMBER;
         BEGIN
-            -- create awf payment batches
-            bizmod_api.createawfpaymentsjob(0, SYSDATE);
+            -- check to see if AWF batch needs to be created
+            SELECT COUNT(1)
+              INTO t_cnt
+              FROM bizmod_api.awf_t a
+             WHERE a.awffeeamount <= 0
+               AND a.paymentbatch IS NULL
+               AND a.submitteddate IS NOT NULL;
+
+            IF (t_cnt > 0)
+            THEN
+                -- create awf payment batches
+                bizmod_api.createawfpaymentsjob(0, SYSDATE);
+            END IF;
 
             -- check for any new license types added
             MERGE INTO bizmod_api.licensetype_t l
@@ -587,7 +600,7 @@ IS
                          FROM bizmod_api.licensetype_t lt
                         WHERE lt.licensetypecode IN ('02', '22')
                           AND lt.renfeeobjid IS NULL
-                          AND NVL(lt.awfflag, 'Y') != 'NA'  -- 05/14/2024  TJL  BIZ-15461
+                          AND NVL(lt.awfflag, 'Y') != 'NA' -- 05/14/2024  TJL  BIZ-15461
                           AND lt.statusname IN ('ACTIVE',
                                                 'SUREND',
                                                 'SUSPEN',
