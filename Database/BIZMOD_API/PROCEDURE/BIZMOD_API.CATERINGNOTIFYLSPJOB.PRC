@@ -24,6 +24,10 @@ AS
     --                                          Mailing Address.
     --   2.0     01/02/2024 TJL  BIZ-14058  Corrected bug in parsing Sponsoring Organization
     --                                          Mailing Address.
+    --   3.0     05/17/2024 TJL  BIZ-15485  Added getting URL information from new configuration
+    --                                          table and prevent updates being sent to LSP when
+    --                                          application status is updated.
+    --   3.1     05/24/2024 TJL  BIZ-15021  Added support for new field Outside Event
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
@@ -147,6 +151,223 @@ AS
 
         RETURN t_address;
     END;
+
+    FUNCTION create_packet(a_objectid IN api.pkg_definition.udt_id)
+        RETURN CLOB
+    IS
+        t_json_app     json_object_t := NEW json_object_t();
+        t_addressid    NUMBER;
+        t_address      bizmod_api.var_tbl := bizmod_api.var_tbl();
+        t_phone        VARCHAR2(20);
+    BEGIN
+        t_address :=
+            parseaddress(
+                api.pkg_columnquery.VALUE(a_objectid,
+                                          'SponsoringOrganizationMailing'));
+
+        t_addressid :=
+            api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
+
+        t_json_app.put('applicationId',
+                       api.pkg_columnquery.datevalue(a_objectid, 'LSPId'));
+        t_json_app.put(
+            'eventStartDate',
+            api.pkg_columnquery.datevalue(a_objectid, 'DateOfEventFrom'));
+        t_json_app.put(
+            'eventEndDate',
+            api.pkg_columnquery.datevalue(a_objectid, 'dateofeventto'));
+        t_json_app.put(
+            'eventStartTime',
+            TO_CHAR(
+                TO_TIMESTAMP(
+                    LPAD(
+                        CASE api.pkg_columnquery.VALUE(
+                                 a_objectid,
+                                 'BeginServingAlcoholAMPMTime')
+                            WHEN 'PM'
+                            THEN
+                                TO_CHAR(
+                                      NVL(
+                                          api.pkg_columnquery.numericvalue(
+                                              a_objectid,
+                                              'Timeyouwillbeginservingalcohol'),
+                                          0)
+                                    + CASE
+                                          WHEN NVL(
+                                                   api.pkg_columnquery.numericvalue(
+                                                       a_objectid,
+                                                       'Timeyouwillbeginservingalcohol'),
+                                                   0) <
+                                               1200
+                                          THEN
+                                              1200
+                                          ELSE
+                                              0
+                                      END)
+                            ELSE
+                                TO_CHAR(
+                                      NVL(
+                                          api.pkg_columnquery.numericvalue(
+                                              a_objectid,
+                                              'Timeyouwillbeginservingalcohol'),
+                                          0)
+                                    - CASE
+                                          WHEN NVL(
+                                                   api.pkg_columnquery.numericvalue(
+                                                       a_objectid,
+                                                       'Timeyouwillbeginservingalcohol'),
+                                                   0) >=
+                                               1200
+                                          THEN
+                                              1200
+                                          ELSE
+                                              0
+                                      END)
+                        END,
+                        4,
+                        '0'),
+                    'HH24MI'),
+                'HH24:MI'));
+        t_json_app.put(
+            'eventEndTime',
+            TO_CHAR(
+                TO_TIMESTAMP(
+                    LPAD(
+                        CASE api.pkg_columnquery.VALUE(
+                                 a_objectid,
+                                 'StopServingAlcoholAMPMTime')
+                            WHEN 'PM'
+                            THEN
+                                TO_CHAR(
+                                      NVL(
+                                          api.pkg_columnquery.numericvalue(
+                                              a_objectid,
+                                              'TimeYouWillStopServingAlcohol'),
+                                          0)
+                                    + CASE
+                                          WHEN NVL(
+                                                   api.pkg_columnquery.numericvalue(
+                                                       a_objectid,
+                                                       'TimeYouWillStopServingAlcohol'),
+                                                   0) <
+                                               1200
+                                          THEN
+                                              1200
+                                          ELSE
+                                              0
+                                      END)
+                            ELSE
+                                TO_CHAR(
+                                      NVL(
+                                          api.pkg_columnquery.numericvalue(
+                                              a_objectid,
+                                              'TimeYouWillStopServingAlcohol'),
+                                          0)
+                                    - CASE
+                                          WHEN NVL(
+                                                   api.pkg_columnquery.numericvalue(
+                                                       a_objectid,
+                                                       'TimeYouWillStopServingAlcohol'),
+                                                   0) >=
+                                               1200
+                                          THEN
+                                              1200
+                                          ELSE
+                                              0
+                                      END)
+                        END,
+                        4,
+                        '0'),
+                    'HH24MI'),
+                'HH24:MI'));
+        t_json_app.put(
+            'expectedAttendance',
+            api.pkg_columnquery.numericvalue(a_objectid,
+                                             'EstimatedAttendance'));
+        t_json_app.put('publicEvent',
+                       api.pkg_columnquery.VALUE(a_objectid, 'PublicEvent'));
+        t_json_app.put('contactName',
+                       api.pkg_columnquery.VALUE(a_objectid, 'ContactName'));
+
+        t_phone :=
+            api.pkg_columnquery.VALUE(a_objectid, 'ContactPhoneNumber');
+
+        IF (t_phone IS NOT NULL
+        AND LENGTH(t_phone) > 9)
+        THEN
+            t_json_app.put(
+                'contactPhone',
+                '('
+                || SUBSTR(t_phone, 1, 3)
+                || ')'
+                || SUBSTR(t_phone, 4, 3)
+                || '-'
+                || SUBSTR(t_phone, 7, 4));
+        END IF;
+
+        t_json_app.put('contactEmail',
+                       api.pkg_columnquery.VALUE(a_objectid, 'ContactEmail'));
+        t_json_app.put(
+            'eventType',
+            CASE api.pkg_columnquery.VALUE(a_objectid, 'EventType')
+                WHEN 'OTHER EVENT'
+                THEN
+                    api.pkg_columnquery.VALUE(a_objectid, 'OtherEventType')
+                ELSE
+                    api.pkg_columnquery.VALUE(a_objectid, 'EventType')
+            END);
+        t_json_app.put(
+            'sponsoringOrganization',
+            api.pkg_columnquery.VALUE(a_objectid, 'SponsoringOrganization'));
+        t_json_app.put('sponsoringOrganizationAddress1', TRIM(t_address(1)));
+        t_json_app.put('sponsoringOrganizationAddress2', TRIM(t_address(2)));
+        t_json_app.put('sponsoringOrganizationCity', TRIM(t_address(3)));
+        t_json_app.put('sponsoringOrganizationState', TRIM(t_address(4)));
+        t_json_app.put('sponsoringOrganizationZip', TRIM(t_address(5)));
+        t_json_app.put(
+            'personInCharge',
+            api.pkg_columnquery.VALUE(a_objectid, 'PersonInChargeOfEvent'));
+
+        t_phone :=
+            api.pkg_columnquery.VALUE(a_objectid,
+                                      'PersonInChargePhoneNumber');
+
+        IF (t_phone IS NOT NULL
+        AND LENGTH(t_phone) > 9)
+        THEN
+            t_json_app.put(
+                'personInChargePhone',
+                '('
+                || SUBSTR(t_phone, 1, 3)
+                || ')'
+                || SUBSTR(t_phone, 4, 3)
+                || '-'
+                || SUBSTR(t_phone, 7, 4));
+        END IF;
+
+        t_json_app.put(
+            'eventLocationAddress1',
+            api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1'));
+        t_json_app.put(
+            'eventLocationAddress2',
+            NVL(api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2'), ''));
+        t_json_app.put('eventLocationCity',
+                       api.pkg_columnquery.VALUE(t_addressid, 'CACity'));
+        t_json_app.put('eventLocationZip',
+                       api.pkg_columnquery.VALUE(t_addressid, 'ZipCode'));
+        t_json_app.put(
+            'withinCityLimits',
+            api.pkg_columnquery.VALUE(a_objectid, 'WithinCityLimits'));
+        t_json_app.put('annualEventsCount',
+                       api.pkg_columnquery.VALUE(a_objectid, 'Quantity'));
+        t_json_app.put(
+            'specificLocation',
+            api.pkg_columnquery.VALUE(a_objectid, 'SpecificLocation'));
+        t_json_app.put('outsideEvent',
+                       api.pkg_columnquery.VALUE(a_objectid, 'OutsideEvent'));
+
+        RETURN t_json_app.TO_CLOB;
+    END;
 -- ****************************************************************************
 -- ****************************************************************************
 --  Main Function Body
@@ -156,8 +377,8 @@ BEGIN
     DECLARE
         t_data         BLOB;
         t_outcome      VARCHAR2(20);
-        t_url          VARCHAR2(1000)
-            := '<<path>>/api/licensing/internal/catering/applications/<<applicationId>>';
+        t_url          VARCHAR2(1000);
+        t_method       VARCHAR2(20);
         t_packet       CLOB;
         t_response     CLOB;
         t_results      CLOB;
@@ -165,399 +386,120 @@ BEGIN
 
         t_applicationid VARCHAR2(1000);
         t_licensenumber VARCHAR2(100);
-        t_sponsoringorganizationaddr VARCHAR(1000);
-        t_addressid    NUMBER;
-        t_address      bizmod_api.var_tbl := bizmod_api.var_tbl();
-        t_phone        VARCHAR2(20);
-
         t_error        VARCHAR2(4000);
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
         t_msg          VARCHAR2(4000 BYTE);
-        t_notifynumber NUMBER := 0;
-        t_wordcnt      NUMBER := 0;
+        t_completed    VARCHAR2(1);
+        t_hashvalue    NUMBER;
+        t_currhash     NUMBER;
     BEGIN
-        -- check to see if word document was created after application completed
-        SELECT COUNT(1)
-          INTO t_wordcnt
-          FROM api.relationships  r
-               LEFT OUTER JOIN doc.documentblobs d
-                   ON d.documentid = r.toobjectid
-         WHERE r.endpointid =
-               api.pkg_configquery.endpointidforname(
-                   'p_IssueCatererEventAuth',
-                   'ABCWordDocument')
-           AND r.fromobjectid = a_objectid
-           AND api.pkg_columnquery.datevalue(r.toobjectid, 'Createddate') >
-               api.pkg_columnquery.datevalue(r.fromobjectid, 'DateCompleted');
+        BEGIN
+            SELECT CASE WHEN c.outcome IS NULL THEN 'N' ELSE 'Y' END,
+                   c.hashvalue
+              INTO t_completed, t_currhash
+              FROM bizmod_api.catering_app_t c
+             WHERE c.processid = a_objectid;
+        EXCEPTION
+            WHEN NO_DATA_FOUND
+            THEN
+                IF (api.pkg_columnquery.numericvalue(a_objectid, 'LSPId') IS NOT NULL)
+                THEN
+                    -- get packet hash value
+                    t_packet := create_packet(a_objectid => a_objectid);
 
-        -- check if application was just created
-        IF (  api.pkg_columnquery.datevalue(a_objectid, 'CreatedDate')
-            + ((1 / 24 / 60) * 2) >
-            SYSDATE)
-        OR (t_wordcnt > 0)
+                    SELECT ORA_HASH(t_packet) INTO t_hashvalue FROM DUAL;
+
+                    INSERT INTO bizmod_api.catering_app_t c(c.lspid,
+                                                            c.processid,
+                                                            c.outcome,
+                                                            c.createddate,
+                                                            c.datecompleted,
+                                                            c.hashvalue)
+                             VALUES (
+                                 api.pkg_columnquery.numericvalue(a_objectid,
+                                                                  'LSPId'),
+                                 a_objectid,
+                                 api.pkg_columnquery.VALUE(a_objectid, 'Outcome'),
+                                 api.pkg_columnquery.datevalue(a_objectid,
+                                                               'CreatedDate'),
+                                 api.pkg_columnquery.datevalue(a_objectid,
+                                                               'DateCompleted'),
+                                 t_hashvalue);
+
+                    COMMIT;
+                END IF;
+                RETURN;
+        END;
+
+        IF (t_completed = 'Y')
         THEN
             RETURN;
         END IF;
 
-        t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
-        t_licensenumber :=
-            api.pkg_columnquery.VALUE(
-                api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
-                'licensenumber');
-        t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
-
-        IF (t_applicationid IS NOT NULL)
+        -- check if outcome has been set
+        IF (api.pkg_columnquery.VALUE(a_objectid, 'Outcome') IS NOT NULL)
         THEN
-            t_address :=
-                parseaddress(
-                    api.pkg_columnquery.VALUE(
-                        a_objectid,
-                        'SponsoringOrganizationMailing'));
+            UPDATE bizmod_api.catering_app_t c
+               SET c.outcome =
+                       api.pkg_columnquery.VALUE(a_objectid, 'Outcome'),
+                   c.datecompleted =
+                       api.pkg_columnquery.datevalue(a_objectid,
+                                                     'DateCompleted')
+             WHERE c.processid = a_objectid;
 
-            t_addressid :=
-                api.pkg_columnquery.VALUE(a_objectid,
-                                          'EventLocAddressObjectId');
+            COMMIT;
+        END IF;
 
-            t_json_app := NEW json_object_t();
-            t_json_app.put('applicationId', t_applicationid);
-            t_json_app.put(
-                'eventStartDate',
-                api.pkg_columnquery.datevalue(a_objectid, 'DateOfEventFrom'));
-            t_json_app.put(
-                'eventEndDate',
-                api.pkg_columnquery.datevalue(a_objectid, 'dateofeventto'));
-            t_json_app.put(
-                'eventStartTime',
-                TO_CHAR(
-                    TO_TIMESTAMP(
-                        LPAD(
-                            CASE api.pkg_columnquery.VALUE(
-                                     a_objectid,
-                                     'BeginServingAlcoholAMPMTime')
-                                WHEN 'PM'
-                                THEN
-                                    TO_CHAR(
-                                          NVL(
-                                              api.pkg_columnquery.numericvalue(
-                                                  a_objectid,
-                                                  'Timeyouwillbeginservingalcohol'),
-                                              0)
-                                        + CASE
-                                              WHEN NVL(
-                                                       api.pkg_columnquery.numericvalue(
-                                                           a_objectid,
-                                                           'Timeyouwillbeginservingalcohol'),
-                                                       0) <
-                                                   1200
-                                              THEN
-                                                  1200
-                                              ELSE
-                                                  0
-                                          END)
-                                ELSE
-                                    TO_CHAR(
-                                          NVL(
-                                              api.pkg_columnquery.numericvalue(
-                                                  a_objectid,
-                                                  'Timeyouwillbeginservingalcohol'),
-                                              0)
-                                        - CASE
-                                              WHEN NVL(
-                                                       api.pkg_columnquery.numericvalue(
-                                                           a_objectid,
-                                                           'Timeyouwillbeginservingalcohol'),
-                                                       0) >=
-                                                   1200
-                                              THEN
-                                                  1200
-                                              ELSE
-                                                  0
-                                          END)
-                            END,
-                            4,
-                            '0'),
-                        'HH24MI'),
-                    'HH24:MI'));
-            t_json_app.put(
-                'eventEndTime',
-                TO_CHAR(
-                    TO_TIMESTAMP(
-                        LPAD(
-                            CASE api.pkg_columnquery.VALUE(
-                                     a_objectid,
-                                     'StopServingAlcoholAMPMTime')
-                                WHEN 'PM'
-                                THEN
-                                    TO_CHAR(
-                                          NVL(
-                                              api.pkg_columnquery.numericvalue(
-                                                  a_objectid,
-                                                  'TimeYouWillStopServingAlcohol'),
-                                              0)
-                                        + CASE
-                                              WHEN NVL(
-                                                       api.pkg_columnquery.numericvalue(
-                                                           a_objectid,
-                                                           'TimeYouWillStopServingAlcohol'),
-                                                       0) <
-                                                   1200
-                                              THEN
-                                                  1200
-                                              ELSE
-                                                  0
-                                          END)
-                                ELSE
-                                    TO_CHAR(
-                                          NVL(
-                                              api.pkg_columnquery.numericvalue(
-                                                  a_objectid,
-                                                  'TimeYouWillStopServingAlcohol'),
-                                              0)
-                                        - CASE
-                                              WHEN NVL(
-                                                       api.pkg_columnquery.numericvalue(
-                                                           a_objectid,
-                                                           'TimeYouWillStopServingAlcohol'),
-                                                       0) >=
-                                                   1200
-                                              THEN
-                                                  1200
-                                              ELSE
-                                                  0
-                                          END)
-                            END,
-                            4,
-                            '0'),
-                        'HH24MI'),
-                    'HH24:MI'));
-            t_json_app.put(
-                'expectedAttendance',
-                api.pkg_columnquery.numericvalue(a_objectid,
-                                                 'EstimatedAttendance'));
-            t_json_app.put(
-                'publicEvent',
-                api.pkg_columnquery.VALUE(a_objectid, 'PublicEvent'));
-            t_json_app.put(
-                'contactName',
-                api.pkg_columnquery.VALUE(a_objectid, 'ContactName'));
+        t_packet := create_packet(a_objectid => a_objectid);
 
-            t_phone :=
-                api.pkg_columnquery.VALUE(a_objectid, 'ContactPhoneNumber');
+        SELECT ORA_HASH(t_packet) INTO t_hashvalue FROM DUAL;
 
-            IF (t_phone IS NOT NULL
-            AND LENGTH(t_phone) > 9)
-            THEN
-                t_json_app.put(
-                    'contactPhone',
-                    '('
-                    || SUBSTR(t_phone, 1, 3)
-                    || ')'
-                    || SUBSTR(t_phone, 4, 3)
-                    || '-'
-                    || SUBSTR(t_phone, 7, 4));
-            END IF;
+        IF (t_hashvalue != t_currhash)
+        THEN
+            t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
 
-            t_json_app.put(
-                'contactEmail',
-                api.pkg_columnquery.VALUE(a_objectid, 'ContactEmail'));
-            t_json_app.put(
-                'eventType',
-                CASE api.pkg_columnquery.VALUE(a_objectid, 'EventType')
-                    WHEN 'OTHER EVENT'
-                    THEN
-                        api.pkg_columnquery.VALUE(a_objectid,
-                                                  'OtherEventType')
-                    ELSE
-                        api.pkg_columnquery.VALUE(a_objectid, 'EventType')
-                END);
-            t_json_app.put(
-                'sponsoringOrganization',
-                api.pkg_columnquery.VALUE(a_objectid,
-                                          'SponsoringOrganization'));
-            t_json_app.put('sponsoringOrganizationAddress1',
-                           TRIM(t_address(1)));
-            t_json_app.put('sponsoringOrganizationAddress2',
-                           TRIM(t_address(2)));
-            t_json_app.put('sponsoringOrganizationCity', TRIM(t_address(3)));
-            t_json_app.put('sponsoringOrganizationState', TRIM(t_address(4)));
-            t_json_app.put('sponsoringOrganizationZip', TRIM(t_address(5)));
-            t_json_app.put(
-                'personInCharge',
-                api.pkg_columnquery.VALUE(a_objectid,
-                                          'PersonInChargeOfEvent'));
+            SELECT REPLACE(ec.parametervalue,
+                           '<<applicationId>>',
+                           t_applicationid)
+              INTO t_url
+              FROM bizmod_api.eservices_config_t ec
+             WHERE ec.dbname = ora_database_name
+               AND ec.process = 'CATERINGNOTIFYLSPJOB'
+               AND ec.parametername = 'URL';
 
-            t_phone :=
-                api.pkg_columnquery.VALUE(a_objectid,
-                                          'PersonInChargePhoneNumber');
+            SELECT ec.parametervalue
+              INTO t_method
+              FROM bizmod_api.eservices_config_t ec
+             WHERE ec.dbname = ora_database_name
+               AND ec.process = 'CATERINGNOTIFYLSPJOB'
+               AND ec.parametername = 'METHOD_UPDATE';
 
-            IF (t_phone IS NOT NULL
-            AND LENGTH(t_phone) > 9)
-            THEN
-                t_json_app.put(
-                    'personInChargePhone',
-                    '('
-                    || SUBSTR(t_phone, 1, 3)
-                    || ')'
-                    || SUBSTR(t_phone, 4, 3)
-                    || '-'
-                    || SUBSTR(t_phone, 7, 4));
-            END IF;
+            t_licensenumber :=
+                api.pkg_columnquery.VALUE(
+                    api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
+                    'licensenumber');
+            t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
 
-            t_json_app.put(
-                'eventLocationAddress1',
-                api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1'));
-            t_json_app.put(
-                'eventLocationAddress2',
-                NVL(api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2'),
-                    ''));
-            t_json_app.put('eventLocationCity',
-                           api.pkg_columnquery.VALUE(t_addressid, 'CACity'));
-            t_json_app.put('eventLocationZip',
-                           api.pkg_columnquery.VALUE(t_addressid, 'ZipCode'));
-            t_json_app.put(
-                'withinCityLimits',
-                api.pkg_columnquery.VALUE(a_objectid, 'WithinCityLimits'));
-            t_json_app.put('annualEventsCount',
-                           api.pkg_columnquery.VALUE(a_objectid, 'Quantity'));
-            t_json_app.put(
-                'specificLocation',
-                api.pkg_columnquery.VALUE(a_objectid, 'SpecificLocation'));
-
-            t_url :=
-                REPLACE(
-                    REPLACE(
-                        t_url,
-                        '<<path>>',
-                        CASE ora_database_name
-                            WHEN 'ABISST1'
-                            THEN
-                                'https://services-sb.abc.ca.gov'
-                            WHEN 'ABISP1'
-                            THEN
-                                'https://abcbiz.abc.ca.gov'
-                            WHEN 'ABISQA1'
-                            THEN
-                                'https://qa-01.abcbiz-qa.abc.ca.gov'
-                            WHEN 'ABISD1'
-                            THEN
-                                'https://qa-02.abcbiz-qa.abc.ca.gov'
-                            ELSE
-                                'https://unknown'
-                        END),
-                    '<<applicationId>>',
-                    t_applicationid);
-
-            t_packet := t_json_app.TO_CLOB;
-            t_notifynumber := 1;
             t_response :=
                 bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
-                                                   a_method    => 'PUT',
+                                                   a_method    => t_method,
                                                    a_content   => t_packet,
                                                    a_file      => NULL);
 
-            IF (t_response IS NOT NULL)
+            IF (t_response IS NULL)
             THEN
+                UPDATE bizmod_api.catering_app_t c
+                   SET c.hashvalue = t_hashvalue
+                 WHERE c.processid = a_objectid;
+
+                COMMIT;
+            ELSE
                 t_response :=
                     t_response
-                    || CHR(13) 
                     || CHR(13)
-                    || 'Outcome: ' 
-                    || t_outcome
                     || CHR(13)
-                    || 'eventStartDate: '
-                    || api.pkg_columnquery.datevalue(a_objectid,
-                                                     'DateOfEventFrom')
-                    || CHR(13)
-                    || 'eventEndDate: '
-                    || api.pkg_columnquery.datevalue(a_objectid,
-                                                     'dateofeventto')
-                    || CHR(13)
-                    || 'BeginServingAlcoholAMPMTime: '
-                    || api.pkg_columnquery.VALUE(
-                           a_objectid,
-                           'BeginServingAlcoholAMPMTime')
-                    || CHR(13)
-                    || 'eventStartTime: '
-                    || api.pkg_columnquery.numericvalue(
-                           a_objectid,
-                           'Timeyouwillbeginservingalcohol')
-                    || CHR(13)
-                    || 'StopServingAlcoholAMPMTime: '
-                    || api.pkg_columnquery.VALUE(
-                           a_objectid,
-                           'StopServingAlcoholAMPMTime')
-                    || CHR(13)
-                    || 'eventEndTime: '
-                    || api.pkg_columnquery.numericvalue(
-                           a_objectid,
-                           'TimeYouWillStopServingAlcohol')
-                    || CHR(13)
-                    || 'expectedAttendance: '
-                    || api.pkg_columnquery.numericvalue(
-                           a_objectid,
-                           'EstimatedAttendance')
-                    || CHR(13)
-                    || 'publicEvent: '
-                    || api.pkg_columnquery.VALUE(a_objectid, 'PublicEvent')
-                    || CHR(13)
-                    || 'contactName: '
-                    || api.pkg_columnquery.VALUE(a_objectid, 'ContactName')
-                    || CHR(13)
-                    || 'ContactPhoneNumber: '
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'ContactPhoneNumber')
-                    || CHR(13)
-                    || 'contactEmail: '
-                    || api.pkg_columnquery.VALUE(a_objectid, 'ContactEmail')
-                    || CHR(13)
-                    || 'eventType: '
-                    || api.pkg_columnquery.VALUE(a_objectid, 'EventType')
-                    || CHR(13)
-                    || 'OtherEventType: '
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'OtherEventType')
-                    || CHR(13)
-                    || 'sponsoringOrganization: '
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'SponsoringOrganization')
-                    || CHR(13)
-                    || 'SponsoringOrganizationMailing: '
-                    || api.pkg_columnquery.VALUE(
-                           a_objectid,
-                           'SponsoringOrganizationMailing')
-                    || CHR(13)
-                    || 'personInCharge: '
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'PersonInChargeOfEvent')
-                    || CHR(13)
-                    || 'PersonInChargePhoneNumber'
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'PersonInChargePhoneNumber')
-                    || CHR(13)
-                    || 'eventLocationAddress1: '
-                    || api.pkg_columnquery.VALUE(t_addressid, 'AddressLine1')
-                    || CHR(13)
-                    || 'eventLocationAddress2: '
-                    || api.pkg_columnquery.VALUE(t_addressid, 'AddressLine2')
-                    || CHR(13)
-                    || 'eventLocationCity: '
-                    || api.pkg_columnquery.VALUE(t_addressid, 'CACity')
-                    || CHR(13)
-                    || 'eventLocationZip: '
-                    || api.pkg_columnquery.VALUE(t_addressid, 'ZipCode')
-                    || CHR(13)
-                    || 'withinCityLimits: '
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'WithinCityLimits')
-                    || CHR(13)
-                    || 'annualEventsCount: '
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'Quantity')
-                    || CHR(13)
-                    || 'specificLocation: '
-                    || api.pkg_columnquery.VALUE(a_objectid,
-                                                 'SpecificLocation');
+                    || json_query(t_packet, '$' RETURNING CLOB PRETTY);
             END IF;
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -579,8 +521,12 @@ BEGIN
                          || CHR(13)
                          || 'Application Update'
                          || CHR(13)
-                         || 'URL: '
-                         || t_url,
+                         || 'URL: "'
+                         || t_url
+                         || '"'
+                         || CHR(13)
+                         || 'Method: '
+                         || t_method,
                          CASE
                              WHEN t_response IS NOT NULL
                              THEN
@@ -592,89 +538,107 @@ BEGIN
                          t_packet);
 
             COMMIT;
+        END IF;
 
-            IF (t_outcome IS NOT NULL
-            AND t_response IS NULL)
+        SELECT REPLACE(ec.parametervalue,
+                       '<<applicationId>>',
+                       t_applicationid)
+          INTO t_url
+          FROM bizmod_api.eservices_config_t ec
+         WHERE ec.dbname = ora_database_name
+           AND ec.process = 'CATERINGNOTIFYLSPJOB'
+           AND ec.parametername = 'URL';
+
+        SELECT ec.parametervalue
+          INTO t_method
+          FROM bizmod_api.eservices_config_t ec
+         WHERE ec.dbname = ora_database_name
+           AND ec.process = 'CATERINGNOTIFYLSPJOB'
+           AND ec.parametername = 'METHOD_STATUS';
+
+        IF (t_outcome IS NOT NULL
+        AND t_response IS NULL)
+        THEN
+            t_url := t_url || CHR(63) || 'status=' || t_outcome;
+
+            IF (t_outcome = 'Approved')
             THEN
-                t_url := t_url || CHR(63) || 'status=' || t_outcome;
-                t_notifynumber := 2;
+                -- get 218 file to send to LSP
+                SELECT d.VALUE
+                  INTO t_data
+                  FROM api.relationships  r
+                       LEFT OUTER JOIN doc.documentblobs d
+                           ON d.documentid = r.toobjectid
+                 WHERE r.endpointid =
+                       api.pkg_configquery.endpointidforname(
+                           'p_IssueCatererEventAuth',
+                           'Document')
+                   AND api.pkg_columnquery.VALUE(d.documentid, 'filename') =
+                       'ABC-218.pdf'
+                   AND r.fromobjectid = a_objectid
+                   AND ROWNUM = 1;
 
-                IF (t_outcome = 'Approved')
-                THEN
-                    -- get 218 file to send to LSP
-                    SELECT d.VALUE
-                      INTO t_data
-                      FROM api.relationships  r
-                           LEFT OUTER JOIN doc.documentblobs d
-                               ON d.documentid = r.toobjectid
-                     WHERE r.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'p_IssueCatererEventAuth',
-                               'Document')
-                       AND api.pkg_columnquery.VALUE(d.documentid,
-                                                     'filename') =
-                           'ABC-218.pdf'
-                       AND r.fromobjectid = a_objectid
-                       AND ROWNUM = 1;
-
-                    t_url :=
-                        t_url
-                        || CHR(38)
-                        || 'file=ABC-218.pdf'
-                        || CHR(38)
-                        || 'metadata=ABC-218.pdf';
-                    t_response :=
-                        bizmod_api.utl_licenseinfo.calllsp(
-                            a_url       => t_url,
-                            a_method    => 'PATCH',
-                            a_content   => NULL,
-                            a_file      => t_data);
-                ELSE
-                    t_response :=
-                        bizmod_api.utl_licenseinfo.calllsp(
-                            a_url       => t_url,
-                            a_method    => 'PATCH',
-                            a_content   => NULL,
-                            a_file      => NULL);
-                END IF;
-
-                INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                       processjob,
-                                                       info,
-                                                       errmsg)
-                         VALUES (
-                             0,
-                             'CATERINGNOTIFYLSPJOB',
-                             'Application Id: '
-                             || t_applicationid
-                             || CHR(13)
-                             || 'License Number: '
-                             || t_licensenumber
-                             || CHR(13)
-                             || 'Catering Object Id: '
-                             || a_objectid
-                             || CHR(13)
-                             || 'Outcome: '
-                             || t_outcome
-                             || CHR(13)
-                             || 'URL: '
-                             || t_url,
-                             CASE
-                                 WHEN t_response IS NULL
-                                 THEN
-                                     NULL
-                                 ELSE
-                                     'Sponsoring Org Mailing: '
-                                     || api.pkg_columnquery.VALUE(
-                                            a_objectid,
-                                            'SponsoringOrganizationMailing')
-                                     || CHR(13)
-                                     || 'LSP Response: '
-                                     || t_response
-                             END);
-
-                COMMIT;
+                t_url :=
+                    t_url
+                    || CHR(38)
+                    || 'file=ABC-218.pdf'
+                    || CHR(38)
+                    || 'metadata=ABC-218.pdf';
+                t_response :=
+                    bizmod_api.utl_licenseinfo.calllsp(
+                        a_url       => t_url,
+                        a_method    => 'PATCH',
+                        a_content   => NULL,
+                        a_file      => t_data);
+            ELSE
+                t_response :=
+                    bizmod_api.utl_licenseinfo.calllsp(
+                        a_url       => t_url,
+                        a_method    => 'PATCH',
+                        a_content   => NULL,
+                        a_file      => NULL);
             END IF;
+
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg)
+                     VALUES (
+                         0,
+                         'CATERINGNOTIFYLSPJOB',
+                         'Application Id: '
+                         || t_applicationid
+                         || CHR(13)
+                         || 'License Number: '
+                         || t_licensenumber
+                         || CHR(13)
+                         || 'Catering Object Id: '
+                         || a_objectid
+                         || CHR(13)
+                         || 'Outcome: '
+                         || t_outcome
+                         || CHR(13)
+                         || 'URL: "'
+                         || t_url
+                         || '"'
+                         || CHR(13)
+                         || 'Method: '
+                         || t_method,
+                         CASE
+                             WHEN t_response IS NULL
+                             THEN
+                                 NULL
+                             ELSE
+                                 'Sponsoring Org Mailing: '
+                                 || api.pkg_columnquery.VALUE(
+                                        a_objectid,
+                                        'SponsoringOrganizationMailing')
+                                 || CHR(13)
+                                 || 'LSP Response: '
+                                 || t_response
+                         END);
+
+            COMMIT;
         END IF;
     EXCEPTION
         WHEN UTL_HTTP.request_failed
@@ -704,19 +668,15 @@ BEGIN
                          || 'Catering Object Id: '
                          || a_objectid
                          || CHR(13)
-                         || CASE t_notifynumber
-                                WHEN 1 THEN 'Application Update'
-                                ELSE 'Outcome: ' || t_outcome
-                            END
+                         || 'URL: "'
+                         || t_url
+                         || '"'
                          || CHR(13)
-                         || 'URL: '
-                         || t_url,
+                         || 'Method: '
+                         || t_method,
                          t_sqlerrm,
                          t_trace,
-                         CASE t_notifynumber
-                             WHEN 1 THEN t_packet
-                             ELSE NULL
-                         END);
+                         t_packet);
 
             COMMIT;
         WHEN OTHERS
@@ -736,19 +696,15 @@ BEGIN
                          'Application Id: '
                          || t_applicationid
                          || CHR(13)
-                         || CASE t_notifynumber
-                                WHEN 1 THEN 'Application Update'
-                                ELSE 'Outcome: ' || t_outcome
-                            END
+                         || 'URL: "'
+                         || t_url
+                         || '"'
                          || CHR(13)
-                         || 'URL: '
-                         || t_url,
+                         || 'Method: '
+                         || t_method,
                          t_sqlerrm,
                          t_trace,
-                         CASE t_notifynumber
-                             WHEN 1 THEN t_packet
-                             ELSE NULL
-                         END);
+                         t_packet);
 
             COMMIT;
     END;
