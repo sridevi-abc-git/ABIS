@@ -20,6 +20,7 @@ CREATE OR REPLACE PROCEDURE ABCREPORTS.RQS_AUTORUNREPORTS(p_override      IN VAR
 -- 03/07/2016 TJL   9131    Added logging report that were exported
 -- 09/22/2016 TJL   7213    Added parameter finialize id
 -- 10/12/2017 TJL           Corrected formating of report
+-- 5/28/2024  PK            Run Report 46 with office flag 'Y' without changing it in config table.
 -- ****************************************************************************
             
     PROCEDURE get_last_report_date(p_cycle             IN  VARCHAR2,
@@ -278,7 +279,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                 lt_parameters.add_value('REPORT_NAME', reports.report_name);            
                 lt_parameters.add_value('PROCESS', reports.process);            
                 lt_parameters.add_value('CYCLE_IND', reports.cycle_ind);            
-                lt_parameters.add_value('BY_OFFICE_FLG', reports.by_office_flg);            
+                lt_parameters.add_value('BY_OFFICE_FLG', case reports.report_number when 46 Then 'Y' else reports.by_office_flg End);            
                 lt_parameters.add_value('DATA_FORMAT', reports.data_format);            
                 lt_parameters.add_value('FINALIZE_ID', reports.finalize_id);            
                 lt_parameters.add_value('REPORT_DAY', reports.report_day);            
