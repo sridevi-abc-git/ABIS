@@ -17,7 +17,7 @@ IS
     --    1.0   01/04/2023 TJL  BIZ-14091   Corrected bug in parsing file
     --    2.0   02/06/2024 TJL  BIZ-14440   Removed parsing of Reference Column Data
     --    3.0   05/21/2024 TJL  BIZ-15523   Changed how batches are scheduled
-    --    3.1   05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
+    --    3.1.1 05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
     --                                        and what email procedure is called
     -- ****************************************************************************
 
@@ -239,6 +239,15 @@ BEGIN
         t_total        NUMBER := 0;
     BEGIN
         BEGIN
+            t_info :=
+                'File Uploaded'
+                || CHR(13)
+                || CHR(9)
+                || 'File Name: '
+                || CHR(9)
+                || t_filename
+                || CHR(13);
+
             SELECT e.filedata
               INTO t_blob
               FROM bizmod_api.eservices_log_t e
@@ -291,12 +300,12 @@ BEGIN
                                                  LEVEL)
                                        IS NOT NULL)
                 LOOP
-                    --     DBMS_OUTPUT.put_line(
-                    --         t_headings(rec.LN)
-                    --         || ' : '
-                    --         || NVL(rec.split, 'null')
-                    --         || ' : '
-                    --         || rec.LN);
+                    DBMS_OUTPUT.put_line(
+                        t_headings(rec.LN)
+                        || ' : '
+                        || NVL(rec.split, 'null')
+                        || ' : '
+                        || rec.LN);
 
                     CASE t_headings(rec.LN)
                         WHEN 'PAYMENTTIMESTAMP'
@@ -326,7 +335,7 @@ BEGIN
                 END LOOP;
 
                   -- make sure payment is in abis and not voided
-                  SELECT CASE COUNT(p.paymentobjectid)
+                  SELECT CASE COUNT(p.confirmationid)
                              WHEN 0
                              THEN
                                  'N'
@@ -346,6 +355,24 @@ BEGIN
                                           'Y'
                                      THEN
                                          'V'
+                                     --                                     WHEN api.pkg_columnquery.numericvalue(
+                                     --                                              p.paymentobjectid,
+                                     --                                              'PaymentAmount') !=
+                                     --                                          t_row.paymentamount
+                                     --                                     THEN
+                                     --                                         'E'
+                                     WHEN p.paymentobjectid IS NOT NULL
+                                              THEN
+                                                  CASE
+                                                      WHEN api.pkg_columnquery.numericvalue(
+                                                               p.paymentobjectid,
+                                                               'PaymentAmount') !=
+                                                           t_row.paymentamount
+                                                      THEN
+                                                          'E'
+                                                      ELSE
+                                                          'Y'
+                                                      END    
                                      ELSE
                                          'Y'
                                  END
@@ -398,18 +425,11 @@ BEGIN
             SELECT COUNT(fd.feeactivity)     cnt
               INTO t_recordsvoided
               FROM TABLE(t_fd) fd
-             WHERE fd.abispayment = 'V';
+             WHERE fd.abispayment != 'Y';
 
             COMMIT;
             t_info :=
-                'File Uploaded'
-                || CHR(13)
-                || CHR(9)
-                || 'File Name: '
-                || CHR(9)
-                || t_filename
-                || CHR(13)
-                || CHR(9)
+                CHR(9)
                 || 'Processed: '
                 || CHR(9)
                 || t_recordsprocessed
@@ -425,7 +445,7 @@ BEGIN
                 || t_recordsduplicate
                 || CHR(13)
                 || CHR(9)
-                || 'Payment Voided: '
+                || 'Unable to Process: '
                 || CHR(9)
                 || t_recordsvoided
                 || CHR(13)
@@ -446,13 +466,16 @@ BEGIN
                 t_cnt := 0;
                 t_info := t_info || CHR(13) || 'Fee Activities: ' || CHR(13);
 
-                FOR rec IN (  SELECT fd.feeactivity, COUNT(fd.feeactivity) cnt, sum(fd.paymentamount) paymentamount
-                                FROM TABLE(t_fd) fd
-                               WHERE fd.abispayment = 'Y'
-                            GROUP BY fd.feeactivity)
+                FOR rec
+                    IN (  SELECT fd.feeactivity,
+                                 COUNT(fd.feeactivity)     cnt,
+                                 SUM(fd.paymentamount)     paymentamount
+                            FROM TABLE(t_fd) fd
+                           WHERE fd.abispayment = 'Y'
+                        GROUP BY fd.feeactivity)
                 LOOP
                     t_total := t_total + rec.paymentamount;
-                    t_cnt := t_cnt + 1;
+                    t_cnt := t_cnt + rec.cnt;
                     t_info :=
                         t_info
                         || CHR(9)
@@ -460,18 +483,18 @@ BEGIN
                         || CHR(9)
                         || rec.feeactivity
                         || CHR(9)
-                        || to_char(rec.paymentamount, 'fm9G999G999D00')
+                        || TO_CHAR(rec.paymentamount, 'fm9G999G999D00')
                         || CHR(13);
                 END LOOP;
 
-                    t_info :=
-                        t_info
-                        || CHR(9)
-                        || t_cnt
-                        || chr(9)
-                        || 'Total:'
-                        || chr(9)
-                        || to_char(t_total, 'fm9G999G999D00');
+                t_info :=
+                    t_info
+                    || CHR(9)
+                    || t_cnt
+                    || CHR(9)
+                    || 'Total:'
+                    || CHR(9)
+                    || TO_CHAR(t_total, 'fm9G999G999D00');
             END IF;
 
             IF (t_errorrecords > 0)
@@ -549,7 +572,7 @@ BEGIN
                 t_trace := DBMS_UTILITY.format_error_backtrace;
                 t_msg := SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990);
 
-                t_info := t_info || 'Error in file upload';
+                t_info := t_info || CHR(13) || 'Error in file upload';
 
                 UPDATE bizmod_api.eservices_log_t
                    SET err = t_msg, responsedate = SYSTIMESTAMP
@@ -579,17 +602,17 @@ BEGIN
 
         COMMIT;
 
-            bizmod_api.utl_licenseinfo.sendemail(
-                a_subject   => 'First Data File Upload'
-                               || CASE
-                                      WHEN t_sqlerrm IS NOT NULL
-                                        OR t_errorrecords > 0
-                                      THEN
-                                          ' has errors'
-                                      ELSE
-                                          NULL
-                                  END,
-                a_body      => t_info);
+        bizmod_api.utl_licenseinfo.sendemail(
+            a_subject   => 'First Data File Upload'
+                           || CASE
+                                  WHEN t_sqlerrm IS NOT NULL
+                                    OR t_errorrecords > 0
+                                  THEN
+                                      ' has errors'
+                                  ELSE
+                                      NULL
+                              END,
+            a_body      => t_info);
 
         RETURN t_return;
     END;
