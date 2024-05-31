@@ -24,7 +24,7 @@ IS
     --   5.0     04/23/2024  TJL BIZ-15138  Corrected bug in duplicating AWF payment records
     --   6.0     05/21/2024  TJL BIZ-15523  Select how which payments are selected for AWF
     --                                         payment batch
-    --   6.1     05/24/2024  TJL BIZ-15485  Changed email function called and when called
+    --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -393,8 +393,8 @@ BEGIN
                 || CHR(13)
                 || 'Batch Type: '
                 || CASE a_seq
-                       WHEN 0 THEN 'AWF no payment required'
-                       ELSE 'First Data AWF Payment Batch'
+                       WHEN 0 THEN 'AWF no payment required' || CHR(13)
+                       ELSE 'First Data AWF Payment Batch' || CHR(13)
                    END
                 || CHR(13)
                 || 'Payment Type: '
@@ -423,6 +423,16 @@ BEGIN
                    END
                 || CHR(13)
                 || CHR(13);
+        ELSE 
+            t_info := 
+                t_info ||
+                    'File: '
+                  || t_filename
+                  || chr(13)
+                  || 'Payment Method: ' 
+                  || t_paymenttype
+                  || chr(13)
+                  || 'No record found for payment';
         END IF;
     EXCEPTION
         WHEN OTHERS
