@@ -24,9 +24,8 @@ AS
     --                                          Mailing Address.
     --   2.0     01/02/2024 TJL  BIZ-14058  Corrected bug in parsing Sponsoring Organization
     --                                          Mailing Address.
-    --   3.0     05/17/2024 TJL  BIZ-15485  Added getting URL information from new configuration
-    --                                          table and prevent updates being sent to LSP when
-    --                                          application status is updated.
+    --   3.0     05/17/2024 TJL  BIZ-15485  Change parameters to call to calllsp. New calllsp uses
+    --                                          configuration table for HTTP Calls
     --   3.1     05/24/2024 TJL  BIZ-15021  Added support for new field Outside Event
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
@@ -169,7 +168,7 @@ AS
             api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
 
         t_json_app.put('applicationId',
-                       api.pkg_columnquery.datevalue(a_objectid, 'LSPId'));
+                       api.pkg_columnquery.value(a_objectid, 'LSPId'));
         t_json_app.put(
             'eventStartDate',
             api.pkg_columnquery.datevalue(a_objectid, 'DateOfEventFrom'));
@@ -375,14 +374,17 @@ AS
 -- ****************************************************************************
 BEGIN
     DECLARE
+        t_process      VARCHAR2(32) := 'CATERINGNOTIFYLSPJOB';
         t_data         BLOB;
         t_outcome      VARCHAR2(20);
-        t_url          VARCHAR2(1000);
-        t_method       VARCHAR2(20);
+        --        t_url          VARCHAR2(1000);
+        --        t_method       VARCHAR2(20);
         t_packet       CLOB;
         t_response     CLOB;
         t_results      CLOB;
         t_json_app     json_object_t;
+        t_parameternames json_object_t;
+        t_replacementvalues json_object_t;
 
         t_applicationid VARCHAR2(1000);
         t_licensenumber VARCHAR2(100);
@@ -393,6 +395,7 @@ BEGIN
         t_completed    VARCHAR2(1);
         t_hashvalue    NUMBER;
         t_currhash     NUMBER;
+        t_header       VARCHAR2(4000);
     BEGIN
         BEGIN
             SELECT CASE WHEN c.outcome IS NULL THEN 'N' ELSE 'Y' END,
@@ -403,7 +406,8 @@ BEGIN
         EXCEPTION
             WHEN NO_DATA_FOUND
             THEN
-                IF (api.pkg_columnquery.numericvalue(a_objectid, 'LSPId') IS NOT NULL)
+                IF (api.pkg_columnquery.numericvalue(a_objectid, 'LSPId')
+                        IS NOT NULL)
                 THEN
                     -- get packet hash value
                     t_packet := create_packet(a_objectid => a_objectid);
@@ -420,15 +424,18 @@ BEGIN
                                  api.pkg_columnquery.numericvalue(a_objectid,
                                                                   'LSPId'),
                                  a_objectid,
-                                 api.pkg_columnquery.VALUE(a_objectid, 'Outcome'),
+                                 api.pkg_columnquery.VALUE(a_objectid,
+                                                           'Outcome'),
                                  api.pkg_columnquery.datevalue(a_objectid,
                                                                'CreatedDate'),
-                                 api.pkg_columnquery.datevalue(a_objectid,
-                                                               'DateCompleted'),
+                                 api.pkg_columnquery.datevalue(
+                                     a_objectid,
+                                     'DateCompleted'),
                                  t_hashvalue);
 
                     COMMIT;
                 END IF;
+
                 RETURN;
         END;
 
@@ -438,7 +445,9 @@ BEGIN
         END IF;
 
         -- check if outcome has been set
-        IF (api.pkg_columnquery.VALUE(a_objectid, 'Outcome') IS NOT NULL)
+        t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
+
+        IF (t_outcome IS NOT NULL)
         THEN
             UPDATE bizmod_api.catering_app_t c
                SET c.outcome =
@@ -455,37 +464,43 @@ BEGIN
 
         SELECT ORA_HASH(t_packet) INTO t_hashvalue FROM DUAL;
 
+        t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
+
+        t_licensenumber :=
+            api.pkg_columnquery.VALUE(
+                api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
+                'licensenumber');
+
+        t_header :=
+            'Application Id: '
+            || t_applicationid
+            || CHR(13)
+            || 'License Number: '
+            || t_licensenumber
+            || CHR(13)
+            || 'Catering Object Id: '
+            || a_objectid
+            || CHR(13)
+            || 'Outcome: '
+            || t_outcome
+            || CHR(13);
+
         IF (t_hashvalue != t_currhash)
         THEN
-            t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
-
-            SELECT REPLACE(ec.parametervalue,
-                           '<<applicationId>>',
-                           t_applicationid)
-              INTO t_url
-              FROM bizmod_api.eservices_config_t ec
-             WHERE ec.dbname = ora_database_name
-               AND ec.process = 'CATERINGNOTIFYLSPJOB'
-               AND ec.parametername = 'URL';
-
-            SELECT ec.parametervalue
-              INTO t_method
-              FROM bizmod_api.eservices_config_t ec
-             WHERE ec.dbname = ora_database_name
-               AND ec.process = 'CATERINGNOTIFYLSPJOB'
-               AND ec.parametername = 'METHOD_UPDATE';
-
-            t_licensenumber :=
-                api.pkg_columnquery.VALUE(
-                    api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
-                    'licensenumber');
-            t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
+            -- update LSP of any changes to application data
+            t_parameternames :=
+                json_object_t(
+                    '{"URL":"URL_UPDATE:","METHOD":"METHOD_UPDATE"}');
+            t_replacementvalues :=
+                json_object_t(
+                    '{"<<applicationId>>":"' || t_applicationid || '"}');
 
             t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url,
-                                                   a_method    => t_method,
-                                                   a_content   => t_packet,
-                                                   a_file      => NULL);
+                bizmod_api.utl_licenseinfo.calllsp(
+                    a_process   => t_process,
+                    a_parameternames => t_parameternames,
+                    a_replacementvalues => t_replacementvalues,
+                    a_content   => t_packet);
 
             IF (t_response IS NULL)
             THEN
@@ -496,7 +511,7 @@ BEGIN
                 COMMIT;
             ELSE
                 t_response :=
-                    t_response
+                    json_query(t_response, '$' RETURNING CLOB PRETTY)
                     || CHR(13)
                     || CHR(13)
                     || json_query(t_packet, '$' RETURNING CLOB PRETTY);
@@ -509,24 +524,8 @@ BEGIN
                                                    packet)
                      VALUES (
                          0,
-                         'CATERINGNOTIFYLSPJOB',
-                         'Application Id: '
-                         || t_applicationid
-                         || CHR(13)
-                         || 'License Number: '
-                         || t_licensenumber
-                         || CHR(13)
-                         || 'Catering Object Id: '
-                         || a_objectid
-                         || CHR(13)
-                         || 'Application Update'
-                         || CHR(13)
-                         || 'URL: "'
-                         || t_url
-                         || '"'
-                         || CHR(13)
-                         || 'Method: '
-                         || t_method,
+                         t_process,
+                         t_header,
                          CASE
                              WHEN t_response IS NOT NULL
                              THEN
@@ -535,32 +534,24 @@ BEGIN
                              ELSE
                                  NULL
                          END,
-                         t_packet);
+                         json_query(t_packet, '$' RETURNING CLOB PRETTY));
 
             COMMIT;
         END IF;
 
-        SELECT REPLACE(ec.parametervalue,
-                       '<<applicationId>>',
-                       t_applicationid)
-          INTO t_url
-          FROM bizmod_api.eservices_config_t ec
-         WHERE ec.dbname = ora_database_name
-           AND ec.process = 'CATERINGNOTIFYLSPJOB'
-           AND ec.parametername = 'URL';
-
-        SELECT ec.parametervalue
-          INTO t_method
-          FROM bizmod_api.eservices_config_t ec
-         WHERE ec.dbname = ora_database_name
-           AND ec.process = 'CATERINGNOTIFYLSPJOB'
-           AND ec.parametername = 'METHOD_STATUS';
+        t_parameternames :=
+            json_object_t('{"URL":"URL_STATUS:","METHOD":"METHOD_STATUS"}');
+        t_replacementvalues :=
+            json_object_t(
+                '{"<<applicationId>>":"'
+                || t_applicationid
+                || '","<<status>>":"'
+                || t_outcome
+                || '"}');
 
         IF (t_outcome IS NOT NULL
         AND t_response IS NULL)
         THEN
-            t_url := t_url || CHR(63) || 'status=' || t_outcome;
-
             IF (t_outcome = 'Approved')
             THEN
                 -- get 218 file to send to LSP
@@ -578,26 +569,26 @@ BEGIN
                    AND r.fromobjectid = a_objectid
                    AND ROWNUM = 1;
 
-                t_url :=
-                    t_url
-                    || CHR(38)
-                    || 'file=ABC-218.pdf'
-                    || CHR(38)
-                    || 'metadata=ABC-218.pdf';
-                t_response :=
-                    bizmod_api.utl_licenseinfo.calllsp(
-                        a_url       => t_url,
-                        a_method    => 'PATCH',
-                        a_content   => NULL,
-                        a_file      => t_data);
-            ELSE
-                t_response :=
-                    bizmod_api.utl_licenseinfo.calllsp(
-                        a_url       => t_url,
-                        a_method    => 'PATCH',
-                        a_content   => NULL,
-                        a_file      => NULL);
+                t_replacementvalues :=
+                    json_object_t(
+                        '{"<<applicationId>>":"'
+                        || t_applicationid
+                        || '","<<status>>":"'
+                        || t_outcome
+                        || CHR(38)
+                        || 'file=ABC-218.pdf'
+                        || CHR(38)
+                        || 'metadata=ABC-218.pdf"}');
             END IF;
+
+            t_response :=
+                bizmod_api.utl_licenseinfo.calllsp(
+                    a_process   => t_process,
+                    a_parameternames => t_parameternames,
+                    a_replacementvalues => t_replacementvalues,
+                    a_content   => t_packet,
+                    a_file      => t_data);
+
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
@@ -605,80 +596,16 @@ BEGIN
                                                    errmsg)
                      VALUES (
                          0,
-                         'CATERINGNOTIFYLSPJOB',
-                         'Application Id: '
-                         || t_applicationid
-                         || CHR(13)
-                         || 'License Number: '
-                         || t_licensenumber
-                         || CHR(13)
-                         || 'Catering Object Id: '
-                         || a_objectid
-                         || CHR(13)
-                         || 'Outcome: '
-                         || t_outcome
-                         || CHR(13)
-                         || 'URL: "'
-                         || t_url
-                         || '"'
-                         || CHR(13)
-                         || 'Method: '
-                         || t_method,
+                         t_process,
+                         t_header,
                          CASE
-                             WHEN t_response IS NULL
-                             THEN
-                                 NULL
-                             ELSE
-                                 'Sponsoring Org Mailing: '
-                                 || api.pkg_columnquery.VALUE(
-                                        a_objectid,
-                                        'SponsoringOrganizationMailing')
-                                 || CHR(13)
-                                 || 'LSP Response: '
-                                 || t_response
+                             WHEN t_response IS NULL THEN NULL
+                             ELSE 'LSP Response: ' || CHR(13) || t_response
                          END);
 
             COMMIT;
         END IF;
     EXCEPTION
-        WHEN UTL_HTTP.request_failed
-        THEN
-            t_sqlerrm :=
-                'HTTP: '
-                || UTL_HTTP.get_detailed_sqlerrm
-                || CHR(13)
-                || SQLERRM;
-            t_trace := DBMS_UTILITY.format_error_backtrace;
-
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg,
-                                                   bktrace,
-                                                   packet)
-                     VALUES (
-                         0,
-                         'CATERINGNOTIFYLSPJOB',
-                         'Application Id: '
-                         || t_applicationid
-                         || CHR(13)
-                         || 'License Number: '
-                         || t_licensenumber
-                         || CHR(13)
-                         || 'Catering Object Id: '
-                         || a_objectid
-                         || CHR(13)
-                         || 'URL: "'
-                         || t_url
-                         || '"'
-                         || CHR(13)
-                         || 'Method: '
-                         || t_method,
-                         t_sqlerrm,
-                         t_trace,
-                         t_packet);
-
-            COMMIT;
         WHEN OTHERS
         THEN
             t_sqlerrm := SQLERRM;
@@ -690,18 +617,9 @@ BEGIN
                                                    errmsg,
                                                    bktrace,
                                                    packet)
-                     VALUES (
-                         0,
-                         'CATERINGNOTIFYLSPJOB',
-                         'Application Id: '
-                         || t_applicationid
-                         || CHR(13)
-                         || 'URL: "'
-                         || t_url
-                         || '"'
-                         || CHR(13)
-                         || 'Method: '
-                         || t_method,
+                 VALUES (0,
+                         t_process,
+                         t_header,
                          t_sqlerrm,
                          t_trace,
                          t_packet);
