@@ -40,11 +40,11 @@ AS
                                address  CLOB,
                                legal_entities CLOB);
 
-
-    FUNCTION calllsp(a_url           IN VARCHAR2,
-                     a_method        IN VARCHAR2,
-                     a_content       IN CLOB,
-                     a_file          IN BLOB)
+    FUNCTION calllsp(a_process      in varchar,
+                     a_parameternames IN OUT json_object_t,
+                     a_replacementvalues IN json_object_t,
+                     a_content      IN CLOB DEFAULT NULL,
+                     a_file         IN BLOB DEFAULT NULL)
         RETURN CLOB;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)

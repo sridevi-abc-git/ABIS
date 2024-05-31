@@ -33,7 +33,8 @@ AS
     --   6.0    03/26/2024  TJL  BIZ-14833    Added new functions (get_application and checkpayment)
     --   6.1    03/28/2024  TJL  BIZ-14833    Remove functions (awfrequired and get_awfreninfo)
     --   6.2    05/20/2024  APD  BIZ-15210    Fix bug to send UTF content and Content-Length for multi-byte chars
-    --   6.3    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table
+    --   6.3    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table and
+    --                                          changed calllsp parameters and parameter types
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -47,10 +48,11 @@ AS
 
     TYPE t_recp IS TABLE OF VARCHAR(512);
 
-    FUNCTION calllsp(a_url          IN VARCHAR2,
-                     a_method       IN VARCHAR2,
-                     a_content      IN CLOB,
-                     a_file         IN BLOB)
+    FUNCTION calllsp(a_process      IN     VARCHAR,
+                     a_parameternames IN OUT json_object_t,
+                     a_replacementvalues IN json_object_t,
+                     a_content      IN     CLOB DEFAULT NULL,
+                     a_file         IN     BLOB DEFAULT NULL)
         RETURN CLOB
     IS
         t_seq          NUMBER;
@@ -80,124 +82,341 @@ AS
         t_response_header_value VARCHAR2(1024);
         t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
-        t_wallet       VARCHAR2(1000);
+        t_infotext     VARCHAR2(32767);
         t_length       NUMBER;
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
+        t_keys         json_key_list;
+        t_column       VARCHAR2(100);
+        t_value        VARCHAR2(4000);
+        t_info         json_object_t := json_object_t();
+        t_header       json_object_t := json_object_t();
+        
     BEGIN
-        INSERT INTO eservices_log_t(request,
-                                    packet,
-                                    info,
-                                    filedata,
-                                    requestdate)
-             VALUES ('CALLLSP',
-                     a_content,
-                     'URL: ' || a_url || CHR(13) || 'Method: ' || a_method,
-                     a_file,
-                     SYSTIMESTAMP)
-          RETURNING seq
-               INTO t_seq;
+        BEGIN
+            -- add wallet to get wallet location from configuration table
+            a_parameternames.put('WALLET', 'WALLET');
+            t_keys := a_parameternames.get_keys;
 
-        t_wallet :=
-            CASE LOWER(ora_database_name)
-                WHEN 'abisp1'
-                THEN
-                    'file:/u01/app/oracle/admin/abisp1/walletSSL'
-                ELSE
-                    'file:/orabin1/admin/'
-                    || LOWER(ora_database_name)
-                    || '/walletSSL/'
-            END;
-
-        UTL_HTTP.set_wallet(t_wallet, NULL);
-
-        -- Open the HTTP request
-        t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
-
-        UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
-        UTL_HTTP.set_body_charset(t_request, 'UTF-8');
-
-        IF (a_file IS NULL)
-        THEN
-            IF (a_content IS NOT NULL)
-            THEN
-                t_length :=
-                    UTL_RAW.LENGTH(
-                        UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(a_content),
-                                        'american_america.al32utf8',
-                                        'AMERICAN_america.WE8MSWIN1252'));
-                UTL_HTTP.set_header(t_request,
-                                    'content-type',
-                                    'application/json');
-                UTL_HTTP.set_header(t_request, 'Content-Length', t_length);
-
-                UTL_HTTP.write_text(t_request, a_content);
-            END IF;
-        ELSE
-            -- Set the request headers
-            UTL_HTTP.set_header(t_request, 'Content-Type', t_content_type);
-            UTL_HTTP.set_header(
-                t_request,
-                'Content-Length',
-                TO_CHAR(
-                      DBMS_LOB.getlength(t_body_start)
-                    + DBMS_LOB.getlength(a_file)
-                    + DBMS_LOB.getlength(t_body_end)));
-
-            -- Write the start of the body to the request
-            UTL_HTTP.write_text(t_request, t_body_start);
-
-            -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
-            t_blob_len := DBMS_LOB.getlength(a_file);
-
-            -- Write the BLOB content to the request in chunks
-            WHILE t_offset <= t_blob_len
+            -- get configuration information
+            FOR i IN 1 .. t_keys.COUNT
             LOOP
-                DBMS_LOB.read(a_file,
-                              t_chunk_size,
-                              t_offset,
-                              t_chunk);
-                UTL_HTTP.write_raw(t_request, t_chunk);
-                t_offset := t_offset + t_chunk_size;
+                t_column := a_parameternames.get_string(t_keys(i));
+--dbms_output.put_line('Columns: ' || t_column);
+                SELECT c.parametervalue
+                  INTO t_value
+                  FROM bizmod_api.eservices_config_t c
+                 WHERE c.dbname = UPPER(ora_database_name)
+                   AND c.process = a_process
+                   AND c.parametername = t_column;
+
+                t_info.put(t_keys(i), t_value);
             END LOOP;
 
-            -- Write the end of the body to the request
-            UTL_HTTP.write_text(t_request, t_body_end);
-        END IF;
+            -- replace the replacement keys from values provided
+            t_keys := a_replacementvalues.get_keys;
 
-        -- Get the response
-        t_response := UTL_HTTP.get_response(t_request);
+            FOR i IN 1 .. t_keys.COUNT
+            LOOP
+                t_info.put(
+                    'URL',
+                    REPLACE(t_info.get_string('URL'),
+                            t_keys(i),
+                            a_replacementvalues.get_string(t_keys(i))));
+            END LOOP;
 
-        IF (t_response.status_code NOT IN (200, 201, 204))
-        THEN
-            DBMS_LOB.createtemporary(t_response_text, TRUE, DBMS_LOB.session);
+            t_infotext := t_info.to_clob;
+--dbms_output.put_line(t_infotext);
 
-            BEGIN
-                LOOP
-                    UTL_HTTP.read_text(t_response, t_text, 32766);
-                    DBMS_LOB.writeappend(t_response_text,
-                                         LENGTH(t_text),
-                                         t_text);
-                END LOOP;
-            EXCEPTION
-                WHEN UTL_HTTP.end_of_body
+            INSERT INTO eservices_log_t(request,
+                                        packet,
+                                        info,
+                                        filedata,
+                                        requestdate)
+                 VALUES (
+                     'CALLLSP',
+                     a_content,
+                     t_infotext,
+                     a_file,
+                     SYSTIMESTAMP)
+              RETURNING seq
+                   INTO t_seq;
+
+            COMMIT;
+            
+            UTL_HTTP.set_wallet(t_info.get_string('WALLET'), NULL);
+
+            -- Open the HTTP request
+            t_request :=
+                UTL_HTTP.begin_request(
+                    url         => t_info.get_string('URL'),
+                    method      => t_info.get_string('METHOD'));
+
+            UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
+            UTL_HTTP.set_body_charset(t_request, 'UTF-8');
+
+            IF (a_file IS NULL)
+            THEN
+                IF (a_content IS NOT NULL)
                 THEN
-                    UTL_HTTP.end_response(t_response);
-            END;
-        END IF;
+                    t_length :=
+                        UTL_RAW.LENGTH(
+                            UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(a_content),
+                                            'american_america.al32utf8',
+                                            'AMERICAN_america.WE8MSWIN1252'));
+                    UTL_HTTP.set_header(t_request,
+                                        'content-type',
+                                        'application/json');
+                    UTL_HTTP.set_header(t_request,
+                                        'Content-Length',
+                                        t_length);
 
-        -- Close the HTTP request/response
-        UTL_HTTP.end_response(t_response);
-        UTL_HTTP.end_request(t_request);
+                    UTL_HTTP.write_text(t_request, a_content);
+                END IF;
+            ELSE
+                -- Set the request headers
+                UTL_HTTP.set_header(t_request,
+                                    'Content-Type',
+                                    t_content_type);
+                UTL_HTTP.set_header(
+                    t_request,
+                    'Content-Length',
+                    TO_CHAR(
+                          DBMS_LOB.getlength(t_body_start)
+                        + DBMS_LOB.getlength(a_file)
+                        + DBMS_LOB.getlength(t_body_end)));
 
-        UPDATE eservices_log_t
-           SET response = json_object('LSPRESPONSE' VALUE t_response_text),
-               responsedate = SYSTIMESTAMP
+                -- Write the start of the body to the request
+                UTL_HTTP.write_text(t_request, t_body_start);
+
+                -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
+                t_blob_len := DBMS_LOB.getlength(a_file);
+
+                -- Write the BLOB content to the request in chunks
+                WHILE t_offset <= t_blob_len
+                LOOP
+                    DBMS_LOB.read(a_file,
+                                  t_chunk_size,
+                                  t_offset,
+                                  t_chunk);
+                    UTL_HTTP.write_raw(t_request, t_chunk);
+                    t_offset := t_offset + t_chunk_size;
+                END LOOP;
+
+                -- Write the end of the body to the request
+                UTL_HTTP.write_text(t_request, t_body_end);
+            END IF;
+
+            -- Get the response
+            t_response := UTL_HTTP.get_response(t_request);
+
+            IF (t_response.status_code NOT IN (200, 201, 204))
+            THEN
+            
+                DBMS_LOB.createtemporary(t_response_text,
+                                         TRUE,
+                                         DBMS_LOB.session);
+                BEGIN
+                    LOOP
+                        UTL_HTTP.read_text(t_response, t_text, 32766);
+                        DBMS_LOB.writeappend(t_response_text,
+                                             LENGTH(t_text),
+                                             t_text);
+                    END LOOP;
+                EXCEPTION
+                    WHEN UTL_HTTP.end_of_body
+                    THEN
+                        UTL_HTTP.end_response(t_response);
+                END;
+                
+                    t_info.put('LSPRESPONSE', t_response_text);
+            END IF;
+
+            -- Close the HTTP request/response
+            UTL_HTTP.end_response(t_response);
+            UTL_HTTP.end_request(t_request);
+            
+        EXCEPTION
+            WHEN UTL_HTTP.request_failed
+            THEN
+                t_sqlerrm :=
+                    'HTTP: '
+                    || UTL_HTTP.get_detailed_sqlerrm
+                    || CHR(13)
+                    || SQLERRM;
+                t_trace := DBMS_UTILITY.format_error_backtrace;
+t_info.put('ORA-ERROR', t_sqlerrm);
+t_response_text := t_response_text || chr(13) || t_sqlerrm;                
+        END;
+
+        t_infotext := t_info.to_clob;
+
+        UPDATE eservices_log_t e
+           SET response = t_infotext,
+               responsedate = SYSTIMESTAMP,
+               e.err = SUBSTR(t_sqlerrm || CHR(13) || t_trace, 1, 3990)
          WHERE seq = t_seq
            LOG ERRORS INTO bizmod_api.err$_eservices_log_t
                    ('UPDATE')
                    REJECT LIMIT UNLIMITED;
 
-        RETURN t_response_text;
+        COMMIT;
+
+        RETURN case when t_response_text is not null then t_info.to_clob else null end;
     END;
+
+
+--    FUNCTION calllsp(a_url          IN VARCHAR2,
+--                     a_method       IN VARCHAR2,
+--                     a_content      IN CLOB,
+--                     a_file         IN BLOB)
+--        RETURN CLOB
+--    IS
+--        t_seq          NUMBER;
+--        t_boundary     VARCHAR2(100)
+--                           := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
+--        t_request      UTL_HTTP.req;
+--        t_response     UTL_HTTP.resp;
+--        t_response_text CLOB;
+--        t_blob_len     NUMBER;
+--        t_chunk_size   NUMBER := 32767;
+--        t_offset       NUMBER := 1;
+--        t_chunk        RAW(32767);
+--        t_content_type VARCHAR2(100)
+--                           := 'multipart/form-data; boundary=' || t_boundary;
+--        t_body_start   VARCHAR2(1000)
+--            := '--'
+--               || t_boundary
+--               || UTL_TCP.crlf
+--               || 'Content-Disposition: form-data; name="file"; filename="report.pdf"'
+--               || UTL_TCP.crlf
+--               || 'Content-Type: application/pdf'
+--               || UTL_TCP.crlf
+--               || UTL_TCP.crlf;
+--        t_body_end     VARCHAR2(100)
+--            := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
+--        t_response_header_name VARCHAR2(256);
+--        t_response_header_value VARCHAR2(1024);
+--        t_response_body VARCHAR2(32767);
+--        t_text         VARCHAR2(32767);
+--        t_wallet       VARCHAR2(1000);
+--        t_length       NUMBER;
+--    BEGIN
+--        INSERT INTO eservices_log_t(request,
+--                                    packet,
+--                                    info,
+--                                    filedata,
+--                                    requestdate)
+--             VALUES ('CALLLSP',
+--                     a_content,
+--                     'URL: ' || a_url || CHR(13) || 'Method: ' || a_method,
+--                     a_file,
+--                     SYSTIMESTAMP)
+--          RETURNING seq
+--               INTO t_seq;
+--
+--        t_wallet :=
+--            CASE LOWER(ora_database_name)
+--                WHEN 'abisp1'
+--                THEN
+--                    'file:/u01/app/oracle/admin/abisp1/walletSSL'
+--                ELSE
+--                    'file:/orabin1/admin/'
+--                    || LOWER(ora_database_name)
+--                    || '/walletSSL/'
+--            END;
+--
+--        UTL_HTTP.set_wallet(t_wallet, NULL);
+--
+--        -- Open the HTTP request
+--        t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
+--
+--        UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
+--        UTL_HTTP.set_body_charset(t_request, 'UTF-8');
+--
+--        IF (a_file IS NULL)
+--        THEN
+--            IF (a_content IS NOT NULL)
+--            THEN
+--                t_length :=
+--                    UTL_RAW.LENGTH(
+--                        UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(a_content),
+--                                        'american_america.al32utf8',
+--                                        'AMERICAN_america.WE8MSWIN1252'));
+--                UTL_HTTP.set_header(t_request,
+--                                    'content-type',
+--                                    'application/json');
+--                UTL_HTTP.set_header(t_request, 'Content-Length', t_length);
+--
+--                UTL_HTTP.write_text(t_request, a_content);
+--            END IF;
+--        ELSE
+--            -- Set the request headers
+--            UTL_HTTP.set_header(t_request, 'Content-Type', t_content_type);
+--            UTL_HTTP.set_header(
+--                t_request,
+--                'Content-Length',
+--                TO_CHAR(
+--                      DBMS_LOB.getlength(t_body_start)
+--                    + DBMS_LOB.getlength(a_file)
+--                    + DBMS_LOB.getlength(t_body_end)));
+--
+--            -- Write the start of the body to the request
+--            UTL_HTTP.write_text(t_request, t_body_start);
+--
+--            -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
+--            t_blob_len := DBMS_LOB.getlength(a_file);
+--
+--            -- Write the BLOB content to the request in chunks
+--            WHILE t_offset <= t_blob_len
+--            LOOP
+--                DBMS_LOB.read(a_file,
+--                              t_chunk_size,
+--                              t_offset,
+--                              t_chunk);
+--                UTL_HTTP.write_raw(t_request, t_chunk);
+--                t_offset := t_offset + t_chunk_size;
+--            END LOOP;
+--
+--            -- Write the end of the body to the request
+--            UTL_HTTP.write_text(t_request, t_body_end);
+--        END IF;
+--
+--        -- Get the response
+--        t_response := UTL_HTTP.get_response(t_request);
+--
+--        IF (t_response.status_code NOT IN (200, 201, 204))
+--        THEN
+--            DBMS_LOB.createtemporary(t_response_text, TRUE, DBMS_LOB.session);
+--
+--            BEGIN
+--                LOOP
+--                    UTL_HTTP.read_text(t_response, t_text, 32766);
+--                    DBMS_LOB.writeappend(t_response_text,
+--                                         LENGTH(t_text),
+--                                         t_text);
+--                END LOOP;
+--            EXCEPTION
+--                WHEN UTL_HTTP.end_of_body
+--                THEN
+--                    UTL_HTTP.end_response(t_response);
+--            END;
+--        END IF;
+--
+--        -- Close the HTTP request/response
+--        UTL_HTTP.end_response(t_response);
+--        UTL_HTTP.end_request(t_request);
+--
+--        UPDATE eservices_log_t
+--           SET response = json_object('LSPRESPONSE' VALUE t_response_text),
+--               responsedate = SYSTIMESTAMP
+--         WHERE seq = t_seq
+--           LOG ERRORS INTO bizmod_api.err$_eservices_log_t
+--                   ('UPDATE')
+--                   REJECT LIMIT UNLIMITED;
+--
+--        RETURN t_response_text;
+--    END;
 
 
 
@@ -395,8 +614,9 @@ AS
         t_to           VARCHAR2(512);
         t_cc           VARCHAR2(512);
         t_bcc          VARCHAR2(512);
-        t_subject      VARCHAR2(512) := a_subject;
         t_conn         UTL_SMTP.connection;
+        t_production   VARCHAR2(1);
+        t_subject      VARCHAR2(512) := a_subject;
         t_host         VARCHAR2(512); -- := '134.186.202.119';
         t_len          INTEGER;
         t_index        INTEGER;
@@ -408,18 +628,22 @@ AS
         SELECT pto,
                pfrom,
                pcc,
-               pbcc
+               pbcc,
+               psmtp,
+               pprod
           INTO t_to,
                t_from,
                t_cc,
-               t_bcc
+               t_bcc,
+               t_host,
+               t_production
           FROM (SELECT c.parametername, c.parametervalue
                   FROM bizmod_api.eservices_config_t c
                  WHERE c.process = a_process
                    AND c.dbname = UPPER(ora_database_name))
                PIVOT (MAX(parametervalue)
                      FOR parametername
-                     IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
+                     IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc, 'SMTPSERVER' psmtp, 'PRODUCTION' pprod));
 
         IF (t_from IS NULL)
         THEN
@@ -458,13 +682,9 @@ AS
 
         CLOSE cur_rcpt;
 
-        SELECT VALUE
-          INTO t_host
-          FROM api.constants
-         WHERE name = 'SMTPSERVER';
-
-        IF (UPPER(ora_database_name) != 'ABISP1')
+        IF (t_production = 'N')
         THEN -- Changed DB name to ABISP1 by pawan on 10/26/2022
+            t_subject := '(' || UPPER(ora_database_name) || ') ' || t_subject;
             t_body :=
                 '*** ('
                 || UPPER(ora_database_name)
@@ -472,7 +692,6 @@ AS
                 || UTL_TCP.crlf
                 || UTL_TCP.crlf
                 || t_body;
-            t_subject := '(' || UPPER(ora_database_name) || ') ' || t_subject;
         END IF;
 
         t_conn := UTL_SMTP.open_connection(t_host, 25);
@@ -487,8 +706,7 @@ AS
         END LOOP;
 
         UTL_SMTP.open_data(t_conn);
-        UTL_SMTP.write_data(t_conn,
-                            'From: ' || t_from || UTL_TCP.crlf);
+        UTL_SMTP.write_data(t_conn, 'From: ' || t_from || UTL_TCP.crlf);
         UTL_SMTP.write_data(t_conn, 'To: ' || t_to || UTL_TCP.crlf);
         UTL_SMTP.write_data(t_conn, 'Cc: ' || t_cc || UTL_TCP.crlf);
         UTL_SMTP.write_data(t_conn, 'Subject: ' || t_subject || UTL_TCP.crlf);
