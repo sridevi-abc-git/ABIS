@@ -26,7 +26,7 @@ AS
     --                                          Mailing Address.
     --   3.0     05/17/2024 TJL  BIZ-15485  Change parameters to call to calllsp. New calllsp uses
     --                                          configuration table for HTTP Calls
-    --   3.1     05/24/2024 TJL  BIZ-15021  Added support for new field Outside Event
+    --   3.1.1   05/24/2024 TJL  BIZ-15021  Added support for new field Outside Event
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
@@ -490,7 +490,7 @@ BEGIN
             -- update LSP of any changes to application data
             t_parameternames :=
                 json_object_t(
-                    '{"URL":"URL_UPDATE:","METHOD":"METHOD_UPDATE"}');
+                    '{"URL":"URL_UPDATE","METHOD":"METHOD_UPDATE"}');
             t_replacementvalues :=
                 json_object_t(
                     '{"<<applicationId>>":"' || t_applicationid || '"}');

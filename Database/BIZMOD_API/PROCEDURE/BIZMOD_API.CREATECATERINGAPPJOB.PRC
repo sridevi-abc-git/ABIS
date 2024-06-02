@@ -27,8 +27,8 @@ IS
     --   4.1     02/13/2024 TJL  BIZ-13081    Added in exception handling sending sending to LSP
     --                                          application status 'Errored'
     --   5.0     03/26/2024 APD  BIZ-14849    Increased email limit to 320 chars
-    --   6.0     05/24/2024 TJL  BIZ-15485    Changed to call the new calllsp function.
-    --   6.0     05/28/2024 TJL  BIZ-15021    Added field OutsideEvent
+    --   6.0.1   05/24/2024 TJL  BIZ-15485    Changed to call the new calllsp function.
+    --   6.0.1   05/28/2024 TJL  BIZ-15021    Added field OutsideEvent
     -- ****************************************************************************
     --************************
     --Object Id
@@ -616,7 +616,7 @@ BEGIN
             -- update LSP of any changes to application data
             t_parameternames :=
                 json_object_t(
-                    '{"URL":"URL_FEES:","METHOD":"METHOD"}');
+                    '{"URL":"URL_FEES","METHOD":"METHOD"}');
             t_replacementvalues :=
                 json_object_t(
                     '{"<<lsppaymentid>>":"' || t_applicationid || '"}');
