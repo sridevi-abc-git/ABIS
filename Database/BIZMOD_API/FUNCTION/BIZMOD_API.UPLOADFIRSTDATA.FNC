@@ -17,7 +17,7 @@ IS
     --    1.0   01/04/2023 TJL  BIZ-14091   Corrected bug in parsing file
     --    2.0   02/06/2024 TJL  BIZ-14440   Removed parsing of Reference Column Data
     --    3.0   05/21/2024 TJL  BIZ-15523   Changed how batches are scheduled
-    --    3.1.1 05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
+    --    3.1.2 05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
     --                                        and what email procedure is called
     -- ****************************************************************************
 
@@ -300,12 +300,12 @@ BEGIN
                                                  LEVEL)
                                        IS NOT NULL)
                 LOOP
-                    DBMS_OUTPUT.put_line(
-                        t_headings(rec.LN)
-                        || ' : '
-                        || NVL(rec.split, 'null')
-                        || ' : '
-                        || rec.LN);
+--                    DBMS_OUTPUT.put_line(
+--                        t_headings(rec.LN)
+--                        || ' : '
+--                        || NVL(rec.split, 'null')
+--                        || ' : '
+--                        || rec.LN);
 
                     CASE t_headings(rec.LN)
                         WHEN 'PAYMENTTIMESTAMP'
@@ -335,7 +335,8 @@ BEGIN
                 END LOOP;
 
                   -- make sure payment is in abis and not voided
-                  SELECT CASE COUNT(p.confirmationid)
+                  BEGIN
+                  SELECT CASE nvl(COUNT(p.confirmationid), 0)
                              WHEN 0
                              THEN
                                  'N'
@@ -381,6 +382,10 @@ BEGIN
                     FROM bizmod_api.e_payments_t p
                    WHERE p.confirmationid = t_row.confirmationnumber
                 GROUP BY p.paymentobjectid;
+                
+                EXCEPTION when no_data_found then
+                    t_row.abispayment := 'N';
+                end;
 
                 -- check if duplicate record
                 SELECT COUNT(licensenumber)
@@ -428,7 +433,7 @@ BEGIN
              WHERE fd.abispayment != 'Y';
 
             COMMIT;
-            t_info :=
+            t_info := t_info ||
                 CHR(9)
                 || 'Processed: '
                 || CHR(9)
@@ -514,7 +519,7 @@ BEGIN
                 END LOOP;
             END IF;
 
-            DBMS_OUTPUT.put_line(t_info);
+--            DBMS_OUTPUT.put_line(t_info);
 
             IF (t_recordsloaded > 0)
             THEN
