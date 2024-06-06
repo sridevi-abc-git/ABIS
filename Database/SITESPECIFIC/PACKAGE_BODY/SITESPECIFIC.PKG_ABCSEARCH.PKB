@@ -29,7 +29,9 @@ IS
     --                            was returned 100% server charge. Kept old version for reference
     --                            not used any more.
     --8/18/2021   PK   WO 25997 Add secondary type 58 to master type 75 undoing the changes done by Tim for WO 20483 for only type 58.
-    -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransactions so it can be used by the new StaffUI system.
+    -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransactions so it can be used by the new StaffUI system.\
+    -- 04/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
+ 
     -- **************************************************************************
 
     ---------------------------------------------------------
@@ -6290,9 +6292,11 @@ IS
         * FindCatererEventAuths() -- PUBLIC
         *   This procedure finds all the Caterer/Event Permit Auth Processes based on the specified criteria
         * Updated 10/23/2015 by Ryan Lutz for performance
+        -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
         **************************************************************************************************/
     PROCEDURE findcaterereventauths(a_licensenumber              VARCHAR2,
                                     a_licenseenames              VARCHAR2,
+                                    a_lspid                      VARCHAR2,
                                     a_dateofeventfrom            DATE,
                                     a_dateofeventto              DATE,
                                     a_eventlocationaddressline1  VARCHAR2,
@@ -6351,25 +6355,36 @@ IS
             t_caterereventauths.EXTEND(1);
             t_caterereventauths(t_caterereventauths.COUNT)   := api.udt_object(c.processid);
         END LOOP;
-
+        
+         --Find all Issue Caterer/Event Auths by LSPID
+         -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
+         extension.pkg_cxproceduralsearch.initializesearch('p_IssueCatererEventAuth');
+         
+        IF a_lspid IS NOT NULL THEN 
+           -- extension.pkg_cxproceduralsearch.initializesearch('p_IssueCatererEventAuth');
+            extension.pkg_cxproceduralsearch.searchbyindex('LSPId', a_lspid, NULL, TRUE);
+        END IF;
+            
         -- Find all Issue Caterer/Event Auths by date of event
 
         IF (a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL) THEN
-            extension.pkg_cxproceduralsearch.initializesearch('p_IssueCatererEventAuth');
+          --  extension.pkg_cxproceduralsearch.initializesearch('p_IssueCatererEventAuth');
             extension.pkg_cxproceduralsearch.searchbyindex('DateOfEventFrom', a_dateofeventfrom, a_dateofeventto);
             extension.pkg_cxproceduralsearch.searchbyindex('DateOfEventTo', a_dateofeventfrom, a_dateofeventto);
-
+     
+         end if;
             IF a_licensenumber IS NOT NULL
             OR a_licenseenames IS NOT NULL THEN
                 extension.pkg_cxproceduralsearch.performsearch(t_caterereventauths, 'or', 'and');
             ELSE
                 extension.pkg_cxproceduralsearch.performsearch(t_caterereventauths, 'or', 'none');
-            END IF;
+          --  END IF;
         END IF;
 
         a_objects             := t_caterereventauths;
         t_caterereventauths.delete;
+        
 
         -- Find all Licenses and Applications based on premises address and get Caterer/Event Auths for them
         findlicenseandapplication(NULL,
@@ -6431,6 +6446,7 @@ IS
 
         IF (a_licensenumber IS NOT NULL
          OR a_licenseenames IS NOT NULL
+         OR a_lspid IS NOT NULL
          OR a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL)
        AND (a_eventlocationaddressline1 IS NOT NULL

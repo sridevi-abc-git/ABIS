@@ -25,6 +25,7 @@ IS
     -- 03/15/2019 PK            WO 13953 Added Search Functionality For Impact Inspections    
 	-- 07/24/2019 TJL  WO 17980 Added new search procedure findpaymenttransunearned
     -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransunearned so it can be used by the new StaffUI system.
+    -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
     -- **************************************************************************
 
     /*------------------------------------------------------------------------*
@@ -632,6 +633,7 @@ IS
     PROCEDURE findcaterereventauths(
         a_licensenumber              VARCHAR2,
         a_licenseenames              VARCHAR2,
+        a_lspid                      VARCHAR2,
         a_dateofeventfrom            DATE,
         a_dateofeventto              DATE,
         a_eventlocationaddressline1  VARCHAR2,
