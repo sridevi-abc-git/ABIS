@@ -24,7 +24,7 @@ AS
     --                                          Mailing Address.
     --   2.0     01/02/2024 TJL  BIZ-14058  Corrected bug in parsing Sponsoring Organization
     --                                          Mailing Address.
-    --   3.0     05/17/2024 TJL  BIZ-15485  Change parameters to call to calllsp. New calllsp uses
+    --   3.0.1   05/17/2024 TJL  BIZ-15485  Change parameters to call to calllsp. New calllsp uses
     --                                          configuration table for HTTP Calls
     --   3.1.1   05/24/2024 TJL  BIZ-15021  Added support for new field Outside Event
     -- **************************************************************************
@@ -540,7 +540,7 @@ BEGIN
         END IF;
 
         t_parameternames :=
-            json_object_t('{"URL":"URL_STATUS:","METHOD":"METHOD_STATUS"}');
+            json_object_t('{"URL":"URL_STATUS","METHOD":"METHOD_STATUS"}');
         t_replacementvalues :=
             json_object_t(
                 '{"<<applicationId>>":"'
