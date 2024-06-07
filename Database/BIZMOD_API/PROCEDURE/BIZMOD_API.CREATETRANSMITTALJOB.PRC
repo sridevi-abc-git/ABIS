@@ -14,7 +14,7 @@ IS
     --   1.0   01/16/2024  TJL BIZ-14091  Process created from e_payment.createtransmittal
     --                                          function.
     --   2.0   03/06/2024  TJL BIZ-14725  Corrected format problem in email body
-    --   3.0   05/20/2024  TJL BIZ-15523  Change code to how transmittal are created from
+    --   3.0.1 05/20/2024  TJL BIZ-15523  Change code to how transmittal are created from
     --                                      First Data Settlement file upload. Add voided
     --                                      payment filters.
     -- ************************************************************************
@@ -39,7 +39,13 @@ BEGIN
     api.pkg_logicaltransactionupdate.resettransaction;
     ROLLBACK;
 
-    SELECT fd.filename, fd.paymentmedium, sum(fd.paymentamount), count(1)
+    SELECT fd.filename, 
+           case fd.paymentmedium 
+              when 'Credit Card' then fd.paymentmedium
+              else 'ECheck'
+           end, 
+           sum(fd.paymentamount), 
+           count(1)
       INTO t_filename, t_paymentmethod, t_fd_paymentamount, t_fd_payment_count
       FROM bizmod_api.first_data_t fd
      WHERE fd.logseq = a_seq
@@ -326,3 +332,5 @@ EXCEPTION
 END createtransmittaljob;
 /
 
+
+GRANT EXECUTE ON BIZMOD_API.CREATETRANSMITTALJOB TO POSSEEXTENSIONS;
