@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet       IN CLOB,
-                                             a_seq          IN NUMBER)
+                                                  a_seq          IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -19,6 +19,8 @@ IS
     --   5.0  05/13/2024  TJL  BIZ-15090  Changed request fees process and added test to return
     --                                      Payment was received before license was issued and
     --                                      No license fee was found after issued
+    --   6.0  06/10/2024  TJL  BIZ-15612
+    --                         BIZ-15616  Corrected bug in wrong message being returned to LSP
     -- ****************************************************************************
 
     PROCEDURE get_fee_amounts(fees IN OUT bizmod_api.fee_tbl)
@@ -376,14 +378,8 @@ BEGIN
                                a_objectdefname => 'j_License',
                                a_columnname => 'ExternalFileNum',
                                a_value     => t_licensenumber)
-                               AS api.udt_objectlist)) o
-             WHERE api.pkg_columnquery.VALUE(objectid, 'StatusName') IN
-                       ('ACTIVE',
-                        'SUREND',
-                        'SUSPEN',
-                        'R64B',
-                        'REVPEN',
-                        'SLMSHD');
+                               AS api.udt_objectlist)) o;
+        --   6.0  06/10/2024  TJL  BIZ-15612 & BIZ-15616  Remove where clause for status
         ELSE
             t_jobid := t_fees(1).jobid;
 
@@ -414,9 +410,10 @@ BEGIN
                     WHEN api.pkg_columnquery.VALUE(t_fees(inx).jobid,
                                                    'ObjectDefName') =
                          'j_LicenseType'
-                     AND t_fees(inx).expirationdate <=
+                     AND ADD_MONTHS(t_fees(inx).expirationdate, -12) <=
                          api.pkg_columnquery.datevalue(t_fees(inx).feeobjid,
                                                        'TransactionDate')
+                     AND t_fees(inx).feeactivity in ('REN', 'REN50', 'REN100')
                      AND t_total <= 0
                     THEN
                         t_msgno := 12;
@@ -430,6 +427,13 @@ BEGIN
                         t_fees(inx).amount := 0;
                         t_msgno := 13;
                         t_msg := 'Fee cannot be paid online';
+                    WHEN api.pkg_columnquery.VALUE(t_fees(inx).jobid,
+                                                   'ObjectDefName') =
+                         'j_LicenseType'
+                     AND t_fees(inx).feeactivity not in ('REN', 'REN50', 'REN100')
+                     AND t_total <= 0
+                    THEN
+                        t_fees.delete(inx);
                     ELSE
                         IF (t_total > 0)
                         THEN
