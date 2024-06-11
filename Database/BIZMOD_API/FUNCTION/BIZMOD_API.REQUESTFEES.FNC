@@ -379,7 +379,7 @@ BEGIN
                                a_columnname => 'ExternalFileNum',
                                a_value     => t_licensenumber)
                                AS api.udt_objectlist)) o;
-        --   6.0  06/10/2024  TJL  BIZ-15612 & BIZ-15616  Remove where clause for status
+        --   6.0  06/10/2024  TJL  BIZ-15612 and BIZ-15616  Remove where clause for status
         ELSE
             t_jobid := t_fees(1).jobid;
 
