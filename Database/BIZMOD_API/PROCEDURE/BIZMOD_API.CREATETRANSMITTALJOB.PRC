@@ -17,6 +17,9 @@ IS
     --   3.0.1 05/20/2024  TJL BIZ-15523  Change code to how transmittal are created from
     --                                      First Data Settlement file upload. Add voided
     --                                      payment filters.
+    --   4.0   06/14/2024  TJL BIZ-15691  Corrected bug when there is more than one payment medium
+    --                                      for ECheck (E-Check and Business E-Check) needed to be
+    --                                      handle as one type.
     -- ************************************************************************
     t_transmittal  api.pkg_definition.udt_id;
     t_objectlist   api.udt_objectlist;
@@ -39,20 +42,28 @@ BEGIN
     api.pkg_logicaltransactionupdate.resettransaction;
     ROLLBACK;
 
-    SELECT fd.filename, 
-           case fd.paymentmedium 
-              when 'Credit Card' then fd.paymentmedium
-              else 'ECheck'
-           end, 
-           sum(fd.paymentamount), 
-           count(1)
-      INTO t_filename, t_paymentmethod, t_fd_paymentamount, t_fd_payment_count
-      FROM bizmod_api.first_data_t fd
-     WHERE fd.logseq = a_seq
-       AND fd.abispayment = 'Y'
-       AND fd.feeactivity not like '%AWF%'
-     GROUP BY fd.filename, fd.paymentmedium;
-
+    -- 06/14/2024  TJL BIZ-15691
+    WITH
+        fd
+        AS
+            (SELECT fd.filename,
+                    CASE fd.paymentmedium
+                        WHEN 'Credit Card' THEN fd.paymentmedium
+                        ELSE 'ECheck'
+                    END    paymentmedium,
+                    fd.paymentamount
+               FROM bizmod_api.first_data_t fd
+              WHERE fd.logseq = a_seq
+                AND fd.abispayment = 'Y'
+                AND fd.feeactivity NOT LIKE '%AWF%')
+      SELECT fd.filename,
+             fd.paymentmedium,
+             SUM(fd.paymentamount),
+             COUNT(1)
+          INTO t_filename, t_paymentmethod, t_fd_paymentamount, t_fd_payment_count
+        FROM fd
+    GROUP BY fd.filename, fd.paymentmedium;  
+    
     -- ************************************************************
     --  Create a list of payment for this transmittal
     -- ************************************************************
