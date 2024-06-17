@@ -1,5 +1,4 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet       IN CLOB,
-                                                  a_seq          IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet IN CLOB, a_seq IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -9,18 +8,18 @@ IS
     -- History
     -------------------------------------------------------------------------------
     --  Ver:       Date          Ticket       Comment
-    --        11/17/2022  TJL             Rewrite of REQUESTFEES
-    --        06/27/2023  TJL  BIZ-11779  Correct premise address not being retrieved
-    --        06/30/2023  TJL             Fixed bug with incorrect message number.
-    --        01/29/2024  APD             Ordered lic view in main loop to make sure j_license row is first
-    --        02/13/2024  APD  BIZ-14426  Fixed bug in getting renewal fees
-    --        02/21/2024  TJL  BIZ-14521  Corrected so payment received message is displayed until
-    --                                      licenses is issued
-    --   5.0  05/13/2024  TJL  BIZ-15090  Changed request fees process and added test to return
-    --                                      Payment was received before license was issued and
-    --                                      No license fee was found after issued
-    --   6.0  06/10/2024  TJL  BIZ-15612
-    --                         BIZ-15616  Corrected bug in wrong message being returned to LSP
+    --          11/17/2022  TJL             Rewrite of REQUESTFEES
+    --          06/27/2023  TJL  BIZ-11779  Correct premise address not being retrieved
+    --          06/30/2023  TJL             Fixed bug with incorrect message number.
+    --          01/29/2024  APD             Ordered lic view in main loop to make sure j_license row is first
+    --          02/13/2024  APD  BIZ-14426  Fixed bug in getting renewal fees
+    --          02/21/2024  TJL  BIZ-14521  Corrected so payment received message is displayed until
+    --                                        licenses is issued
+    --   5.0    05/13/2024  TJL  BIZ-15090  Changed request fees process and added test to return
+    --                                        Payment was received before license was issued and
+    --                                        No license fee was found after issued
+    --   6.0.1  06/10/2024  TJL  BIZ-15612
+    --                           BIZ-15616  Corrected bug in wrong message being returned to LSP
     -- ****************************************************************************
 
     PROCEDURE get_fee_amounts(fees IN OUT bizmod_api.fee_tbl)
@@ -369,17 +368,40 @@ BEGIN
           FROM f;
 
         IF (t_fees.COUNT = 0)
-        THEN
-            SELECT MAX(objectid)
-              INTO t_jobid
-              FROM TABLE(
-                       CAST(
-                           api.pkg_simplesearch.castableobjectsbyindex(
-                               a_objectdefname => 'j_License',
-                               a_columnname => 'ExternalFileNum',
-                               a_value     => t_licensenumber)
-                               AS api.udt_objectlist)) o;
-        --   6.0  06/10/2024  TJL  BIZ-15612 and BIZ-15616  Remove where clause for status
+        THEN -- BIZ-15616
+            t_msgno := 1;
+            t_msg := 'NO ACTIVE LICENSE FOUND';
+
+            FOR rec
+                IN (SELECT objectid,
+                           api.pkg_columnquery.VALUE(objectid, 'StatusName')    statusname
+                      FROM TABLE(
+                               CAST(
+                                   api.pkg_simplesearch.castableobjectsbyindex(
+                                       a_objectdefname => 'j_LicenseType',
+                                       a_columnname =>
+                                           'dup_LicenseExternalFileNum',
+                                       a_value     => t_licensenumber)
+                                       AS api.udt_objectlist)) o)
+            LOOP
+                IF (rec.statusname IN ('ACTIVE',
+                                       'SUREND',
+                                       'SUSPEN',
+                                       'R64B',
+                                       'REVPEN',
+                                       'SLMSHD'))
+                THEN
+                    t_msgno := 2;
+                    t_msg := 'NO LICENSE FEES FOUND';
+                    t_jobid := rec.objectid;
+                    EXIT;
+                ELSE
+                    IF (t_jobid IS NULL)
+                    THEN
+                        t_jobid := rec.objectid;
+                    END IF;
+                END IF;
+            END LOOP;
         ELSE
             t_jobid := t_fees(1).jobid;
 
@@ -413,7 +435,8 @@ BEGIN
                      AND ADD_MONTHS(t_fees(inx).expirationdate, -12) <=
                          api.pkg_columnquery.datevalue(t_fees(inx).feeobjid,
                                                        'TransactionDate')
-                     AND t_fees(inx).feeactivity in ('REN', 'REN50', 'REN100')
+                     AND t_fees(inx).feeactivity IN
+                             ('REN', 'REN50', 'REN100')
                      AND t_total <= 0
                     THEN
                         t_msgno := 12;
@@ -430,7 +453,8 @@ BEGIN
                     WHEN api.pkg_columnquery.VALUE(t_fees(inx).jobid,
                                                    'ObjectDefName') =
                          'j_LicenseType'
-                     AND t_fees(inx).feeactivity not in ('REN', 'REN50', 'REN100')
+                     AND t_fees(inx).feeactivity NOT IN
+                             ('REN', 'REN50', 'REN100')
                      AND t_total <= 0
                     THEN
                         t_fees.delete(inx);
@@ -451,12 +475,6 @@ BEGIN
                 --  elegible for payment
                 t_msgno := NULL;
                 t_msg := NULL;
-            ELSE
-                IF (t_msgno IS NULL)
-                THEN
-                    t_msgno := 2;
-                    t_msg := 'NO LICENSE FEES FOUND';
-                END IF;
             END IF;
 
             SELECT json_object(
