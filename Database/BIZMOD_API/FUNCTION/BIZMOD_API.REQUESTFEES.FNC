@@ -18,7 +18,7 @@ IS
     --   5.0    05/13/2024  TJL  BIZ-15090  Changed request fees process and added test to return
     --                                        Payment was received before license was issued and
     --                                        No license fee was found after issued
-    --   6.0.1  06/10/2024  TJL  BIZ-15612
+    --   6.0.2  06/10/2024  TJL  BIZ-15612
     --                           BIZ-15616  Corrected bug in wrong message being returned to LSP
     -- ****************************************************************************
 
@@ -395,11 +395,6 @@ BEGIN
                     t_msg := 'NO LICENSE FEES FOUND';
                     t_jobid := rec.objectid;
                     EXIT;
-                ELSE
-                    IF (t_jobid IS NULL)
-                    THEN
-                        t_jobid := rec.objectid;
-                    END IF;
                 END IF;
             END LOOP;
         ELSE
