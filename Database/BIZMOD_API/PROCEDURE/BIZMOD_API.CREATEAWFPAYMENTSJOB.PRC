@@ -25,6 +25,7 @@ IS
     --   6.0     05/21/2024  TJL BIZ-15523  Select how which payments are selected for AWF
     --                                         payment batch
     --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
+    --   7.0     06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -69,14 +70,27 @@ BEGIN
     BEGIN  --   6.0     05/21/2024  TJL
         IF (a_seq > 0)
         THEN
-            SELECT fd.filename, fd.paymentmedium, sum(fd.paymentamount), count(1)
-              INTO t_filename, t_paymenttype, t_fd_paymentamount, t_fd_payment_count
-              FROM bizmod_api.first_data_t fd
-             WHERE fd.logseq = a_seq
-               AND fd.abispayment = 'Y'
-               AND fd.feeactivity like '%AWF%'
-             GROUP BY fd.filename, fd.paymentmedium;
-     
+            WITH  --  06/18/2024  TJL BIZ-15691 
+                fd
+                AS
+                    (SELECT fd.filename,
+                            CASE fd.paymentmedium
+                                WHEN 'Credit Card' THEN fd.paymentmedium
+                                ELSE 'ECheck'
+                            END    paymentmedium,
+                            fd.paymentamount
+                       FROM bizmod_api.first_data_t fd
+                      WHERE fd.logseq = a_seq
+                        AND fd.abispayment = 'Y'
+                        AND fd.feeactivity LIKE '%AWF%')
+              SELECT fd.filename,
+                     fd.paymentmedium,
+                     SUM(fd.paymentamount),
+                     COUNT(1)
+                  INTO t_filename, t_paymenttype, t_fd_paymentamount, t_fd_payment_count
+                FROM fd
+            GROUP BY fd.filename, fd.paymentmedium;
+
             SELECT p.seq,
                    a.licensenumber,
                    a.licensetypecode,
