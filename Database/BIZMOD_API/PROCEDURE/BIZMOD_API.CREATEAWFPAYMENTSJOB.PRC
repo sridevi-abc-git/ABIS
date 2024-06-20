@@ -25,7 +25,7 @@ IS
     --   6.0     05/21/2024  TJL BIZ-15523  Select how which payments are selected for AWF
     --                                         payment batch
     --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
-    --   7.0.1   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
+    --   7.0.2   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -411,6 +411,13 @@ BEGIN
 
             t_info :=
                 t_info
+                || 'Seq: '
+                || a_seq
+                || CHR(13)
+                || 'File: '
+                || t_filename
+                || CHR(13)
+                || CHR(13)
                 || 'AWF Payment Batch: '
                 || api.pkg_columnquery.VALUE(t_paymentbatchobjectid,
                                              'ExternalFileNum')
@@ -454,6 +461,9 @@ BEGIN
         ELSE
             t_info :=
                 t_info
+                || 'Seq: '
+                || a_seq
+                || CHR(13)
                 || 'File: '
                 || t_filename
                 || CHR(13)
