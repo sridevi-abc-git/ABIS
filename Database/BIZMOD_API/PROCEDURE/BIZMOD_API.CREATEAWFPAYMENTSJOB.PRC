@@ -25,7 +25,7 @@ IS
     --   6.0     05/21/2024  TJL BIZ-15523  Select how which payments are selected for AWF
     --                                         payment batch
     --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
-    --   7.0     06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
+    --   7.0.1   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -51,7 +51,8 @@ IS
 
     t_totalfees    NUMBER;
     t_checkcount   NUMBER;
-    t_receiptnumber NUMBER;
+    t_receiptnumber api.pkg_definition.udt_sequencevalue;
+    t_receiptlast  api.pkg_definition.udt_sequencevalue;
     t_batchid      VARCHAR2(30);
     t_licensetypecode VARCHAR2(3);
     t_licensenumber VARCHAR2(10);
@@ -60,17 +61,17 @@ IS
         := CASE a_seq WHEN 0 THEN 'Check' ELSE 'Credit Card' END;
     t_sqlerrm      VARCHAR2(4000);
     t_backtrace    VARCHAR2(4000);
-    t_filename      VARCHAR2(512);
-    t_fd_paymentamount  NUMBER := 0;
+    t_filename     VARCHAR2(512);
+    t_fd_paymentamount NUMBER := 0;
     t_fd_payment_count NUMBER := 0;
 BEGIN
     api.pkg_logicaltransactionupdate.resettransaction;
     ROLLBACK;
 
-    BEGIN  --   6.0     05/21/2024  TJL
+    BEGIN --   6.0     05/21/2024  TJL
         IF (a_seq > 0)
         THEN
-            WITH  --  06/18/2024  TJL BIZ-15691 
+            WITH --  06/18/2024  TJL BIZ-15691
                 fd
                 AS
                     (SELECT fd.filename,
@@ -87,7 +88,10 @@ BEGIN
                      fd.paymentmedium,
                      SUM(fd.paymentamount),
                      COUNT(1)
-                  INTO t_filename, t_paymenttype, t_fd_paymentamount, t_fd_payment_count
+                INTO t_filename,
+                     t_paymenttype,
+                     t_fd_paymentamount,
+                     t_fd_payment_count
                 FROM fd
             GROUP BY fd.filename, fd.paymentmedium;
 
@@ -107,7 +111,7 @@ BEGIN
                        AND a.licensetypecode = p.licensetypecode) -- 04/23/2024  TJL BIZ-15138
              WHERE a.paymentbatch IS NULL
                AND fd.abispayment = 'Y'
-               AND fd.feeactivity like '%AWF%'
+               AND fd.feeactivity LIKE '%AWF%'
                AND fd.logseq = a_seq;
         ELSE
             -- 02/06/2024  TJL BIZ-14393
@@ -123,8 +127,8 @@ BEGIN
              WHERE a.awffeeamount <= 0
                AND a.paymentbatch IS NULL
                AND a.submitteddate IS NOT NULL;
-               
-            t_fd_payment_count := t_awf.count;
+
+            t_fd_payment_count := t_awf.COUNT;
         END IF;
 
         IF (t_awf.COUNT > 0)
@@ -142,11 +146,6 @@ BEGIN
                        'FM00')
                 || '-'
                 || TO_CHAR(SYSDATE, 'YY');
-
-            SELECT MAX(TO_NUMBER(attributevalue)) + 1
-              INTO t_receiptnumber
-              FROM possedata.objectcolumndata
-             WHERE columndefid = 317628;
 
             -- *****************************************************************
             -- Create payment batch
@@ -206,9 +205,10 @@ BEGIN
                         t_paymentbatchobjectid,
                         t_batchpaymententryobjectid);
 
-                api.pkg_columnupdate.setvalue(t_batchpaymententryobjectid,
-                                              'PaymentNumber',
-                                              t_receiptnumber + t_checkcount);
+                api.pkg_columnupdate.setvalue(
+                    t_batchpaymententryobjectid,
+                    'PaymentNumber',
+                    api.pkg_sequenceupdate.nextvalue(301439));
                 api.pkg_columnupdate.setvalue(t_batchpaymententryobjectid,
                                               'CheckAmount',
                                               t_awf(inx).paymentamount);
@@ -236,6 +236,19 @@ BEGIN
 
                 api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
+
+                -- check if first record
+                IF (t_receiptnumber IS NULL)
+                THEN
+                    t_receiptnumber :=
+                        api.pkg_columnquery.VALUE(
+                            t_batchpaymententryobjectid,
+                            'PaymentNumber');
+                END IF;
+
+                t_receiptlast :=
+                    api.pkg_columnquery.VALUE(t_batchpaymententryobjectid,
+                                              'PaymentNumber');
             END LOOP;
 
             api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
@@ -250,10 +263,10 @@ BEGIN
 
             api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                           'PaymentNumberFrom',
-                                          t_receiptnumber + 1);
+                                          t_receiptnumber);
             api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                           'PaymentNumberTo',
-                                          t_receiptnumber + t_checkcount);
+                                          t_receiptlast);
             api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                           'Penalty',
                                           'Timely');
@@ -387,10 +400,7 @@ BEGIN
 
                 UPDATE bizmod_api.awf_t t
                    SET t.completed =
-                                   CASE t.awffeeamount
-                                       WHEN 0 THEN 'Y'
-                                       ELSE NULL
-                           END,
+                           CASE t.awffeeamount WHEN 0 THEN 'Y' ELSE NULL END,
                        t.paymentbatch = t_paymentbatchobjectid,
                        t.paymentbatchdate = SYSDATE
                  WHERE t.ROWID = t_awf(inx).rowkey;
@@ -416,13 +426,17 @@ BEGIN
                 || CHR(13)
                 || 'Number of Payments: '
                 || t_checkcount
-                || chr(9)
-                || '(Expected: ' || t_fd_payment_count || ')'
+                || CHR(9)
+                || '(Expected: '
+                || t_fd_payment_count
+                || ')'
                 || CHR(13)
                 || 'Total Payment Amount: '
                 || TO_CHAR(t_totalfees, 'fm9G999G999D00')
-                || chr(9)
-                || '(Expected: ' || TO_CHAR(t_fd_paymentamount, 'fm9G999G999D00') || ')'
+                || CHR(9)
+                || '(Expected: '
+                || TO_CHAR(t_fd_paymentamount, 'fm9G999G999D00')
+                || ')'
                 || CASE
                        WHEN t_sqlerrm IS NOT NULL
                        THEN
@@ -437,16 +451,16 @@ BEGIN
                    END
                 || CHR(13)
                 || CHR(13);
-        ELSE 
-            t_info := 
-                t_info ||
-                    'File: '
-                  || t_filename
-                  || chr(13)
-                  || 'Payment Method: ' 
-                  || t_paymenttype
-                  || chr(13)
-                  || 'No record found for payment';
+        ELSE
+            t_info :=
+                t_info
+                || 'File: '
+                || t_filename
+                || CHR(13)
+                || 'Payment Method: '
+                || t_paymenttype
+                || CHR(13)
+                || 'No record found for payment';
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -473,12 +487,12 @@ BEGIN
     COMMIT;
 
     -- Generate email of completion of first data processing
-        IF (t_awf.COUNT > 0)
-        THEN
+    IF (t_awf.COUNT > 0)
+    THEN
         bizmod_api.utl_licenseinfo.sendemail(
             a_subject   => 'Create AWF Payment Batch Job Completed',
             a_body      => t_info);
-        end if;
+    END IF;
 END;
 /
 
