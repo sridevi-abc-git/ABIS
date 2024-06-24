@@ -1,4 +1,5 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet IN CLOB, a_seq IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet       IN CLOB,
+                                                  a_seq          IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -18,7 +19,7 @@ IS
     --   5.0    05/13/2024  TJL  BIZ-15090  Changed request fees process and added test to return
     --                                        Payment was received before license was issued and
     --                                        No license fee was found after issued
-    --   6.0.2  06/10/2024  TJL  BIZ-15612
+    --   6.0.3  06/10/2024  TJL  BIZ-15612
     --                           BIZ-15616  Corrected bug in wrong message being returned to LSP
     -- ****************************************************************************
 
@@ -445,6 +446,20 @@ BEGIN
                         t_fees(inx).amount := 0;
                         t_msgno := 13;
                         t_msg := 'Fee cannot be paid online';
+                    WHEN api.pkg_columnquery.VALUE(t_fees(inx).jobid,
+                                                   'ObjectDefName') =
+                         'j_LicenseType'
+                     AND t_fees(inx).feeactivity IN
+                             ('REN', 'REN50', 'REN100')
+                     AND t_total <= 0
+                    THEN
+                        t_fees.delete(inx);
+
+                        IF (t_msgno IS NULL)
+                        THEN
+                            t_msgno := 2;
+                            t_msg := 'NO LICENSE FEES FOUND';
+                        END IF;
                     WHEN api.pkg_columnquery.VALUE(t_fees(inx).jobid,
                                                    'ObjectDefName') =
                          'j_LicenseType'
