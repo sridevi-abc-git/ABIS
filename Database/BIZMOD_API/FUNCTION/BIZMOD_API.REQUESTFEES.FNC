@@ -19,7 +19,7 @@ IS
     --   5.0    05/13/2024  TJL  BIZ-15090  Changed request fees process and added test to return
     --                                        Payment was received before license was issued and
     --                                        No license fee was found after issued
-    --   6.0.3  06/10/2024  TJL  BIZ-15612
+    --   6.0.4  06/10/2024  TJL  BIZ-15612
     --                           BIZ-15616  Corrected bug in wrong message being returned to LSP
     -- ****************************************************************************
 
@@ -468,6 +468,12 @@ BEGIN
                      AND t_total <= 0
                     THEN
                         t_fees.delete(inx);
+                    WHEN api.pkg_columnquery.VALUE(t_fees(inx).jobid,
+                                                   'ObjectDefName') =
+                         'j_License'
+                     AND t_total <= 0
+                    THEN
+                        t_fees.delete(inx);
                     ELSE
                         IF (t_total > 0)
                         THEN
@@ -475,6 +481,13 @@ BEGIN
                         END IF;
                 END CASE;
             END LOOP;
+        END IF;
+
+        IF (NOT t_available
+        AND t_fees.COUNT = 0
+        AND t_msgno IS NULL)
+        THEN
+            t_jobid := NULL; -- force message #1
         END IF;
 
         IF (t_jobid IS NOT NULL)
