@@ -82,6 +82,7 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 01/21/2022 PK  WO 27037  LSP ABIS license renewal payment error with previous due fee line
 --                          Added t_transactiondate and additional logic of date to bring total owing to PROCEDURE initialize
 -- 12/28/2022 PK WO 30274   Added code to make type 68 work when added as secondary on new LT 90
+-- 07/01/2024 TJL BIZ-15444  Added a call to bizmod_api.pkg_abis.newfee in newfee procedure
 -------------------------------------------------------------------------------
 
 IS
@@ -1374,6 +1375,9 @@ IS
                                       a_taxrateid,
                                       SYSDATE);
             a_feeobjid   := api.pkg_objectupdate.registerexternalobject('o_Fee', a_feeid, SYSDATE);
+            
+            -- 07/01/2024 TJL BIZ-15444
+            bizmod_api.pkg_abis.newfee(a_objectid => a_jobid, a_asofdate => sysdate);
         ELSE
             NULL;
         END IF;
