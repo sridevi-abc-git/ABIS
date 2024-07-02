@@ -7,9 +7,7 @@ AS
     -- History:
     -----------------------------------------------------------------------------
     --    Ver:     Date                       Comment
-    --     1.0   11/01/2023  TJL BIZ-12802  Initial Package Created
-    --     2.0   05/17/2024  TJL BIZ-15485  Added test for online application
-    --     3.0   07/01/2024  TJL BIZ-15444  Move and renamed package from
+    --     1.0   07/01/2024  TJL BIZ-15444  Move and renamed package from
     --                                        SITESPECIFIC.PKG_CATERING and added
     --                                        new procedures and functions to support
     --                                        License Applications
@@ -70,17 +68,27 @@ AS
                          t_trace);
     END;
 
+
     PROCEDURE newfee(a_objectid     IN api.pkg_definition.udt_id,
                      a_asofdate        DATE)
     IS
         t_cnt          NUMBER := 0;
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
+        t_pending      VARCHAR2(1);
+        
     BEGIN
         IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPId') IS NOT NULL)
         THEN
-            IF (t_cnt = 0)
-            THEN
+            begin
+            -- check to see if job is already scheduled
+            select pending
+              into t_pending
+              from bizmod_api.license_app_t 
+             where jobid = a_objectid
+               and nvl(pending, 'N') = 'Y';
+            
+            exception when no_data_found then
                 -- schedule job to notify LSP of new fees avaible to be paid
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'NEWFEEJOB',
@@ -88,8 +96,13 @@ AS
                         'E-Services New Fee Notify LSP Job ' || a_objectid,
                     a_argument1 => a_objectid,
                     a_argument2 => SYSDATE + (1 / (24 * 60)) * 5); -- 5 minute delay
-            END IF;
+                    
+                update bizmod_api.license_app_t
+                   set pending = 'Y'
+                 where jobid = a_objectid;
+            end;
         END IF;
+        
     EXCEPTION
         WHEN OTHERS
         THEN
@@ -107,5 +120,45 @@ AS
                          t_sqlerrm,
                          t_trace);
     END;
+    
+    PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
+                              a_asofdate     IN DATE,
+                              a_jobid        IN api.pkg_definition.udt_id)
+    is
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
+    begin
+        IF (api.pkg_columnquery.VALUE(a_jobid, 'LSPId') IS NOT NULL)
+        THEN
+                bizmod_api.utl_licenseinfo.createjob(
+                    a_procedure => 'APPLICATIONSAVEJOB',
+                    a_description =>
+                        'E-Services Application Saved Notify LSP Job ' || a_jobid,
+                    a_argument1 => a_objectid,
+                    a_argument2 => SYSDATE,
+                    a_argument3 => a_jobid);
+    
+        end if;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SQLERRM;
+            t_trace := DBMS_UTILITY.format_error_backtrace;
+
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                 VALUES (0,
+                         'APPLICATIONSAVE',
+                         'Application Object Id: ' || a_jobid || chr(13) ||
+                         'Process Id: ' || a_objectid,
+                         t_sqlerrm,
+                         t_trace);
+    end;                                  
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.PKG_ABIS TO PUBLIC;
