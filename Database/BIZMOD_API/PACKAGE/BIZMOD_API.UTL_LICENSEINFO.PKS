@@ -18,6 +18,7 @@ AS
     --   7.0    05/09/2024  TJL  BIZ-15444    Added global types used for license application
     --                                          function and process job
     --   7.1    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table
+    --   8.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(appl_type VARCHAR2(50),
@@ -68,7 +69,11 @@ AS
                         a_encoding        VARCHAR2 DEFAULT 'text/plain',
                         a_mimetype        VARCHAR2 DEFAULT 'text/plain');
 
-
+    PROCEDURE createjob(a_procedure    IN VARCHAR2,
+                        a_description  IN VARCHAR2,
+                        a_argument1    IN VARCHAR2 DEFAULT '0',
+                        a_argument2    IN DATE DEFAULT SYSDATE,
+                        a_argument3    IN VARCHAR2 DEFAULT NULL);
 END;
 /
 

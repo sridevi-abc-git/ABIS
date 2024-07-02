@@ -35,6 +35,7 @@ AS
     --   6.2    05/20/2024  APD  BIZ-15210    Fix bug to send UTF content and Content-Length for multi-byte chars
     --   6.3    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table and
     --                                          changed calllsp parameters and parameter types
+    --   7.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -91,7 +92,6 @@ AS
         t_value        VARCHAR2(4000);
         t_info         json_object_t := json_object_t();
         t_header       json_object_t := json_object_t();
-        
     BEGIN
         BEGIN
             -- add wallet to get wallet location from configuration table
@@ -102,7 +102,8 @@ AS
             FOR i IN 1 .. t_keys.COUNT
             LOOP
                 t_column := a_parameternames.get_string(t_keys(i));
---dbms_output.put_line('Columns: ' || t_column);
+
+                --dbms_output.put_line('Columns: ' || t_column);
                 SELECT c.parametervalue
                   INTO t_value
                   FROM bizmod_api.eservices_config_t c
@@ -125,25 +126,25 @@ AS
                             a_replacementvalues.get_string(t_keys(i))));
             END LOOP;
 
-            t_infotext := t_info.to_clob;
---dbms_output.put_line(t_infotext);
+            t_infotext := t_info.TO_CLOB;
+
+            --dbms_output.put_line(t_infotext);
 
             INSERT INTO eservices_log_t(request,
                                         packet,
                                         info,
                                         filedata,
                                         requestdate)
-                 VALUES (
-                     'CALLLSP',
-                     a_content,
-                     t_infotext,
-                     a_file,
-                     SYSTIMESTAMP)
+                 VALUES ('CALLLSP',
+                         a_content,
+                         t_infotext,
+                         a_file,
+                         SYSTIMESTAMP)
               RETURNING seq
                    INTO t_seq;
 
             COMMIT;
-            
+
             UTL_HTTP.set_wallet(t_info.get_string('WALLET'), NULL);
 
             -- Open the HTTP request
@@ -212,10 +213,10 @@ AS
 
             IF (t_response.status_code NOT IN (200, 201, 204))
             THEN
-            
                 DBMS_LOB.createtemporary(t_response_text,
                                          TRUE,
                                          DBMS_LOB.session);
+
                 BEGIN
                     LOOP
                         UTL_HTTP.read_text(t_response, t_text, 32766);
@@ -228,14 +229,13 @@ AS
                     THEN
                         UTL_HTTP.end_response(t_response);
                 END;
-                
-                    t_info.put('LSPRESPONSE', t_response_text);
+
+                t_info.put('LSPRESPONSE', t_response_text);
             END IF;
 
             -- Close the HTTP request/response
             UTL_HTTP.end_response(t_response);
             UTL_HTTP.end_request(t_request);
-            
         EXCEPTION
             WHEN UTL_HTTP.request_failed
             THEN
@@ -245,11 +245,11 @@ AS
                     || CHR(13)
                     || SQLERRM;
                 t_trace := DBMS_UTILITY.format_error_backtrace;
-t_info.put('ORA-ERROR', t_sqlerrm);
-t_response_text := t_response_text || chr(13) || t_sqlerrm;                
+                t_info.put('ORA-ERROR', t_sqlerrm);
+                t_response_text := t_response_text || CHR(13) || t_sqlerrm;
         END;
 
-        t_infotext := t_info.to_clob;
+        t_infotext := t_info.TO_CLOB;
 
         UPDATE eservices_log_t e
            SET response = t_infotext,
@@ -262,162 +262,11 @@ t_response_text := t_response_text || chr(13) || t_sqlerrm;
 
         COMMIT;
 
-        RETURN case when t_response_text is not null then t_info.to_clob else null end;
+        RETURN CASE
+                   WHEN t_response_text IS NOT NULL THEN t_info.TO_CLOB
+                   ELSE NULL
+               END;
     END;
-
-
---    FUNCTION calllsp(a_url          IN VARCHAR2,
---                     a_method       IN VARCHAR2,
---                     a_content      IN CLOB,
---                     a_file         IN BLOB)
---        RETURN CLOB
---    IS
---        t_seq          NUMBER;
---        t_boundary     VARCHAR2(100)
---                           := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
---        t_request      UTL_HTTP.req;
---        t_response     UTL_HTTP.resp;
---        t_response_text CLOB;
---        t_blob_len     NUMBER;
---        t_chunk_size   NUMBER := 32767;
---        t_offset       NUMBER := 1;
---        t_chunk        RAW(32767);
---        t_content_type VARCHAR2(100)
---                           := 'multipart/form-data; boundary=' || t_boundary;
---        t_body_start   VARCHAR2(1000)
---            := '--'
---               || t_boundary
---               || UTL_TCP.crlf
---               || 'Content-Disposition: form-data; name="file"; filename="report.pdf"'
---               || UTL_TCP.crlf
---               || 'Content-Type: application/pdf'
---               || UTL_TCP.crlf
---               || UTL_TCP.crlf;
---        t_body_end     VARCHAR2(100)
---            := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
---        t_response_header_name VARCHAR2(256);
---        t_response_header_value VARCHAR2(1024);
---        t_response_body VARCHAR2(32767);
---        t_text         VARCHAR2(32767);
---        t_wallet       VARCHAR2(1000);
---        t_length       NUMBER;
---    BEGIN
---        INSERT INTO eservices_log_t(request,
---                                    packet,
---                                    info,
---                                    filedata,
---                                    requestdate)
---             VALUES ('CALLLSP',
---                     a_content,
---                     'URL: ' || a_url || CHR(13) || 'Method: ' || a_method,
---                     a_file,
---                     SYSTIMESTAMP)
---          RETURNING seq
---               INTO t_seq;
---
---        t_wallet :=
---            CASE LOWER(ora_database_name)
---                WHEN 'abisp1'
---                THEN
---                    'file:/u01/app/oracle/admin/abisp1/walletSSL'
---                ELSE
---                    'file:/orabin1/admin/'
---                    || LOWER(ora_database_name)
---                    || '/walletSSL/'
---            END;
---
---        UTL_HTTP.set_wallet(t_wallet, NULL);
---
---        -- Open the HTTP request
---        t_request := UTL_HTTP.begin_request(url => a_url, method => a_method);
---
---        UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
---        UTL_HTTP.set_body_charset(t_request, 'UTF-8');
---
---        IF (a_file IS NULL)
---        THEN
---            IF (a_content IS NOT NULL)
---            THEN
---                t_length :=
---                    UTL_RAW.LENGTH(
---                        UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(a_content),
---                                        'american_america.al32utf8',
---                                        'AMERICAN_america.WE8MSWIN1252'));
---                UTL_HTTP.set_header(t_request,
---                                    'content-type',
---                                    'application/json');
---                UTL_HTTP.set_header(t_request, 'Content-Length', t_length);
---
---                UTL_HTTP.write_text(t_request, a_content);
---            END IF;
---        ELSE
---            -- Set the request headers
---            UTL_HTTP.set_header(t_request, 'Content-Type', t_content_type);
---            UTL_HTTP.set_header(
---                t_request,
---                'Content-Length',
---                TO_CHAR(
---                      DBMS_LOB.getlength(t_body_start)
---                    + DBMS_LOB.getlength(a_file)
---                    + DBMS_LOB.getlength(t_body_end)));
---
---            -- Write the start of the body to the request
---            UTL_HTTP.write_text(t_request, t_body_start);
---
---            -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
---            t_blob_len := DBMS_LOB.getlength(a_file);
---
---            -- Write the BLOB content to the request in chunks
---            WHILE t_offset <= t_blob_len
---            LOOP
---                DBMS_LOB.read(a_file,
---                              t_chunk_size,
---                              t_offset,
---                              t_chunk);
---                UTL_HTTP.write_raw(t_request, t_chunk);
---                t_offset := t_offset + t_chunk_size;
---            END LOOP;
---
---            -- Write the end of the body to the request
---            UTL_HTTP.write_text(t_request, t_body_end);
---        END IF;
---
---        -- Get the response
---        t_response := UTL_HTTP.get_response(t_request);
---
---        IF (t_response.status_code NOT IN (200, 201, 204))
---        THEN
---            DBMS_LOB.createtemporary(t_response_text, TRUE, DBMS_LOB.session);
---
---            BEGIN
---                LOOP
---                    UTL_HTTP.read_text(t_response, t_text, 32766);
---                    DBMS_LOB.writeappend(t_response_text,
---                                         LENGTH(t_text),
---                                         t_text);
---                END LOOP;
---            EXCEPTION
---                WHEN UTL_HTTP.end_of_body
---                THEN
---                    UTL_HTTP.end_response(t_response);
---            END;
---        END IF;
---
---        -- Close the HTTP request/response
---        UTL_HTTP.end_response(t_response);
---        UTL_HTTP.end_request(t_request);
---
---        UPDATE eservices_log_t
---           SET response = json_object('LSPRESPONSE' VALUE t_response_text),
---               responsedate = SYSTIMESTAMP
---         WHERE seq = t_seq
---           LOG ERRORS INTO bizmod_api.err$_eservices_log_t
---                   ('UPDATE')
---                   REJECT LIMIT UNLIMITED;
---
---        RETURN t_response_text;
---    END;
-
 
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
@@ -643,7 +492,12 @@ t_response_text := t_response_text || chr(13) || t_sqlerrm;
                    AND c.dbname = UPPER(ora_database_name))
                PIVOT (MAX(parametervalue)
                      FOR parametername
-                     IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc, 'SMTPSERVER' psmtp, 'PRODUCTION' pprod));
+                     IN ('TO' pto,
+                        'FROM' pfrom,
+                        'CC' pcc,
+                        'BCC' pbcc,
+                        'SMTPSERVER' psmtp,
+                        'PRODUCTION' pprod));
 
         IF (t_from IS NULL)
         THEN
@@ -764,6 +618,59 @@ t_response_text := t_response_text || chr(13) || t_sqlerrm;
         UTL_SMTP.close_data(t_conn);
         UTL_SMTP.quit(t_conn);
     END sendemail;
+
+
+    PROCEDURE createjob(a_procedure    IN VARCHAR2,
+                        a_description  IN VARCHAR2,
+                        a_argument1    IN VARCHAR2 DEFAULT '0',
+                        a_argument2    IN DATE DEFAULT SYSDATE,
+                        a_argument3    IN VARCHAR2 DEFAULT NULL)
+    IS
+        t_arguments    VARCHAR2(4000);
+        t_schedulekey  api.pkg_definition.udt_id;
+    BEGIN
+        --set up arguments for scheduler
+        scheduler.pkg_scheduler.addargument(t_arguments,
+                                            'procedure',
+                                            'BIZMOD_API.' || a_procedure);
+        scheduler.pkg_scheduler.addargument(t_arguments,
+                                            'EffectiveUser',
+                                            'ABC');
+
+        scheduler.pkg_scheduler.addargument(t_arguments,
+                                            'arg1',
+                                            NVL(a_argument1, '0'));
+        scheduler.pkg_scheduler.addargument(t_arguments, 'arg2', a_argument2);
+
+        IF (a_argument3 IS NOT NULL)
+        THEN
+            scheduler.pkg_scheduler.addargument(t_arguments,
+                                                'arg3',
+                                                a_argument3);
+        END IF;
+
+        --schedule item to be handled by the process server
+        t_schedulekey :=
+            scheduler.pkg_scheduler.scheduleitem(
+                a_argument2,
+                2,
+                'nc_0011_ExecuteProcedureAsPosseUser',
+                t_arguments,
+                'E-Services ' || a_description,
+                1); --serverkey
+
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            api.pkg_errors.clear();
+            api.pkg_errors.setargvalue('Custom Procedure',
+                                       'bizmod_api.' || a_procedure);
+            api.pkg_errors.raiseerror(
+                -20000,
+                'ScheduleProcedure Error raised: ' || SQLERRM);
+    END;
 END;
 /
 
