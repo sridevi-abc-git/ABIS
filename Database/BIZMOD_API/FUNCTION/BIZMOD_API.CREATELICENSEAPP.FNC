@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
     -- History:
     -------------------------------------------------------------------------------
     --          Date                         Comment
-    --   1.0  05/02/2024  TJL  BIZ-15444  Initial Package Created
+    --   1.1  05/02/2024  TJL  BIZ-15804  Initial Package Created
     -- ****************************************************************************
     t_json_obj     json_object_t := json_object_t();
     t_json_arr     json_array_t := json_array_t();
@@ -25,13 +25,10 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
 
 BEGIN
 
-        bizmod_api.createjob(a_procedure => 'CREATELICENSEAPPJOB',
-                             a_description => 'Create License Application',
-                             a_argument1 => a_seq);
     IF (t_json_arr.get_size() = 0)
     THEN
-        bizmod_api.createjob(a_procedure => 'CREATECATERINGAPPJOB',
-                             a_description => 'Create Catering Application',
+        bizmod_api.utl_licenseinfo.createjob(a_procedure => 'CREATELICENSEAPPJOB',
+                             a_description => 'Create License Application',
                              a_argument1 => a_seq);
 
         t_json_data.put('MSGNO', '0');
