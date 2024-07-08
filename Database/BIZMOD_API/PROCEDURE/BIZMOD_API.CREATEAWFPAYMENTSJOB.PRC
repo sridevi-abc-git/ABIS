@@ -25,7 +25,7 @@ IS
     --   6.0     05/21/2024  TJL BIZ-15523  Select how which payments are selected for AWF
     --                                         payment batch
     --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
-    --   7.0.2   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
+    --   7.0.3   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -367,10 +367,10 @@ BEGIN
 
             api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                           'PaymentNumberFromVerify',
-                                          t_receiptnumber + 1);
+                                          t_receiptnumber);
             api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                           'PaymentNumberToVerify',
-                                          t_receiptnumber + t_checkcount);
+                                          t_receiptlast);
             api.pkg_columnupdate.setvalue(t_paymentbatchobjectid,
                                           'Penalty',
                                           'Timely');
