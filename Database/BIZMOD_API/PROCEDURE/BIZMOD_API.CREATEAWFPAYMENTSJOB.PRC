@@ -26,6 +26,7 @@ IS
     --                                         payment batch
     --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
     --   7.0.3   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
+    --   7.1.0   07/09/2024  TJL BIZ-15691  Made change to email message.
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -411,38 +412,38 @@ BEGIN
 
             t_info :=
                 t_info
-                || 'Seq: '
-                || a_seq
-                || CHR(13)
-                || 'File: '
-                || t_filename
-                || CHR(13)
+                || CASE
+                       WHEN a_seq > 0
+                       THEN
+                           'Seq: '
+                           || a_seq
+                           || CHR(13)
+                           || 'File: '
+                           || t_filename
+                           || CHR(13)
+                       ELSE
+                           NULL
+                   END
                 || CHR(13)
                 || 'AWF Payment Batch: '
                 || api.pkg_columnquery.VALUE(t_paymentbatchobjectid,
                                              'ExternalFileNum')
                 || CHR(13)
-                || 'Batch Type: '
-                || CASE a_seq
-                       WHEN 0 THEN 'AWF no payment required' || CHR(13)
-                       ELSE 'First Data AWF Payment Batch' || CHR(13)
-                   END
-                || CHR(13)
                 || 'Payment Type: '
                 || t_paymenttype
                 || CHR(13)
                 || 'Number of Payments: '
-                || t_checkcount
+                || LPAD(t_checkcount, 5, ' ')
                 || CHR(9)
                 || '(Expected: '
                 || t_fd_payment_count
                 || ')'
                 || CHR(13)
                 || 'Total Payment Amount: '
-                || TO_CHAR(t_totalfees, 'fm9G999G999D00')
+                || TO_CHAR(t_totalfees, 'fm9G999G990D00')
                 || CHR(9)
                 || '(Expected: '
-                || TO_CHAR(t_fd_paymentamount, 'fm9G999G999D00')
+                || TO_CHAR(t_fd_paymentamount, 'fm9G999G990D00')
                 || ')'
                 || CASE
                        WHEN t_sqlerrm IS NOT NULL
@@ -461,11 +462,18 @@ BEGIN
         ELSE
             t_info :=
                 t_info
-                || 'Seq: '
-                || a_seq
-                || CHR(13)
-                || 'File: '
-                || t_filename
+                || CASE
+                       WHEN a_seq > 0
+                       THEN
+                           'Seq: '
+                           || a_seq
+                           || CHR(13)
+                           || 'File: '
+                           || t_filename
+                           || CHR(13)
+                       ELSE
+                           NULL
+                   END
                 || CHR(13)
                 || 'Payment Method: '
                 || t_paymenttype
