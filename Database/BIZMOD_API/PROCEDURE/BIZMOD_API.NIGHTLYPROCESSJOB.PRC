@@ -33,6 +33,7 @@ IS
     --                                         Report in LSP.
     --   8.0    05/20/2024  TJL  BIZ-15523  Added test to see if AWF batch needs to be created
     --   8.1    05/24/2024  TJL  BIZ-15485  Removed sending emails on job being completed
+    --   9.0    07/09/2024  TJL  BIZ-15837  Removed Fee Waiver Exception
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -614,36 +615,36 @@ IS
                     get_awfreninfo(a_fiscalend => t_fiscalend,
                                    a_jobid     => lt.licensetypejobid);
 
-                IF (t_feeobjid IS NOT NULL
-                AND t_msgno IS NULL)
-                THEN
-                    t_feeid :=
-                        api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
-
-                    FOR rec
-                        IN (SELECT api.pkg_columnquery.VALUE(reo.objectid,
-                                                             'BatchId')    batchid
-                              FROM api.paymenttransactions  pt
-                                   JOIN api.feetransactions ft
-                                       ON pt.transactionid = ft.transactionid
-                                   JOIN api.registeredexternalobjects reo
-                                       ON (reo.linkvalue =
-                                           TO_CHAR(pt.paymentid)
-                                       AND reo.objectdefid =
-                                           api.pkg_configquery.objectdefidforname(
-                                               'o_Payment'))
-                             WHERE ft.feeid = t_feeid -- rec.renfeeid
-                                                     )
-                    LOOP
-                        -- look for batch id with CVR in it
-                        IF (rec.batchid LIKE '%CVR%')
-                        THEN
-                            t_msgno := 14;
-                            EXIT;
-                        END IF;
-                    END LOOP;
-                END IF;
-
+--                IF (t_feeobjid IS NOT NULL
+--                AND t_msgno IS NULL)
+--                THEN
+--                    t_feeid :=
+--                        api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
+--
+--                    FOR rec
+--                        IN (SELECT api.pkg_columnquery.VALUE(reo.objectid,
+--                                                             'BatchId')    batchid
+--                              FROM api.paymenttransactions  pt
+--                                   JOIN api.feetransactions ft
+--                                       ON pt.transactionid = ft.transactionid
+--                                   JOIN api.registeredexternalobjects reo
+--                                       ON (reo.linkvalue =
+--                                           TO_CHAR(pt.paymentid)
+--                                       AND reo.objectdefid =
+--                                           api.pkg_configquery.objectdefidforname(
+--                                               'o_Payment'))
+--                             WHERE ft.feeid = t_feeid -- rec.renfeeid
+--                                                     )
+--                    LOOP
+--                        -- look for batch id with CVR in it
+--                        IF (rec.batchid LIKE '%CVR%')
+--                        THEN
+--                            t_msgno := 14;
+--                            EXIT;
+--                        END IF;
+--                    END LOOP;
+--                END IF;
+--
                 UPDATE bizmod_api.licensetype_t lic
                    SET lic.renfeeobjid = t_feeobjid,
                        lic.renewalfeedate =
@@ -653,7 +654,7 @@ IS
                        lic.awfflag =
                            CASE NVL(t_msgno, 0)
                                WHEN 0 THEN 'Y'
-                               WHEN 14 THEN 'CVR'
+--                               WHEN 14 THEN 'CVR'
                                ELSE 'N'
                            END
                  WHERE lic.licensetypejobid = lt.licensetypejobid;
