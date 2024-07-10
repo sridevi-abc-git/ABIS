@@ -7,8 +7,8 @@ AS
     -- History:
     -----------------------------------------------------------------------------
     --    Ver:     Date                       Comment
-    --     1.0   07/01/2024  TJL BIZ-15444  Move and renamed package from
-    --                                        SITESPECIFIC.PKG_CATERING and added
+    --     1.1   07/01/2024  TJL BIZ-15808  Move and renamed package from
+    --                          (BIZ-15812)   SITESPECIFIC.PKG_CATERING and added
     --                                        new procedures and functions to support
     --                                        License Applications
     -- **************************************************************************
@@ -21,6 +21,9 @@ AS
     PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
                               a_asofdate     IN DATE,
                               a_jobid        IN api.pkg_definition.udt_id);
+--    PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
+--                              a_asofdate     IN DATE,
+--                              a_jobid        IN VARCHAR2);
 END;
 /
 

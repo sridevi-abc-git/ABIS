@@ -7,8 +7,8 @@ AS
     -- History:
     -----------------------------------------------------------------------------
     --    Ver:     Date                       Comment
-    --     1.0   07/01/2024  TJL BIZ-15444  Move and renamed package from
-    --                                        SITESPECIFIC.PKG_CATERING and added
+    --     1.1   07/01/2024  TJL BIZ-15808  Move and renamed package from
+    --                          (BIZ-15812)   SITESPECIFIC.PKG_CATERING and added
     --                                        new procedures and functions to support
     --                                        License Applications
     -- **************************************************************************
@@ -72,54 +72,25 @@ AS
     PROCEDURE newfee(a_objectid     IN api.pkg_definition.udt_id,
                      a_asofdate        DATE)
     IS
-        t_cnt          NUMBER := 0;
-        t_sqlerrm      VARCHAR2(4000);
-        t_trace        VARCHAR2(4000);
-        t_pending      VARCHAR2(1);
         
     BEGIN
-        IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPId') IS NOT NULL)
+        IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPID') IS NOT NULL)
         THEN
-            begin
-            -- check to see if job is already scheduled
-            select pending
-              into t_pending
-              from bizmod_api.license_app_t 
-             where jobid = a_objectid
-               and nvl(pending, 'N') = 'Y';
-            
-            exception when no_data_found then
-                -- schedule job to notify LSP of new fees avaible to be paid
-                bizmod_api.utl_licenseinfo.createjob(
-                    a_procedure => 'NEWFEEJOB',
-                    a_description =>
-                        'E-Services New Fee Notify LSP Job ' || a_objectid,
-                    a_argument1 => a_objectid,
-                    a_argument2 => SYSDATE + (1 / (24 * 60)) * 5); -- 5 minute delay
-                    
                 update bizmod_api.license_app_t
-                   set pending = 'Y'
+                   set newfee = 'Y'
                  where jobid = a_objectid;
-            end;
+
+commit;       
         END IF;
         
-    EXCEPTION
-        WHEN OTHERS
-        THEN
-            t_sqlerrm := SQLERRM;
-            t_trace := DBMS_UTILITY.format_error_backtrace;
-
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg,
-                                                   bktrace)
-                 VALUES (0,
-                         'NEWFEE',
-                         'Application Id: ' || a_objectid,
-                         t_sqlerrm,
-                         t_trace);
     END;
+    
+--    PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
+--                              a_asofdate     IN DATE,
+--                              a_jobid        IN VARCHAR2) IS
+--    begin
+--        applicationsave(a_objectid, a_asofdate, to_number(a_jobid));
+--    end;
     
     PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
                               a_asofdate     IN DATE,
@@ -133,12 +104,25 @@ AS
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'APPLICATIONSAVEJOB',
                     a_description =>
-                        'E-Services Application Saved Notify LSP Job ' || a_jobid,
+                        'Application Saved Notify LSP ID ' || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
                     a_argument1 => a_objectid,
                     a_argument2 => SYSDATE,
                     a_argument3 => a_jobid);
     
         end if;
+        
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                 VALUES (0,
+                         'APPLICATIONSAVE',
+                         'Application Object Id: ' || a_jobid || chr(13) ||
+                         'Process Id: ' || a_objectid,
+                         t_sqlerrm,
+                         t_trace);
+                         
     EXCEPTION
         WHEN OTHERS
         THEN
