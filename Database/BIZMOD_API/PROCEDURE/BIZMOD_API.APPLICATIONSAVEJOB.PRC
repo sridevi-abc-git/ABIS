@@ -12,50 +12,112 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
-    --   1.0  07/01/2024 TJL  BIZ-15444  Initial Procedure Created
+    --   1.1  07/01/2024 TJL  BIZ-15808  Initial Procedure Created
     -- ****************************************************************************
     t_parameternames json_object_t;
     t_replacementvalues json_object_t;
-    t_applicationid NUMBER;
+    t_response     json_object_t;
+    t_applicationid VARCHAR2(40);
     t_process      VARCHAR2(32) := 'APPLICATIONSAVEJOB';
-    t_response     CLOB;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_status       VARCHAR2(40);
-    t_outcome      VARCHAR2(40);
+    t_info         VARCHAR2(4000);
+    t_results      CLOB;
 BEGIN
-    t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
+    BEGIN
+        t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
 
-    t_outcome :=
-        CASE
-            WHEN a_objectid IS NULL
-            THEN
-                api.pkg_columnquery.VALUE(a_jobid, 'StatusName')
-            ELSE
-                api.pkg_columnquery.VALUE(a_objectid, 'Outcome')
-        END;
+        t_status := api.pkg_columnquery.VALUE(a_jobid, 'StatusName');
 
-    IF (t_outcome IS NOT NULL)
+        IF (t_status IS NOT NULL)
+        THEN
+            -- update LSP of any changes to application data
+            t_parameternames :=
+                json_object_t(
+                    '{"URL":"URL_STATUSx","METHOD":"METHOD_STATUS"}');
+            t_replacementvalues :=
+                json_object_t(
+                    '{"<<applicationId>>":"'
+                    || t_applicationid
+                    || '","<<status>>":"'
+                    || t_status
+                    || '"}');
+
+            t_info :=
+                'Parameters: '
+                || t_parameternames.to_string
+                || CHR(13)
+                || 'Replacement Values: '
+                || t_replacementvalues.to_string;
+
+            t_results :=
+                bizmod_api.utl_licenseinfo.calllsp(
+                    a_process   => t_process,
+                    a_parameternames => t_parameternames,
+                    a_replacementvalues => t_replacementvalues);
+
+            t_response := json_object_t.parse(t_results);
+        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SQLERRM;
+            t_trace := DBMS_UTILITY.format_error_backtrace;
+    END;
+
+    IF (t_sqlerrm IS NULL)
     THEN
-        -- update LSP of any changes to application data
-        t_parameternames :=
-            json_object_t('{"URL":"URL_STATUS","METHOD":"METHOD"}');
-        t_replacementvalues :=
-            json_object_t(
-                '{"<<applicationId>>":"'
-                || t_applicationid
-                || '","<<status>>":"'
-                || t_status
-                || '"}');
-
-        t_response :=
-            bizmod_api.utl_licenseinfo.calllsp(
-                a_process   => t_process,
-                a_parameternames => t_parameternames,
-                a_replacementvalues => t_replacementvalues);
-                
-    ---- do something with t_response
-
+        t_sqlerrm :=
+            CASE
+                WHEN t_response.has('LSPRESPONSE')
+                THEN
+                    t_response.get_string('LSPRESPONSE')
+                WHEN t_response.has('ORA-ERROR')
+                THEN
+                    t_response.get_string('ORA-ERROR')
+                ELSE
+                    NULL
+            END;
     END IF;
+
+    INSERT INTO bizmod_api.e_process_log_t(seq,
+                                           processjob,
+                                           info,
+                                           errmsg,
+                                           bktrace)
+             VALUES (
+                 0,
+                 t_process,
+                 'Application Id: '
+                 || t_applicationid
+                 || CHR(13)
+                 || 'Status: '
+                 || t_status
+                 || CHR(13)
+                 || 'j_Application: '
+                 || a_jobid
+                 || CHR(13)
+                 || 'process object id: '
+                 || a_objectid
+                 || CHR(13)
+                 || CASE
+                        WHEN t_results IS NOT NULL or t_sqlerrm is not null
+                        THEN
+                            'Info: '
+                            || t_info
+                            || CHR(13)
+                            || 'LSP Response: '
+                            || t_results
+                        ELSE
+                            NULL
+                    END,
+                 t_sqlerrm,
+                 t_trace);
+
+    COMMIT;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.APPLICATIONSAVEJOB TO POSSEEXTENSIONS;
