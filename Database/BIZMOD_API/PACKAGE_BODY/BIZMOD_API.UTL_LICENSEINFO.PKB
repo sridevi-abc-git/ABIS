@@ -36,6 +36,7 @@ AS
     --   6.3    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table and
     --                                          changed calllsp parameters and parameter types
     --   7.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
+    --   8.0.1  07/08/2024  TJL  BIZ-15808    Updated callsp with more exception handling    
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -89,6 +90,7 @@ AS
         t_trace        VARCHAR2(4000);
         t_keys         json_key_list;
         t_column       VARCHAR2(100);
+        t_columns      VARCHAR2(4000);
         t_value        VARCHAR2(4000);
         t_info         json_object_t := json_object_t();
         t_header       json_object_t := json_object_t();
@@ -98,11 +100,13 @@ AS
             a_parameternames.put('WALLET', 'WALLET');
             t_keys := a_parameternames.get_keys;
 
+            BEGIN
             -- get configuration information
             FOR i IN 1 .. t_keys.COUNT
             LOOP
                 t_column := a_parameternames.get_string(t_keys(i));
-
+                t_columns := t_columns || t_column || '; ';
+                
                 --dbms_output.put_line('Columns: ' || t_column);
                 SELECT c.parametervalue
                   INTO t_value
@@ -113,7 +117,11 @@ AS
 
                 t_info.put(t_keys(i), t_value);
             END LOOP;
-
+            
+            EXCEPTION when no_data_found then
+                RAISE_APPLICATION_ERROR(-20001,'Parameter Not Found: ' || t_column, TRUE);
+            END;
+            
             -- replace the replacement keys from values provided
             t_keys := a_replacementvalues.get_keys;
 
