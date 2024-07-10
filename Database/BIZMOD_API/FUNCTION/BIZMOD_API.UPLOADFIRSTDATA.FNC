@@ -19,6 +19,7 @@ IS
     --    3.0   05/21/2024 TJL  BIZ-15523   Changed how batches are scheduled
     --    3.1.2 05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
     --                                        and what email procedure is called
+    --    4.0   07/08/2024 TJL              Add check to see if file already uploaded
     -- ****************************************************************************
 
     FUNCTION split_clob(a_clob         IN CLOB,
@@ -238,323 +239,406 @@ BEGIN
         t_cnt          NUMBER;
         t_total        NUMBER := 0;
     BEGIN
-        BEGIN
-            t_info :=
-                'File Uploaded'
-                || CHR(13)
-                || CHR(9)
-                || 'File Name: '
-                || CHR(9)
-                || t_filename
-                || CHR(13);
+        SELECT COUNT(seq)
+          INTO t_cnt
+          FROM bizmod_api.eservices_log_t eg
+         WHERE JSON_EXISTS(
+                   eg.packet,
+                   '$?(@.FILE_NAME == $v1)' PASSING t_filename AS "v1")
+           AND eg.request = 'UPLOADFIRSTDATA';
 
-            SELECT e.filedata
-              INTO t_blob
-              FROM bizmod_api.eservices_log_t e
-             WHERE e.seq = a_seq;
+        IF (t_cnt = 1)
+        THEN
+            BEGIN
+                t_info :=
+                    'File Uploaded'
+                    || CHR(13)
+                    || CHR(9)
+                    || 'File Name: '
+                    || CHR(9)
+                    || t_filename
+                    || CHR(13);
 
-            t_var := split_clob(TO_CLOB(t_blob));
-            t_headings :=
-                split_clob(a_clob => UPPER(t_var(1)), a_delimiter => ',');
+                SELECT e.filedata
+                  INTO t_blob
+                  FROM bizmod_api.eservices_log_t e
+                 WHERE e.seq = a_seq;
 
-            -- remove characters in headings
-            FOR inx IN 1 .. t_headings.COUNT
-            LOOP
-                t_headings(inx) :=
-                    UPPER(REGEXP_REPLACE(t_headings(inx), '([ ./#]+)', ''));
-            END LOOP;
+                t_var := split_clob(TO_CLOB(t_blob));
+                t_headings :=
+                    split_clob(a_clob => UPPER(t_var(1)), a_delimiter => ',');
 
-            FOR inx IN 2 .. t_var.COUNT
-            LOOP
-                t_row :=
-                    NEW fd_rec(NULL,
-                               NULL,
-                               NULL,
-                               NULL,
-                               NULL,
-                               NULL,
-                               NULL,
-                               NULL,
-                               t_filename,
-                               SYSDATE,
-                               a_seq,
-                               NULL);
-
-                FOR rec
-                    IN (    SELECT TRIM(
-                                       BOTH '"' FROM TRIM(
-                                                         BOTH ',' FROM REGEXP_SUBSTR(
-                                                                           t_var(
-                                                                               inx),
-                                                                           '(".*?"|.*?)(,|$)',
-                                                                           1,
-                                                                           LEVEL)))
-                                       split,
-                                   LEVEL,
-                                   ROWNUM
-                                       LN
-                              FROM DUAL
-                        CONNECT BY REGEXP_SUBSTR(t_var(inx),
-                                                 '(".*?"|.*?)(,|$)',
-                                                 1,
-                                                 LEVEL)
-                                       IS NOT NULL)
+                -- remove characters in headings
+                FOR inx IN 1 .. t_headings.COUNT
                 LOOP
---                    DBMS_OUTPUT.put_line(
---                        t_headings(rec.LN)
---                        || ' : '
---                        || NVL(rec.split, 'null')
---                        || ' : '
---                        || rec.LN);
-
-                    CASE t_headings(rec.LN)
-                        WHEN 'PAYMENTTIMESTAMP'
-                        THEN
-                            t_row.paymenttimestamp :=
-                                TO_DATE(rec.split, 'MM/DD/YYYY HH:MI:SS AM');
-                        WHEN 'PAYMENTAMOUNT'
-                        THEN
-                            t_row.paymentamount :=
-                                REGEXP_REPLACE(rec.split, '([$,]+)', '');
-                        WHEN 'REFERENCE'
-                        THEN
-                            t_row.reference := rec.split;
-                            get_ref_info(a_info => rec.split, a_rec => t_row);
-                        WHEN 'PAYMENTMEDIUM'
-                        THEN
-                            t_row.paymentmedium := rec.split;
-                        WHEN 'CONFIRMATION'
-                        THEN
-                            t_row.confirmationnumber := rec.split;
-                        WHEN 'PAYMENTTYPE'
-                        THEN
-                            t_row.paymenttype := rec.split;
-                        ELSE
-                            NULL;
-                    END CASE;
+                    t_headings(inx) :=
+                        UPPER(
+                            REGEXP_REPLACE(t_headings(inx), '([ ./#]+)', ''));
                 END LOOP;
 
-                  -- make sure payment is in abis and not voided
-                  BEGIN
-                  SELECT CASE nvl(COUNT(p.confirmationid), 0)
-                             WHEN 0
-                             THEN
-                                 'N'
-                             ELSE
-                                 CASE
-                                     WHEN api.pkg_columnquery.VALUE(
-                                              p.paymentobjectid,
-                                              'IsVoidedFlag') =
-                                          'Y'
-                                       OR api.pkg_columnquery.VALUE(
-                                              p.paymentobjectid,
-                                              'IsDishonored') =
-                                          'Y'
-                                       OR api.pkg_columnquery.VALUE(
-                                              p.paymentobjectid,
-                                              'IsRefund') =
-                                          'Y'
+                FOR inx IN 2 .. t_var.COUNT
+                LOOP
+                    t_row :=
+                        NEW fd_rec(NULL,
+                                   NULL,
+                                   NULL,
+                                   NULL,
+                                   NULL,
+                                   NULL,
+                                   NULL,
+                                   NULL,
+                                   t_filename,
+                                   SYSDATE,
+                                   a_seq,
+                                   NULL);
+
+                    FOR rec
+                        IN (    SELECT TRIM(
+                                           BOTH '"' FROM TRIM(
+                                                             BOTH ',' FROM REGEXP_SUBSTR(
+                                                                               t_var(
+                                                                                   inx),
+                                                                               '(".*?"|.*?)(,|$)',
+                                                                               1,
+                                                                               LEVEL)))
+                                           split,
+                                       LEVEL,
+                                       ROWNUM
+                                           LN
+                                  FROM DUAL
+                            CONNECT BY REGEXP_SUBSTR(t_var(inx),
+                                                     '(".*?"|.*?)(,|$)',
+                                                     1,
+                                                     LEVEL)
+                                           IS NOT NULL)
+                    LOOP
+                        --                    DBMS_OUTPUT.put_line(
+                        --                        t_headings(rec.LN)
+                        --                        || ' : '
+                        --                        || NVL(rec.split, 'null')
+                        --                        || ' : '
+                        --                        || rec.LN);
+
+                        CASE t_headings(rec.LN)
+                            WHEN 'PAYMENTTIMESTAMP'
+                            THEN
+                                t_row.paymenttimestamp :=
+                                    TO_DATE(rec.split,
+                                            'MM/DD/YYYY HH:MI:SS AM');
+                            WHEN 'PAYMENTAMOUNT'
+                            THEN
+                                t_row.paymentamount :=
+                                    REGEXP_REPLACE(rec.split, '([$,]+)', '');
+                            WHEN 'REFERENCE'
+                            THEN
+                                t_row.reference := rec.split;
+                                get_ref_info(a_info      => rec.split,
+                                             a_rec       => t_row);
+                            WHEN 'PAYMENTMEDIUM'
+                            THEN
+                                t_row.paymentmedium := rec.split;
+                            WHEN 'CONFIRMATION'
+                            THEN
+                                t_row.confirmationnumber := rec.split;
+                            WHEN 'PAYMENTTYPE'
+                            THEN
+                                t_row.paymenttype := rec.split;
+                            ELSE
+                                NULL;
+                        END CASE;
+                    END LOOP;
+
+                    -- make sure payment is in abis and not voided
+                    BEGIN
+                          SELECT CASE NVL(COUNT(p.confirmationid), 0)
+                                     WHEN 0
                                      THEN
-                                         'V'
-                                     --                                     WHEN api.pkg_columnquery.numericvalue(
-                                     --                                              p.paymentobjectid,
-                                     --                                              'PaymentAmount') !=
-                                     --                                          t_row.paymentamount
-                                     --                                     THEN
-                                     --                                         'E'
-                                     WHEN p.paymentobjectid IS NOT NULL
-                                              THEN
-                                                  CASE
-                                                      WHEN api.pkg_columnquery.numericvalue(
-                                                               p.paymentobjectid,
-                                                               'PaymentAmount') !=
-                                                           t_row.paymentamount
-                                                      THEN
-                                                          'E'
-                                                      ELSE
-                                                          'Y'
-                                                      END    
+                                         'N'
                                      ELSE
-                                         'Y'
+                                         CASE
+                                             WHEN api.pkg_columnquery.VALUE(
+                                                      p.paymentobjectid,
+                                                      'IsVoidedFlag') =
+                                                  'Y'
+                                               OR api.pkg_columnquery.VALUE(
+                                                      p.paymentobjectid,
+                                                      'IsDishonored') =
+                                                  'Y'
+                                               OR api.pkg_columnquery.VALUE(
+                                                      p.paymentobjectid,
+                                                      'IsRefund') =
+                                                  'Y'
+                                             THEN
+                                                 'V'
+                                             --                                     WHEN api.pkg_columnquery.numericvalue(
+                                             --                                              p.paymentobjectid,
+                                             --                                              'PaymentAmount') !=
+                                             --                                          t_row.paymentamount
+                                             --                                     THEN
+                                             --                                         'E'
+                                             WHEN p.paymentobjectid IS NOT NULL
+                                             THEN
+                                                 CASE
+                                                     WHEN api.pkg_columnquery.numericvalue(
+                                                              p.paymentobjectid,
+                                                              'PaymentAmount') !=
+                                                          t_row.paymentamount
+                                                     THEN
+                                                         'E'
+                                                     ELSE
+                                                         'Y'
+                                                 END
+                                             ELSE
+                                                 'Y'
+                                         END
                                  END
-                         END
-                    INTO t_row.abispayment
-                    FROM bizmod_api.e_payments_t p
-                   WHERE p.confirmationid = t_row.confirmationnumber
-                GROUP BY p.paymentobjectid;
-                
-                EXCEPTION when no_data_found then
-                    t_row.abispayment := 'N';
-                end;
+                            INTO t_row.abispayment
+                            FROM bizmod_api.e_payments_t p
+                           WHERE p.confirmationid = t_row.confirmationnumber
+                        GROUP BY p.paymentobjectid;
+                    EXCEPTION
+                        WHEN NO_DATA_FOUND
+                        THEN
+                            t_row.abispayment := 'N';
+                    END;
 
-                -- check if duplicate record
-                SELECT COUNT(licensenumber)
-                  INTO t_cnt
-                  FROM bizmod_api.first_data_t fd
-                 WHERE fd.confirmationnumber = t_row.confirmationnumber;
+                    -- check if duplicate record
+                    SELECT COUNT(licensenumber)
+                      INTO t_cnt
+                      FROM bizmod_api.first_data_t fd
+                     WHERE fd.confirmationnumber = t_row.confirmationnumber;
 
-                IF (t_cnt > 0)
-                THEN
-                    t_recordsduplicate := t_recordsduplicate + 1;
+                    IF (t_cnt > 0)
+                    THEN
+                        t_recordsduplicate := t_recordsduplicate + 1;
+                        t_recordsprocessed := t_recordsprocessed + 1;
+                        CONTINUE;
+                    END IF;
+
+                    -- skip record if payment type is not Primary
+                    IF (t_row.paymenttype != 'Primary')
+                    THEN
+                        CONTINUE;
+                    END IF;
+
                     t_recordsprocessed := t_recordsprocessed + 1;
-                    CONTINUE;
-                END IF;
-
-                -- skip record if payment type is not Primary
-                IF (t_row.paymenttype != 'Primary')
-                THEN
-                    CONTINUE;
-                END IF;
-
-                t_recordsprocessed := t_recordsprocessed + 1;
-                t_fd.EXTEND(1);
-                t_fd(t_fd.COUNT) := t_row;
-            END LOOP;
-
-            -- insert records in to first data table
-            INSERT INTO bizmod_api.first_data_t fd
-                SELECT * FROM TABLE(t_fd)
-                    LOG ERRORS INTO bizmod_api.err$_first_data_t
-                            ('INSERT')
-                            REJECT LIMIT UNLIMITED;
-
-            t_recordsloaded := SQL%ROWCOUNT;
-
-            -- check for error records
-            IF (t_recordsloaded < t_fd.COUNT)
-            THEN
-                t_errorrecords := t_fd.COUNT - t_recordsloaded;
-            END IF;
-
-            -- get count of void/refund/dishonored
-            SELECT COUNT(fd.feeactivity)     cnt
-              INTO t_recordsvoided
-              FROM TABLE(t_fd) fd
-             WHERE fd.abispayment != 'Y';
-
-            COMMIT;
-            t_info := t_info ||
-                CHR(9)
-                || 'Processed: '
-                || CHR(9)
-                || t_recordsprocessed
-                || CHR(13)
-                || CHR(9)
-                || 'Loaded: '
-                || CHR(9)
-                || t_recordsloaded
-                || CHR(13)
-                || CHR(9)
-                || 'Duplicate: '
-                || CHR(9)
-                || t_recordsduplicate
-                || CHR(13)
-                || CHR(9)
-                || 'Unable to Process: '
-                || CHR(9)
-                || t_recordsvoided
-                || CHR(13)
-                || CASE
-                       WHEN t_errorrecords > 0
-                       THEN
-                           CHR(9)
-                           || 'Error Records: '
-                           || CHR(9)
-                           || t_errorrecords
-                       ELSE
-                           NULL
-                   END
-                || CHR(13);
-
-            IF (t_recordsloaded > 0)
-            THEN
-                t_cnt := 0;
-                t_info := t_info || CHR(13) || 'Fee Activities: ' || CHR(13);
-
-                FOR rec
-                    IN (  SELECT fd.feeactivity,
-                                 COUNT(fd.feeactivity)     cnt,
-                                 SUM(fd.paymentamount)     paymentamount
-                            FROM TABLE(t_fd) fd
-                           WHERE fd.abispayment = 'Y'
-                        GROUP BY fd.feeactivity)
-                LOOP
-                    t_total := t_total + rec.paymentamount;
-                    t_cnt := t_cnt + rec.cnt;
-                    t_info :=
-                        t_info
-                        || CHR(9)
-                        || rec.cnt
-                        || CHR(9)
-                        || rec.feeactivity
-                        || CHR(9)
-                        || TO_CHAR(rec.paymentamount, 'fm9G999G999D00')
-                        || CHR(13);
+                    t_fd.EXTEND(1);
+                    t_fd(t_fd.COUNT) := t_row;
                 END LOOP;
 
+                -- insert records in to first data table
+                INSERT INTO bizmod_api.first_data_t fd
+                    SELECT * FROM TABLE(t_fd)
+                        LOG ERRORS INTO bizmod_api.err$_first_data_t
+                                ('INSERT')
+                                REJECT LIMIT UNLIMITED;
+
+                t_recordsloaded := SQL%ROWCOUNT;
+
+                -- check for error records
+                IF (t_recordsloaded < t_fd.COUNT)
+                THEN
+                    t_errorrecords := t_fd.COUNT - t_recordsloaded;
+                END IF;
+
+                -- get count of void/refund/dishonored
+                SELECT COUNT(fd.feeactivity)     cnt
+                  INTO t_recordsvoided
+                  FROM TABLE(t_fd) fd
+                 WHERE fd.abispayment != 'Y';
+
+                COMMIT;
                 t_info :=
                     t_info
                     || CHR(9)
-                    || t_cnt
+                    || 'Processed: '
                     || CHR(9)
-                    || 'Total:'
+                    || t_recordsprocessed
+                    || CHR(13)
                     || CHR(9)
-                    || TO_CHAR(t_total, 'fm9G999G999D00');
-            END IF;
+                    || 'Loaded: '
+                    || CHR(9)
+                    || t_recordsloaded
+                    || CHR(13)
+                    || CHR(9)
+                    || 'Duplicate: '
+                    || CHR(9)
+                    || t_recordsduplicate
+                    || CHR(13)
+                    || CHR(9)
+                    || 'Unable to Process: '
+                    || CHR(9)
+                    || t_recordsvoided
+                    || CHR(13)
+                    || CASE
+                           WHEN t_errorrecords > 0
+                           THEN
+                               CHR(9)
+                               || 'Error Records: '
+                               || CHR(9)
+                               || t_errorrecords
+                           ELSE
+                               NULL
+                       END
+                    || CHR(13);
 
-            IF (t_errorrecords > 0)
-            THEN
-                t_info := t_info || CHR(13) || 'ERRORS:' || CHR(13);
+                IF (t_recordsloaded > 0)
+                THEN
+                    t_cnt := 0;
+                    t_info :=
+                        t_info || CHR(13) || 'Fee Activities: ' || CHR(13);
 
-                FOR rec IN (SELECT e.licensenumber, ora_err_mesg$ msg
-                              FROM err$_first_data_t e
-                             WHERE e.logseq = a_seq)
-                LOOP
+                    FOR rec
+                        IN (  SELECT fd.feeactivity,
+                                     COUNT(fd.feeactivity)     cnt,
+                                     SUM(fd.paymentamount)     paymentamount
+                                FROM TABLE(t_fd) fd
+                               WHERE fd.abispayment = 'Y'
+                            GROUP BY fd.feeactivity)
+                    LOOP
+                        t_total := t_total + rec.paymentamount;
+                        t_cnt := t_cnt + rec.cnt;
+                        t_info :=
+                            t_info
+                            || CHR(9)
+                            || rec.cnt
+                            || CHR(9)
+                            || rec.feeactivity
+                            || CHR(9)
+                            || TO_CHAR(rec.paymentamount, 'fm9G999G999D00')
+                            || CHR(13);
+                    END LOOP;
+
                     t_info :=
                         t_info
                         || CHR(9)
-                        || rec.licensenumber
+                        || t_cnt
                         || CHR(9)
-                        || rec.msg;
-                END LOOP;
-            END IF;
-
---            DBMS_OUTPUT.put_line(t_info);
-
-            IF (t_recordsloaded > 0)
-            THEN
-                SELECT SUM(
-                           CASE
-                               WHEN fd.feeactivity LIKE '%AWF%' THEN 1
-                               ELSE 0
-                           END),
-                       SUM(
-                           CASE
-                               WHEN fd.feeactivity NOT LIKE '%AWF%' THEN 1
-                               ELSE 0
-                           END)
-                  INTO t_awf, t_other
-                  FROM bizmod_api.first_data_t fd
-                 WHERE fd.logseq = a_seq
-                   AND fd.abispayment = 'Y';
-
-                IF (t_awf > 0)
-                THEN
-                    bizmod_api.createjob(
-                        a_procedure => 'CREATEAWFPAYMENTSJOB',
-                        a_description => 'Create AWF Payment Batch',
-                        a_argument1 => a_seq);
+                        || 'Total:'
+                        || CHR(9)
+                        || TO_CHAR(t_total, 'fm9G999G999D00');
                 END IF;
 
-                IF (t_other > 0)
+                IF (t_errorrecords > 0)
                 THEN
-                    bizmod_api.createjob(
-                        a_procedure => 'CREATETRANSMITTALJOB',
-                        a_description => 'Create Transmittals',
-                        a_argument1 => a_seq);
-                END IF;
-            END IF;
+                    t_info := t_info || CHR(13) || 'ERRORS:' || CHR(13);
 
+                    FOR rec IN (SELECT e.licensenumber, ora_err_mesg$ msg
+                                  FROM err$_first_data_t e
+                                 WHERE e.logseq = a_seq)
+                    LOOP
+                        t_info :=
+                            t_info
+                            || CHR(9)
+                            || rec.licensenumber
+                            || CHR(9)
+                            || rec.msg;
+                    END LOOP;
+                END IF;
+
+                --            DBMS_OUTPUT.put_line(t_info);
+
+                IF (t_recordsloaded > 0)
+                THEN
+                    SELECT SUM(
+                               CASE
+                                   WHEN fd.feeactivity LIKE '%AWF%' THEN 1
+                                   ELSE 0
+                               END),
+                           SUM(
+                               CASE
+                                   WHEN fd.feeactivity NOT LIKE '%AWF%'
+                                   THEN
+                                       1
+                                   ELSE
+                                       0
+                               END)
+                      INTO t_awf, t_other
+                      FROM bizmod_api.first_data_t fd
+                     WHERE fd.logseq = a_seq
+                       AND fd.abispayment = 'Y';
+
+                    IF (t_awf > 0)
+                    THEN
+                        bizmod_api.createjob(
+                            a_procedure => 'CREATEAWFPAYMENTSJOB',
+                            a_description => 'Create AWF Payment Batch',
+                            a_argument1 => a_seq);
+                    END IF;
+
+                    IF (t_other > 0)
+                    THEN
+                        bizmod_api.createjob(
+                            a_procedure => 'CREATETRANSMITTALJOB',
+                            a_description => 'Create Transmittals',
+                            a_argument1 => a_seq);
+                    END IF;
+                END IF;
+
+                t_return :=
+                    json_object(
+                        'PACKET_TYPE' VALUE 'MESSAGE',
+                        'DATA' VALUE
+                            json_object(
+                                'MSGNO' VALUE '0',
+                                'MSG' VALUE
+                                    'File Uploaded'
+                                    || CASE
+                                           WHEN t_errorrecords > 0
+                                           THEN
+                                               ' with errors'
+                                           ELSE
+                                               NULL
+                                       END));
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    t_sqlerrm := SQLERRM;
+                    t_trace := DBMS_UTILITY.format_error_backtrace;
+                    t_msg := SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990);
+
+                    t_info := t_info || CHR(13) || 'Error in file upload';
+
+                    UPDATE bizmod_api.eservices_log_t
+                       SET err = t_msg, responsedate = SYSTIMESTAMP
+                     WHERE seq = a_seq;
+
+                    COMMIT;
+
+                    t_return :=
+                        json_object(
+                            'PACKET_TYPE' VALUE 'MESSAGE',
+                            'DATA' VALUE
+                                json_object('MSGNO' VALUE '5',
+                                            'MSG' VALUE 'Oracle Exception',
+                                            'EXCEPTION' VALUE t_msg));
+            END;
+
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                 VALUES (0,
+                         'UPLOADFIRSTDATA',
+                         SUBSTR(t_info, 1, 3900),
+                         t_sqlerrm,
+                         t_trace);
+
+            COMMIT;
+
+            bizmod_api.utl_licenseinfo.sendemail(
+                a_subject   => 'First Data File Upload'
+                               || CASE
+                                      WHEN t_sqlerrm IS NOT NULL
+                                        OR t_errorrecords > 0
+                                      THEN
+                                          ' has errors'
+                                      ELSE
+                                          NULL
+                                  END,
+                a_body      => t_info);
+        ELSE
             t_return :=
                 json_object(
                     'PACKET_TYPE' VALUE 'MESSAGE',
@@ -562,62 +646,8 @@ BEGIN
                         json_object(
                             'MSGNO' VALUE '0',
                             'MSG' VALUE
-                                'File Uploaded'
-                                || CASE
-                                       WHEN t_errorrecords > 0
-                                       THEN
-                                           ' with errors'
-                                       ELSE
-                                           NULL
-                                   END));
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                t_sqlerrm := SQLERRM;
-                t_trace := DBMS_UTILITY.format_error_backtrace;
-                t_msg := SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990);
-
-                t_info := t_info || CHR(13) || 'Error in file upload';
-
-                UPDATE bizmod_api.eservices_log_t
-                   SET err = t_msg, responsedate = SYSTIMESTAMP
-                 WHERE seq = a_seq;
-
-                COMMIT;
-
-                t_return :=
-                    json_object(
-                        'PACKET_TYPE' VALUE 'MESSAGE',
-                        'DATA' VALUE
-                            json_object('MSGNO' VALUE '5',
-                                        'MSG' VALUE 'Oracle Exception',
-                                        'EXCEPTION' VALUE t_msg));
-        END;
-
-        INSERT INTO bizmod_api.e_process_log_t(seq,
-                                               processjob,
-                                               info,
-                                               errmsg,
-                                               bktrace)
-             VALUES (0,
-                     'UPLOADFIRSTDATA',
-                     SUBSTR(t_info, 1, 3900),
-                     t_sqlerrm,
-                     t_trace);
-
-        COMMIT;
-
-        bizmod_api.utl_licenseinfo.sendemail(
-            a_subject   => 'First Data File Upload'
-                           || CASE
-                                  WHEN t_sqlerrm IS NOT NULL
-                                    OR t_errorrecords > 0
-                                  THEN
-                                      ' has errors'
-                                  ELSE
-                                      NULL
-                              END,
-            a_body      => t_info);
+                                'Duplicate File'));
+        END IF;
 
         RETURN t_return;
     END;
