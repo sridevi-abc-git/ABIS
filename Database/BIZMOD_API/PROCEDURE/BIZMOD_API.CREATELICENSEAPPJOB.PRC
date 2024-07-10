@@ -11,7 +11,7 @@ CREATE OR REPLACE PROCEDURE BIZMOD_API.CREATELICENSEAPPJOB(
     -- History:
     -------------------------------------------------------------------------------
     --          Date                         Comment
-    --   1.0  05/09/2024  TJL  BIZ-15444  Initial Package Created
+    --   1.1  05/09/2024  TJL  BIZ-15800  Initial Package Created
     -- ****************************************************************************
     
     PROCEDURE add_secondary_license_types(
@@ -572,6 +572,7 @@ BEGIN
 
     
         SELECT appl_type,
+               lsp_application_id,
                primary_license_types,
                premise_address,
                mailing_address,
@@ -582,6 +583,7 @@ BEGIN
                    '$.DATA'
                    COLUMNS(
                        appl_type VARCHAR2(50) PATH '$.APPL_TYPE',
+                       lsp_application_id VARCHAR2(40) PATH '$.LSP_APPLICATION_ID',
                        primary_license_types VARCHAR2(4000)
                            FORMAT JSON
                            PATH '$[*].PRIMARY_LICENSE_TYPES',
@@ -607,6 +609,7 @@ BEGIN
         api.pkg_columnupdate.setvalue(t_jobid,
                                       'ApplicationType',
                                       t_apprec.appl_type);
+        api.pkg_columnupdate.setvalue(t_jobid, 'LSPID', t_apprec.lsp_application_id);
         --        api.pkg_columnupdate.setvalue(t_jobid, 'Felony', 'No');
         --        api.pkg_columnupdate.setvalue(t_jobid, 'Violation', 'No');
         --        --            api.pkg_columnupdate.setvalue(t_jobid,
@@ -662,6 +665,19 @@ BEGIN
 --        DBMS_OUTPUT.put_line(t_apprec.premise_address);
 --        DBMS_OUTPUT.put_line(t_apprec.mailing_address);
 
+        -- "ApplicationCreatedDate" must be set last before save
+        api.pkg_columnupdate.setvalue(t_jobid, 'ApplicationCreatedDate', SYSDATE);
+
+        INSERT INTO bizmod_api.license_app_t(lspid,
+                                             jobid,
+                                             newfee,
+                                             createddate)
+                 VALUES (
+                     t_apprec.lsp_application_id,
+                     t_jobid,
+                     NULL,
+                     SYSDATE);
+                     
         sitespecific.pkg_license.generateappexternalfilenum(t_jobid, SYSDATE);
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
@@ -672,10 +688,32 @@ BEGIN
             || ' *  '
             || CHR(9)
             || t_jobid);
+        
+        -- notify LSP application has completed
+        bizmod_api.pkg_abis.applicationsave(a_objectid => NULL, a_asofdate => sysdate, a_jobid => t_jobid);
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                     a_seq,
+                     'CREATELICENSEAPPJOB',
+                     'Application Id: '
+                     || t_apprec.lsp_application_id
+                     || CHR(13)
+                     || 'License Number: '
+                     || api.pkg_columnquery.VALUE(t_jobid, 'ExternalFileNum')
+                     || CHR(13)
+                     || 'j_Application: '
+                     || t_jobid,
+                     t_sqlerrm,
+                     t_trace);
 
+        COMMIT;
     END;
 END;
 /
 
 
-GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO ABC;
+GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO POSSEEXTENSIONS;
