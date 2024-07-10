@@ -19,9 +19,11 @@ AS
     --                                          function and process job
     --   7.1    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table
     --   8.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
+    --   8.0.1  07/08/2024  TJL  BIZ-15800    Updated gc_apprec_t record
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(appl_type VARCHAR2(50),
+                               lsp_application_id VARCHAR2(40),
                                primary_license_types VARCHAR2(4000),
                                premise_address VARCHAR2(4000),
                                mailing_address VARCHAR2(4000),
