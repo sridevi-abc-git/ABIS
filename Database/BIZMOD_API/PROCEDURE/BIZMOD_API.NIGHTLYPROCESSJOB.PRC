@@ -34,6 +34,8 @@ IS
     --   8.0    05/20/2024  TJL  BIZ-15523  Added test to see if AWF batch needs to be created
     --   8.1    05/24/2024  TJL  BIZ-15485  Removed sending emails on job being completed
     --   9.0    07/09/2024  TJL  BIZ-15837  Removed Fee Waiver Exception
+    --  10.0    07/11/2024  TJL  BIZ-       Corrected bug when secondaries are added licensetype_t
+    --                                        table not updated
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -430,7 +432,7 @@ IS
     -- ****************************************************************************
     -- ****************************************************************************
 
-    PROCEDURE awfupdateinfo
+    PROCEDURE updateinfo
     AS
     BEGIN
         DECLARE
@@ -597,6 +599,46 @@ IS
 
             COMMIT;
 
+            -- 07/11/2024  TJL  BIZ-
+            -- Update secondaries that have changed with new values
+            UPDATE bizmod_api.licensetype_t lt2
+               SET lt2.secondaries =
+                       (SELECT json_arrayagg(
+                                   json_object(
+                                       'LTC' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               slt.toobjectid,
+                                               'LicenseTypeCode'),
+                                       'ID' VALUE slt.relationshipid))
+                          FROM api.relationships  slt
+                               JOIN mart.licensetype lt
+                                   ON (lt.objectid = slt.fromobjectid)
+                         WHERE (lt.objectid = slt.fromobjectid
+                            AND slt.endpointid =
+                                api.pkg_configquery.endpointidforname(
+                                    'j_LicenseType',
+                                    'LicTypeCatSecondary'))
+                           AND lt.objectid = lt2.licensetypejobid)
+             WHERE NVL(lt2.secondaries, 'none') !=
+                   NVL(
+                       (SELECT json_arrayagg(
+                                   json_object(
+                                       'LTC' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               slt.toobjectid,
+                                               'LicenseTypeCode'),
+                                       'ID' VALUE slt.relationshipid))
+                          FROM api.relationships  slt
+                               JOIN mart.licensetype lt
+                                   ON (lt.objectid = slt.fromobjectid)
+                         WHERE (lt.objectid = slt.fromobjectid
+                            AND slt.endpointid =
+                                api.pkg_configquery.endpointidforname(
+                                    'j_LicenseType',
+                                    'LicTypeCatSecondary'))
+                           AND lt.objectid = lt2.licensetypejobid),
+                       'none');
+
             -- get awf renewal fee
             FOR lt IN (SELECT lt.*
                          FROM bizmod_api.licensetype_t lt
@@ -615,36 +657,6 @@ IS
                     get_awfreninfo(a_fiscalend => t_fiscalend,
                                    a_jobid     => lt.licensetypejobid);
 
---                IF (t_feeobjid IS NOT NULL
---                AND t_msgno IS NULL)
---                THEN
---                    t_feeid :=
---                        api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
---
---                    FOR rec
---                        IN (SELECT api.pkg_columnquery.VALUE(reo.objectid,
---                                                             'BatchId')    batchid
---                              FROM api.paymenttransactions  pt
---                                   JOIN api.feetransactions ft
---                                       ON pt.transactionid = ft.transactionid
---                                   JOIN api.registeredexternalobjects reo
---                                       ON (reo.linkvalue =
---                                           TO_CHAR(pt.paymentid)
---                                       AND reo.objectdefid =
---                                           api.pkg_configquery.objectdefidforname(
---                                               'o_Payment'))
---                             WHERE ft.feeid = t_feeid -- rec.renfeeid
---                                                     )
---                    LOOP
---                        -- look for batch id with CVR in it
---                        IF (rec.batchid LIKE '%CVR%')
---                        THEN
---                            t_msgno := 14;
---                            EXIT;
---                        END IF;
---                    END LOOP;
---                END IF;
---
                 UPDATE bizmod_api.licensetype_t lic
                    SET lic.renfeeobjid = t_feeobjid,
                        lic.renewalfeedate =
@@ -652,11 +664,8 @@ IS
                                                          'TransactionDate'),
                        lic.awfstatusnumber = t_msgno,
                        lic.awfflag =
-                           CASE NVL(t_msgno, 0)
-                               WHEN 0 THEN 'Y'
---                               WHEN 14 THEN 'CVR'
-                               ELSE 'N'
-                           END
+                           CASE NVL(t_msgno, 0) WHEN 0 THEN 'Y'
+                             ELSE 'N' END
                  WHERE lic.licensetypejobid = lt.licensetypejobid;
             END LOOP;
 
@@ -874,9 +883,9 @@ BEGIN
             END IF;
 
             -- ************************************************************
-            -- Update AWF
+            -- Update license and AWF info
             -- ************************************************************
-            awfupdateinfo;
+            updateinfo;
 
             -- ********************************************************************
             -- ********************************************************************
@@ -1138,7 +1147,6 @@ BEGIN
             THEN
                 t_sqlerrm := SQLERRM;
                 t_trace := DBMS_UTILITY.format_error_backtrace;
-                
         END;
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -1153,7 +1161,7 @@ BEGIN
                      t_trace);
 
         COMMIT;
-        end;
+    END;
 END nightlyprocessjob;
 /
 
