@@ -11,7 +11,7 @@ CREATE OR REPLACE PROCEDURE BIZMOD_API.CREATELICENSEAPPJOB(
     -- History:
     -------------------------------------------------------------------------------
     --          Date                         Comment
-    --   1.1  05/09/2024  TJL  BIZ-15800  Initial Package Created
+    --   1.2  05/09/2024  TJL  BIZ-15800  Initial Package Created
     -- ****************************************************************************
     
     PROCEDURE add_secondary_license_types(
@@ -666,7 +666,7 @@ BEGIN
 --        DBMS_OUTPUT.put_line(t_apprec.mailing_address);
 
         -- "ApplicationCreatedDate" must be set last before save
-        api.pkg_columnupdate.setvalue(t_jobid, 'ApplicationCreatedDate', SYSDATE);
+--        api.pkg_columnupdate.setvalue(t_jobid, 'ApplicationCreatedDate', SYSDATE);
 
         INSERT INTO bizmod_api.license_app_t(lspid,
                                              jobid,

@@ -12,7 +12,7 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
-    --   1.1  07/01/2024 TJL  BIZ-15808  Initial Procedure Created
+    --   1.2  07/01/2024 TJL  BIZ-15808  Initial Procedure Created
     -- ****************************************************************************
     t_parameternames json_object_t;
     t_replacementvalues json_object_t;
@@ -35,7 +35,7 @@ BEGIN
             -- update LSP of any changes to application data
             t_parameternames :=
                 json_object_t(
-                    '{"URL":"URL_STATUSx","METHOD":"METHOD_STATUS"}');
+                    '{"URL":"URL_STATUS","METHOD":"METHOD_STATUS"}');
             t_replacementvalues :=
                 json_object_t(
                     '{"<<applicationId>>":"'

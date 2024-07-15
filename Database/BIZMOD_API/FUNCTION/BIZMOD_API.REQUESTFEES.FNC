@@ -21,6 +21,7 @@ IS
     --                                        No license fee was found after issued
     --   6.0.4  06/10/2024  TJL  BIZ-15612
     --                           BIZ-15616  Corrected bug in wrong message being returned to LSP
+    --   7.0    07/11/2024  TJL  BIZ-15837  Removed CVR test
     -- ****************************************************************************
 
     PROCEDURE get_fee_amounts(fees IN OUT bizmod_api.fee_tbl)
@@ -340,19 +341,7 @@ BEGIN
                    NULL,
                    NULL,
                    NULL,
-                   NVL(
-                       (SELECT 'Self-certified'
-                          FROM abc.self_certification sc
-                         WHERE sc.licensenumber =
-                               api.pkg_columnquery.VALUE(f.jobid,
-                                                         'LicenseNumber') -- t_licensenumber
-                           AND sc.licensetypecode = f.licensetypecode
-                           AND sc.expirationdate =
-                               api.pkg_columnquery.datevalue(
-                                   f.jobid,
-                                   'dup_ExpirationDate')
-                           AND sc.eligible = 'Y'),
-                       CASE
+                   CASE
                            WHEN api.pkg_columnquery.VALUE(f.jobid, 'Status') IN
                                     ('REVPEN', 'REV PENDING')
                            THEN
@@ -363,7 +352,7 @@ BEGIN
                                'SLMS-hold'
                            ELSE
                                'New'
-                       END),
+                       END,
                    f.feeobjid)
           BULK COLLECT INTO t_fees
           FROM f;
@@ -620,3 +609,6 @@ BEGIN
     END;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.REQUESTFEES TO BIZMOD_USER;

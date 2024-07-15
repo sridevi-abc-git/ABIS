@@ -7,7 +7,7 @@ AS
     -- History:
     -----------------------------------------------------------------------------
     --    Ver:     Date                       Comment
-    --     1.1   07/01/2024  TJL BIZ-15808  Move and renamed package from
+    --     1.2   07/01/2024  TJL BIZ-15808  Move and renamed package from
     --                          (BIZ-15812)   SITESPECIFIC.PKG_CATERING and added
     --                                        new procedures and functions to support
     --                                        License Applications
@@ -79,8 +79,6 @@ AS
                 update bizmod_api.license_app_t
                    set newfee = 'Y'
                  where jobid = a_objectid;
-
-commit;       
         END IF;
         
     END;
