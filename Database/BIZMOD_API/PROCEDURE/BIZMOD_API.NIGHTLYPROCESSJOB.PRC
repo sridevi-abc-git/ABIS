@@ -36,6 +36,8 @@ IS
     --   9.0    07/09/2024  TJL  BIZ-15837  Removed Fee Waiver Exception
     --  10.0    07/11/2024  TJL  BIZ-       Corrected bug when secondaries are added licensetype_t
     --                                        table not updated
+    --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring 
+    --                                        out which renewal fee to use for AWF.
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -111,7 +113,7 @@ IS
 
         -- Older license don't have applications in ABIS
         --   Applications not need for licenses issued over 3 years ago
-        IF (TRUNC(t_issuedate) >= ADD_MONTHS(a_fiscalend + 1, -36))
+        IF (TRUNC(t_issuedate) >= t_start_date) -- 07/15/2024  TJL  BIZ-15858
         THEN
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
@@ -119,8 +121,6 @@ IS
             -- assume original for applications issued over 3 years ago
             t_applicationtype := 'Original';
         END IF;
-
-        --        DBMS_OUTPUT.put_line('type: ' || t_applicationtype);
 
         IF (t_applicationtype = 'Transfer')
         THEN
@@ -176,6 +176,7 @@ IS
                    AND f.transactiondate BETWEEN t_start_date AND t_end_date;
             -- for licenses issued was a transfer this year get renewal fees
             --    from the transfer from license
+
             WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalend + 1, -12)
                                         AND a_fiscalend
             THEN
@@ -436,14 +437,12 @@ IS
     AS
     BEGIN
         DECLARE
-            t_msgno        NUMBER;
-            t_feeobjid     NUMBER;
-            t_feeid        NUMBER;
-            t_fiscalend    DATE
-                := TO_DATE(
-                       '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)));
-            t_old          NUMBER;
-            t_cnt          NUMBER;
+            t_msgno             NUMBER;
+            t_feeobjid          NUMBER;
+            t_feeid             NUMBER;
+            t_old               NUMBER;
+            t_cnt               NUMBER;
+            t_expirationdate    DATE;
         BEGIN
             -- check to see if AWF batch needs to be created
             SELECT COUNT(1)
@@ -654,7 +653,7 @@ IS
             LOOP
                 t_msgno := awfrequired(lt.licensetypejobid);
                 t_feeobjid :=
-                    get_awfreninfo(a_fiscalend => t_fiscalend,
+                    get_awfreninfo(a_fiscalend => lt.licensetypeexpirationdate, -- 07/15/2024  TJL  BIZ-15858
                                    a_jobid     => lt.licensetypejobid);
 
                 UPDATE bizmod_api.licensetype_t lic
