@@ -20,34 +20,63 @@ AS
     --   7.1    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table
     --   8.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
     --   8.0.1  07/08/2024  TJL  BIZ-15800    Updated gc_apprec_t record
+    --   9.0    07/22/2024  TJL  BIZ-15800    Updated gc_* records
     -- ****************************************************************************
 
-    TYPE gc_apprec_t IS RECORD(appl_type VARCHAR2(50),
-                               lsp_application_id VARCHAR2(40),
-                               primary_license_types VARCHAR2(4000),
-                               premise_address VARCHAR2(4000),
-                               mailing_address VARCHAR2(4000),
+    TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
+                               lspapplicationid VARCHAR2(40),
+                               primarylicensetypes VARCHAR2(4000),
+                               premiseaddress VARCHAR2(4000),
+                               mailingaddress VARCHAR2(4000),
+                               attorney CLOB,
+                               escrow CLOB,
                                legal_entities CLOB);
 
-    TYPE gc_addr_t IS RECORD(address_1 VARCHAR2(4000),
-                             address_2 VARCHAR2(4000),
-                             city VARCHAR2(4000),
-                             state VARCHAR2(4000),
-                             zip VARCHAR2(4000));
-                             
+    TYPE gc_addr_t IS RECORD(addresslocation VARCHAR2(4000), 
+                             addressline1 VARCHAR2(4000),
+                             addressline2 VARCHAR2(4000),
+                             usacity VARCHAR2(4000),
+                             usastate VARCHAR2(4000),
+                             zipcode VARCHAR2(4000),
+                             phonenumber VARCHAR2(4000),
+                             faxnumber VARCHAR2(4000),
+                             internationalphonenumber VARCHAR2(4000),
+                             censustract VARCHAR2(4000),
+                             censustractsource VARCHAR2(4000),
+                             geocodeaddressline1 VARCHAR2(4000),
+                             outsidecitylimits VARCHAR2(3),
+                             highcrime VARCHAR2(3),
+                             cardroomcasino VARCHAR2(3),
+                             noevent VARCHAR2(3),
+                             eligiblefortransfer VARCHAR2(3));
+
     TYPE gc_entity_t IS RECORD(TYPE VARCHAR2(4000),
-                               first_name VARCHAR2(4000),
-                               last_name VARCHAR2(4000),
-                               owner_type VARCHAR2(4000),
-                               percentage number(6,2),
-                               address  CLOB,
+                               ownertype VARCHAR2(4000),
+                               percentage NUMBER,
+                               firstname VARCHAR2(4000),
+                               middlename VARCHAR2(4000),
+                               lastname VARCHAR2(4000),
+                               suffix VARCHAR2(20),
+                               aliasnames VARCHAR2(4000),
+                               socialsecuritynumber VARCHAR2(4),
+                               driverslicensenumber VARCHAR2(4000),
+                               driverslicensestate VARCHAR2(4000),
+                               passportnumber VARCHAR2(4000),
+                               gender VARCHAR2(4000),
+                               birthdate DATE,
+                               birthcity VARCHAR2(4000),
+                               birthstate VARCHAR2(4000),
+                               birthcountry VARCHAR2(4000),
+                               maritalstatus VARCHAR2(4000),
+                               federalemployeridentificationn VARCHAR2(4000),
+                               address CLOB,
                                legal_entities CLOB);
 
-    FUNCTION calllsp(a_process      in varchar,
+    FUNCTION calllsp(a_process      IN     VARCHAR,
                      a_parameternames IN OUT json_object_t,
                      a_replacementvalues IN json_object_t,
-                     a_content      IN CLOB DEFAULT NULL,
-                     a_file         IN BLOB DEFAULT NULL)
+                     a_content      IN     CLOB DEFAULT NULL,
+                     a_file         IN     BLOB DEFAULT NULL)
         RETURN CLOB;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
@@ -55,14 +84,15 @@ AS
 
     PROCEDURE clean(a_json IN OUT json_object_t);
 
-    FUNCTION get_application(a_jobid IN NUMBER, a_licensetypecode IN VARCHAR2)
+    FUNCTION get_application(a_jobid        IN NUMBER,
+                             a_licensetypecode IN VARCHAR2)
         RETURN NUMBER;
 
     FUNCTION checkpayment(a_licensenumber IN VARCHAR2,
                           a_licensetypecode IN VARCHAR2,
                           a_renewalfeedate IN DATE)
-    RETURN VARCHAR2;
-    
+        RETURN VARCHAR2;
+
     PROCEDURE sendemail(a_process      IN VARCHAR2 DEFAULT 'EMAIL',
                         a_subject      IN VARCHAR2,
                         a_body         IN VARCHAR2,
