@@ -38,7 +38,7 @@ IS
     --                                        table not updated
     --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring 
     --                                        out which renewal fee to use for AWF.
-    --  11.0    07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
+    --  11.0.1  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -264,7 +264,7 @@ IS
 
     -- ****************************************************************************
     -- ****************************************************************************
-    FUNCTION awfrequired(a_licensetypeobjectid IN NUMBER)
+    FUNCTION awfrequired(a_fiscalend DATE, a_licensetypeobjectid IN NUMBER)
         RETURN NUMBER
     IS
         t_issuedate    DATE;
@@ -272,33 +272,30 @@ IS
         t_awfdate      DATE;
         t_expiration   DATE;
         t_awfrequired  VARCHAR2(2) := 'NA';
-        t_start_date   DATE
-            := TO_DATE(
-                   '01-07-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)),
-                   'dd-mm-yyyy');
-        t_end_date     DATE
-            := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
-                       'dd-mm-yyyy');
+        t_fiscalstart   DATE := Add_months(a_fiscalend, - 12) + 1;
+--        t_start_date   DATE
+--            := TO_DATE(
+--                   '01-07-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)),
+--                   'dd-mm-yyyy');
+--        t_end_date     DATE
+--            := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
+--                       'dd-mm-yyyy');
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
         t_feeobjid     NUMBER;
         t_feeid        NUMBER;
         t_msgno        NUMBER;
-        t_licensetypejobid NUMBER;
+--        t_licensetypejobid NUMBER;
     BEGIN
-        SELECT api.pkg_columnquery.datevalue(lt.licensetypejobid,
-                                             'ExpirationDate'),
-               ADD_MONTHS(
-                   api.pkg_columnquery.datevalue(lt.licensetypejobid,
-                                                 'ExpirationDate'),
-                   -12), -- lt.renewalfeedate, --), , nvl(api.pkg_columnquery.datevalue(lt.licensetypejobid, 'ReadyToIssueDate')
-               lt.applicationjobid,
-               lt.licensetypejobid
-          INTO t_expiration,
-               t_start_date,
-               t_application,
-               t_licensetypejobid
+        SELECT --a_fiscalend,
+               --ADD_MONTHS(a_fiscalend, -12), 
+               lt.applicationjobid
+               --a_licensetypeobjectid
+          INTO --t_expiration,
+               --t_start_date,
+               t_application
+               --t_licensetypejobid
           FROM bizmod_api.licensetype_t lt
          WHERE lt.licensetypejobid = a_licensetypeobjectid;
 
@@ -313,11 +310,9 @@ IS
                            ON (f.feeid = a.awffeeid)
                  WHERE f.jobid = a_licensetypeobjectid
                    AND f.description LIKE '%AWF%'
-                   AND (api.pkg_columnquery.datevalue(f.jobid,
-                                                      'expirationdate') =
-                        a.expirationdate
+                   AND (t_expiration = a.expirationdate
                      OR a.expirationdate IS NULL)
-                   AND TRUNC(f.transactiondate) > t_start_date
+                   AND TRUNC(f.transactiondate) >= t_fiscalstart
                 UNION
                 SELECT COUNT(1)     cnt
                   FROM bizmod_api.e_payments_t p
@@ -326,7 +321,7 @@ IS
                                                   'LicenseNumber')
                     AND p.licensetypecode IN ('02', '22')
                     AND p.description LIKE '%AWF%'
-                    AND TRUNC(p.createddate) > t_start_date));
+                    AND TRUNC(p.createddate) >= t_fiscalstart));
 
         -- check if this was liense was just issued or was transfered
         IF (t_msgno IS NULL
@@ -406,8 +401,8 @@ IS
                           FROM (SELECT COUNT(1)     cnt
                                   FROM api.fees f
                                  WHERE f.jobid = t_transferfromobjectid
-                                   AND TRUNC(f.transactiondate) BETWEEN t_start_date
-                                                                    AND t_end_date
+                                   AND TRUNC(f.transactiondate) BETWEEN t_fiscalstart
+                                                                    AND a_fiscalend
                                    AND f.description LIKE '%AWF%'
                                 UNION
                                 SELECT COUNT(1)     cnt
@@ -417,8 +412,8 @@ IS
                                            t_transferfromobjectid,
                                            'LicenseNumber')
                                    AND p.licensetypecode IN ('02', '22')
-                                   AND TRUNC(p.createddate) BETWEEN t_start_date
-                                                                AND t_end_date
+                                   AND TRUNC(p.createddate) BETWEEN t_fiscalstart
+                                                                AND a_fiscalend
                                    AND p.description LIKE '%AWF%');
                     ELSE
                         t_msgno := 10;
@@ -654,7 +649,8 @@ IS
                                                 'REVPEN',
                                                 'SLMSHD'))
             LOOP
-                t_msgno := awfrequired(lt.licensetypejobid);
+                t_msgno := awfrequired(a_fiscalend => greatest(lt.licensetypeexpirationdate, t_expirationdate), -- 07/24/2024  TJL  BIZ-15915
+                                       a_licensetypeobjectid     => lt.licensetypejobid);
                 t_feeobjid :=
                     get_awfreninfo(a_fiscalend => greatest(lt.licensetypeexpirationdate, t_expirationdate), -- 07/24/2024  TJL  BIZ-15915
                                    a_jobid     => lt.licensetypejobid);
