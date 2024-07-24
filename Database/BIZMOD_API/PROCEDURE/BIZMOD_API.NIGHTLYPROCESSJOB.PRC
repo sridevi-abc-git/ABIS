@@ -38,7 +38,7 @@ IS
     --                                        table not updated
     --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring 
     --                                        out which renewal fee to use for AWF.
-    --  11.0.1  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
+    --  11.0.2  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -273,29 +273,15 @@ IS
         t_expiration   DATE;
         t_awfrequired  VARCHAR2(2) := 'NA';
         t_fiscalstart   DATE := Add_months(a_fiscalend, - 12) + 1;
---        t_start_date   DATE
---            := TO_DATE(
---                   '01-07-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)),
---                   'dd-mm-yyyy');
---        t_end_date     DATE
---            := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
---                       'dd-mm-yyyy');
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
         t_feeobjid     NUMBER;
         t_feeid        NUMBER;
         t_msgno        NUMBER;
---        t_licensetypejobid NUMBER;
     BEGIN
-        SELECT --a_fiscalend,
-               --ADD_MONTHS(a_fiscalend, -12), 
-               lt.applicationjobid
-               --a_licensetypeobjectid
-          INTO --t_expiration,
-               --t_start_date,
-               t_application
-               --t_licensetypejobid
+        SELECT lt.applicationjobid
+          INTO t_application
           FROM bizmod_api.licensetype_t lt
          WHERE lt.licensetypejobid = a_licensetypeobjectid;
 
