@@ -38,7 +38,7 @@ IS
     --                                        table not updated
     --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring 
     --                                        out which renewal fee to use for AWF.
-    --  11.0.2  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
+    --  11.0.3  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -956,7 +956,8 @@ BEGIN
                              WHERE feeid =
                                    api.pkg_columnquery.numericvalue(
                                        rec.feeobjid,
-                                       'FeeId'));
+                                       'FeeId')
+                               AND rownum = 1);
 
                     SELECT r.toobjectid
                       INTO t_paymentbatch
