@@ -31,6 +31,7 @@ IS
     --   3.0    09/10/2023 TJL  BIZ-12315   Corrected bug in getting paid amount when ren50 and ren100
     --   4.0    03/26/2024 TJL  BIZ-14833   Change where and how information is retrieve for AWF Report
     --   4.1    03/29/2024 TJL  BIZ-14833   Fix bug of not getting renew fee activity
+    --   5.0    08/07/2024 TJL              Made checking for payments using license expiration date.
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -74,12 +75,9 @@ BEGIN
                            bizmod_api.utl_licenseinfo.checkpayment(
                                a_licensenumber => lt.licensenumber,
                                a_licensetypecode => lt.licensetypecode,
-                               a_renewalfeedate =>
-                                   NVL(
-                                       lt.renewalfeedate,
-                                       ADD_MONTHS(
+                               a_renewalfeedate => ADD_MONTHS(
                                            lt.licensetypeexpirationdate,
-                                           -12)))
+                                           -12))
                        ELSE
                            lt.awfflag
                    END
