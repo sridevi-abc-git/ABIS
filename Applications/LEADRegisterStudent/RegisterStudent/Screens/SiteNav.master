@@ -1,0 +1,21 @@
+﻿<%@ Master Language="C#" MasterPageFile="~/Screens/Site.Master" AutoEventWireup="true" CodeBehind="SiteNav.master.cs" Inherits="RegisterStudent.Screens.SiteNav" %>
+<%@ MasterType VirtualPath="~/Screens/Site.Master" %>
+
+<asp:Content ID="navhead" ContentPlaceHolderID="head" runat="server">
+	<asp:ContentPlaceHolder ID="head" runat="server">
+	</asp:ContentPlaceHolder>
+</asp:Content>
+
+<asp:Content ID="navmain" ContentPlaceHolderID="main" runat="server">
+	<div>
+		<div style="border-radius: 0; background-color: #E0E0E0; text-align:center; font-size: 2em; font-weight: bold;
+		     margin: 0px auto 0em auto; padding: 10px; color: #797b7c;">
+			LEAD Student Registration
+		</div>
+
+		<div style="padding: 0px 0px 0px 0px;">
+			<asp:ContentPlaceHolder ID="main" runat="server">
+			</asp:ContentPlaceHolder>
+		</div>
+	</div>
+</asp:Content>

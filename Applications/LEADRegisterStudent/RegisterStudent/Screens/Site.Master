@@ -1,0 +1,73 @@
+﻿<%@ Master Language="C#" AutoEventWireup="true" CodeBehind="Site.master.cs" Inherits="RegisterStudent.Screens.Site" %>
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+	<script type="text/javascript" src="../JavaScript/jquery-2.1.1.min.js"></script>
+	<script type="text/javascript" src="../JavaScript/jquery.simplemodal.1.4.4.min.js"></script>
+	<title></title>
+	<style type="text/css">
+		.title  { font-size: 1.5em; font-weight: bold; color: #ffffff; background-color: #990000;
+				  padding: 1em; margin-bottom: 1em; text-align:center; border-radius: 0; 
+				}
+		.header {border: solid 1px #E0E0E0; border-radius: 145px 10px 0 0; height: 150px;
+				 margin: 0px auto 0 auto; padding: 10px; vertical-align:top; background-color: #E0E0E0; }
+		.main   {margin: 40px auto; width: 1000px; border:1px solid black;
+				 border-radius: 145px 10px 10px 10px;  background-color: #FFFFFF;  }
+		.button { margin:0 .3em; }
+
+.grad {
+    background: #999999; /* For browsers that do not support gradients */
+    background: -webkit-linear-gradient(#999999, #ffffff); /* For Safari 5.1 to 6.0 */
+    background: -o-linear-gradient(#999999, #ffffff); /* For Opera 11.1 to 12.0 */
+    background: -moz-linear-gradient(#999999, #ffffff); /* For Firefox 3.6 to 15 */
+    background: linear-gradient(#999999, #ffffff); /* Standard syntax */
+	height: 100%;
+	background-attachment: fixed;
+} 
+#modal, #basic-modal-content {display:none;}
+#modal      { width: 350px; line-height: 150px; color: #bbb;
+			  background-color: #333; border: 4px solid #444; padding: 12px; text-align: center;
+		    }
+#modal span { vertical-align: middle; line-height: normal; font-size: 2em; }				
+
+
+/* Overlay */
+#simplemodal-overlay {background-color:#000;}
+
+	</style>
+    <asp:ContentPlaceHolder ID="head" runat="server">
+    </asp:ContentPlaceHolder>
+</head>
+<body class="grad">
+    <form id="form1" runat="server">
+		<asp:Literal runat="server" ID="hostname" ></asp:Literal>
+    <div class="main">
+		<div class="header">
+			<div style="display:inline-block; vertical-align:top;">
+				<img src="../Images/ABCStar.gif" alt="ABC Star" style="position:relative; left:-38px; top:-35px; "  />
+			</div>
+			<div style="display:inline-block; vertical-align:middle; padding-top:30px;">
+				<a href="http://www.ca.gov/"><img src="../Images/header_ca.gov.png" alt="CA.gov" style="margin-right:1em;" /></a>
+				<img src="../Images/header_organization.png" alt="Welcome to the State of California, Department of Alcoholic Beverage Control" />
+			</div>
+			<div style="text-align:right; display:inline-block; vertical-align:top; width: 250px;">
+				<asp:LinkButton runat="server" ID="homelink"
+					Text="Home" />
+			</div>
+		</div>
+
+        <asp:ContentPlaceHolder ID="main" runat="server"/>
+
+		<div id="modal">
+			<span>Please Wait Processing</span>
+		</div>
+
+		<div style="text-align:center; margin: 1em 0 2em 0;">
+			Copyright &copy; <%=DateTime.Now.Year%> State of California
+		</div>
+    </div>
+    </form>
+</body>
+</html>
