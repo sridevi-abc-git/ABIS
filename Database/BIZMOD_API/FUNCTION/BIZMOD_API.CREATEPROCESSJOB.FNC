@@ -13,13 +13,14 @@ IS
     -------------------------------------------------------------------------------
     --    Ver:     Date                       Comment
     --    1.0   09/12/2023  TJL BIZ-12467   Initial Function Created
+    --    2.0   08/08/2024  TJL BIZ-16000   Change to new createjob procedure
     -- ****************************************************************************
     t_process      VARCHAR2(40);
 BEGIN
     SELECT json_value(a_packet, '$.PROCESS') INTO t_process FROM DUAL;
 
 
-    bizmod_api.createjob(a_procedure => t_process,
+    bizmod_api.utl_licenseinfo.createjob(a_procedure => t_process,
                          a_description => t_process,
                          a_argument1 => a_seq);
 
