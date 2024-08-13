@@ -1,6 +1,5 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.createcateringappjob(
-    a_seq          IN NUMBER,
-    a_asofdate     IN DATE)
+CREATE OR REPLACE PROCEDURE BIZMOD_API.createcateringappjob(a_seq          IN NUMBER,
+                                                 a_asofdate     IN DATE)
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.CREATECATERINGAPPJOB.PRC
@@ -29,11 +28,19 @@ IS
     --   5.0     03/26/2024 APD  BIZ-14849    Increased email limit to 320 chars
     --   6.0.2   05/24/2024 TJL  BIZ-15485    Changed to call the new calllsp function.
     --   6.0.2   05/28/2024 TJL  BIZ-15021    Added field OutsideEvent
+    --   7.0     08/13/2024 TJL  BIZ-15808    Change call to new calllsp function
     -- ****************************************************************************
     --************************
     --Object Id
     --************************
-    t_process     VARCHAR2(32) := 'CREATECATERINGAPPJOB';
+    t_url_fees CONSTANT VARCHAR2(1000)
+        := '/api/licensing/internal/catering/payments/<<lsppaymentid>>/fees' ;
+    t_url_status CONSTANT VARCHAR2(1000)
+        := '/api/licensing/internal/catering/applications/<<applicationId>>?status=<<status>>' ;
+    t_method CONSTANT VARCHAR2(10) := 'PATCH';
+    t_urlinfo      VARCHAR2(10000);
+
+    t_process      VARCHAR2(32) := 'CREATECATERINGAPPJOB';
     t_licobjid     NUMBER(20);
     t_processid    api.pkg_definition.udt_id;
     t_processdefid api.pkg_definition.udt_id;
@@ -78,8 +85,8 @@ IS
     t_eventlocationcity VARCHAR2(50);
     t_eventlocationzip VARCHAR2(10);
     t_specificlocation VARCHAR2(80);
-    t_outsideevent  VARCHAR2(3);
-    
+    t_outsideevent VARCHAR2(3);
+
     --*********
     --Fee Data
     --*********
@@ -99,10 +106,6 @@ IS
     --*****
     --Misc
     --*****
---    t_url          VARCHAR2(1000)
---        := '<<path>>/api/licensing/internal/catering/payments/<<lsppaymentid>>/fees'; -- TJL
---    t_url2         VARCHAR2(1000)
---        := '<<path>>/api/licensing/internal/catering/applications/<<applicationId>>'; -- TJL
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000);
@@ -110,9 +113,9 @@ IS
     t_response     CLOB;
     t_output       CLOB;
     t_count        NUMBER;
-        t_json_app     json_object_t;
-        t_parameternames json_object_t;
-        t_replacementvalues json_object_t;
+    t_json_app     json_object_t;
+    t_parameternames json_object_t;
+    t_replacementvalues json_object_t;
 BEGIN
     --*****************
     --Clear any error
@@ -130,44 +133,7 @@ BEGIN
 
     t_applicationid :=
         json_value(t_packet, '$.DATA.APPLICATION.APPLICATIONID');
-    t_lsppaymentid :=
-        json_value(t_packet, '$.DATA.APPLICATION.LSPPAYMENTID');
-
-    -- 12/06/2023 TJL added updating url for different LSP environment
---    t_url :=
---        REPLACE(
---            REPLACE(
---                t_url,
---                '<<path>>',
---                CASE ora_database_name
---                    WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
---                    WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
---                    WHEN 'ABISQA1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
---                    WHEN 'ABISD1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
---                    ELSE 'https://unknown'
---                END),
---            '<<lsppaymentid>>',
---            t_lsppaymentid);
---
---    -- 02/13/2024 TJL  BIZ-13081
---    t_url2 :=
---        REPLACE(
---            REPLACE(
---                t_url2,
---                '<<path>>',
---                CASE ora_database_name
---                    WHEN 'ABISST1' THEN 'https://services-sb.abc.ca.gov'
---                    WHEN 'ABISP1' THEN 'https://abcbiz.abc.ca.gov'
---                    WHEN 'ABISQA1' THEN 'https://qa-01.abcbiz-qa.abc.ca.gov'
---                    WHEN 'ABISD1' THEN 'https://qa-02.abcbiz-qa.abc.ca.gov'
---                    ELSE 'https://unknown'
---                END),
---            '<<applicationId>>',
---            t_applicationid)
---        || CHR(63)
---        || 'status=Posted';
---
---    --RAISE VALUE_ERROR;
+    t_lsppaymentid := json_value(t_packet, '$.DATA.APPLICATION.LSPPAYMENTID');
 
     --**********************
     --Extract data from JSON
@@ -257,8 +223,7 @@ BEGIN
             json_value(t_packet, '$.DATA.APPLICATION.CONTACTPHONE'),
             '\D');
     t_contactemail := json_value(t_packet, '$.DATA.APPLICATION.CONTACTEMAIL');
-    t_outsideevent :=
-        json_value(t_packet, '$.DATA.APPLICATION.OUTSIDEEVENT');
+    t_outsideevent := json_value(t_packet, '$.DATA.APPLICATION.OUTSIDEEVENT');
 
     --*************************
     --Format Sponsoring Addres
@@ -584,54 +549,31 @@ BEGIN
                        a_columnname => 'LSPId',
                        a_value     => t_applicationid) AS api.udt_objectlist))
            o
-    where rownum = 1;
+     WHERE ROWNUM = 1;
 
     --**********************************
     --Format data packet and use CallLSP
     --**********************************
     t_results := json_object('feeObjectId' VALUE t_feeobjid);
 
-            -- update LSP of any changes to application data
-            t_parameternames :=
-                json_object_t(
-                    '{"URL":"URL_STATUS","METHOD":"METHOD"}');
-            t_replacementvalues :=
-                json_object_t(
-                    '{"<<applicationId>>":"' || t_applicationid || '","<<status>>":"Posted"}');
+    t_urlinfo :=
+        REPLACE(REPLACE(t_url_status, '<<applicationId>>', t_applicationid),
+                '<<status>>',
+                'Posted');
 
-            t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(
-                    a_process   => t_process,
-                    a_parameternames => t_parameternames,
-                    a_replacementvalues => t_replacementvalues);
-
---    t_response :=
---        bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url2,
---                                           a_method    => 'PATCH',
---                                           a_content   => NULL,
---                                           a_file      => NULL);
+    t_response :=
+        bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
+                                           a_method    => t_method);
 
     IF (t_response IS NULL)
     THEN
-            -- update LSP of any changes to application data
-            t_parameternames :=
-                json_object_t(
-                    '{"URL":"URL_FEES","METHOD":"METHOD"}');
-            t_replacementvalues :=
-                json_object_t(
-                    '{"<<lsppaymentid>>":"' || t_lsppaymentid || '"}');
+        t_urlinfo :=
+            REPLACE(t_url_status, '<<lsppaymentid>>', t_lsppaymentid);
 
-            t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(
-                    a_process   => t_process,
-                    a_parameternames => t_parameternames,
-                    a_replacementvalues => t_replacementvalues,
-                    a_content   => t_results);
---        t_response :=
---            bizmod_api.utl_licenseinfo.calllsp(t_url,
---                                               'PATCH',
---                                               t_results,
---                                               NULL); -- 12/07/2023 TJL
+        t_response :=
+            bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
+                                               a_method    => t_method,
+                                               a_content   => t_results);
     END IF;
 
     -- 12/06/2023 TJL add log update
@@ -673,46 +615,6 @@ BEGIN
 --Error Handling
 --**************
 EXCEPTION
---    -- 12/06/2023 TJL Added exception handling for HTTP failures and logging to
---    --  the process log table.
---    WHEN UTL_HTTP.request_failed
---    THEN
---        t_sqlerrm :=
---            'HTTP: ' || UTL_HTTP.get_detailed_sqlerrm || CHR(13) || SQLERRM;
---        t_trace := DBMS_UTILITY.format_error_backtrace;
---
---        INSERT INTO bizmod_api.e_process_log_t(seq,
---                                               processjob,
---                                               info,
---                                               errmsg,
---                                               bktrace,
---                                               packet)
---                 VALUES (
---                     a_seq,
---                     'CREATECATERINGAPPJOB',
---                     'Application Id: '
---                     || t_applicationid
---                     || CHR(13)
---                     || 'License Number: '
---                     || t_licensenumber
---                     || CHR(13)
---                     || 'p_IssueCatererEventAuth: '
---                     || t_isscatobjid
---                     || CHR(13)
---                     || 'URL1: '
---                     || t_url
---                     || CHR(13)
---                     || 'URL2: '
---                     || t_url2,
---                     t_sqlerrm,
---                     t_trace,
---                     t_results);
---
---        UPDATE bizmod_api.eservices_log_t
---           SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
---         WHERE seq = a_seq;
---
---        COMMIT;
     WHEN OTHERS
     THEN
         t_sqlerrm := SQLERRM;
@@ -751,87 +653,17 @@ EXCEPTION
 
         BEGIN
             -- update LSP of any changes to application data
-            t_parameternames :=
-                json_object_t(
-                    '{"URL":"URL_STATUS","METHOD":"METHOD"}');
-            t_replacementvalues :=
-                json_object_t(
-                    '{"<<applicationId>>":"' || t_applicationid || '","<<status>>":"Errored"}');
-dbms_output.put_line('calling calllsp');
+            t_urlinfo :=
+                REPLACE(
+                    REPLACE(t_url_status,
+                            '<<applicationId>>',
+                            t_applicationid),
+                    '<<status>>',
+                    'Errored');
+
             t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(
-                    a_process   => t_process,
-                    a_parameternames => t_parameternames,
-                    a_replacementvalues => t_replacementvalues);
-dbms_output.put_line('response: ' || t_response);                    
---            -- 02/13/2024 TJL  BIZ-13081
---            t_url2 := REPLACE(t_url2, 'status=Posted', 'status=Errored');
---            t_response :=
---                bizmod_api.utl_licenseinfo.calllsp(a_url       => t_url2,
---                                                   a_method    => 'PATCH',
---                                                   a_content   => NULL,
---                                                   a_file      => NULL);
---        EXCEPTION
---            WHEN UTL_HTTP.request_failed
---            THEN
---                t_sqlerrm :=
---                    'HTTP: '
---                    || UTL_HTTP.get_detailed_sqlerrm
---                    || CHR(13)
---                    || SQLERRM;
---                t_trace := DBMS_UTILITY.format_error_backtrace;
---
---                INSERT INTO bizmod_api.e_process_log_t(seq,
---                                                       processjob,
---                                                       info,
---                                                       errmsg,
---                                                       bktrace,
---                                                       packet)
---                         VALUES (
---                             0,
---                             'CREATECATERINGAPPJOB',
---                             'Application Id: '
---                             || t_applicationid
---                             || CHR(13)
---                             || 'License Number: '
---                             || t_licensenumber
---                             || CHR(13)
---                             || 'Catering Object Id: '
---                             || t_isscatobjid
---                             || CHR(13)
---                             || 'Status Update'
---                             || CHR(13)
---                             || 'URL2: '
---                             || t_url2,
---                             t_sqlerrm,
---                             t_trace,
---                             'status=Errored');
---
---                COMMIT;
---            WHEN OTHERS
---            THEN
---                t_sqlerrm := SQLERRM;
---                t_trace := DBMS_UTILITY.format_error_backtrace;
---
---                INSERT INTO bizmod_api.e_process_log_t(seq,
---                                                       processjob,
---                                                       info,
---                                                       errmsg,
---                                                       bktrace)
---                         VALUES (
---                             0,
---                             'CREATECATERINGAPPJOB',
---                             'Application Id: '
---                             || t_applicationid
---                             || CHR(13)
---                             || 'Outcome: Errored'
---                             || CHR(13)
---                             || 'URL: '
---                             || t_url2,
---                             t_sqlerrm,
---                             t_trace);
---
---                COMMIT;
+                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
+                                                   a_method    => t_method);
         END;
 END;
 /

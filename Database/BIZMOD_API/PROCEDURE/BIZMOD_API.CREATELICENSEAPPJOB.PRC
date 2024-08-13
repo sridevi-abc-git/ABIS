@@ -1,6 +1,5 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.createlicenseappjob(
-    a_seq          IN NUMBER,
-    a_asofdate     IN DATE)
+CREATE OR REPLACE PROCEDURE BIZMOD_API.createlicenseappjob(a_seq          IN NUMBER,
+                                                a_asofdate     IN DATE)
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.CREATELICENSEAPPJOB.PRC
@@ -10,11 +9,14 @@ IS
     --
     -- History:
     -------------------------------------------------------------------------------
-    --          Date                         Comment
-    --   1.2  05/09/2024  TJL  BIZ-15800  Initial Package Created
-    --   2.0  07/19/2024  TJL  BIZ-15800  Added additional fields for application
+    --             Date                         Comment
+    --   1.2    05/09/2024  TJL  BIZ-15800  Initial Package Created
+    --   2.0.1  07/19/2024  TJL  BIZ-15800  Added additional fields for application
     --                                      update.
     -- ****************************************************************************
+
+    PROCEDURE add_legal_entities(a_jobid        IN api.pkg_definition.udt_id,
+                                 a_legal_entity IN CLOB);
 
     PROCEDURE add_secondary_license_types(
         a_primary_objectid IN api.pkg_definition.udt_id,
@@ -378,7 +380,7 @@ IS
             ELSE
                 api.pkg_columnupdate.setvalue(t_addressobjectid,
                                               'AddressLocation',
-                                              'In USA, Outside CA');
+                                              t_addr.addresslocation);
 
                 api.pkg_columnupdate.setvalue(t_addressobjectid,
                                               'USACity',
@@ -387,6 +389,34 @@ IS
                 api.pkg_columnupdate.setvalue(t_addressobjectid,
                                               'USAState',
                                               t_addr.usastate);
+            END IF;
+
+            IF (a_address_type = 'Premises')
+            THEN
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'CensusTract',
+                                              t_addr.censustract);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'CensusTractSource',
+                                              t_addr.censustractsource);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'GeoCodeAddressLine1',
+                                              t_addr.geocodeaddressline1);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'OutsideCityLimits',
+                                              t_addr.outsidecitylimits);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'HighCrime',
+                                              t_addr.highcrime);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'CardRoomCasino',
+                                              t_addr.cardroomcasino);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'NoEvent',
+                                              t_addr.noevent);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'EligibleForTransfer',
+                                              t_addr.eligiblefortransfer);
             END IF;
         END IF;
 
@@ -404,10 +434,10 @@ IS
         COMMIT;
     END;
 
-    PROCEDURE add_legal_entities(a_jobid        IN api.pkg_definition.udt_id,
-                                 a_legal_entity IN CLOB)
+    PROCEDURE add_person(a_jobid        IN api.pkg_definition.udt_id,
+                         a_legal_entity IN CLOB)
     IS
-        t_entity       bizmod_api.utl_licenseinfo.gc_entity_t;
+        t_entity       bizmod_api.utl_licenseinfo.gc_person_t;
         t_objectdefid  api.pkg_definition.udt_id;
         t_objectid     api.pkg_definition.udt_id;
 
@@ -417,14 +447,15 @@ IS
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
     BEGIN
+        DBMS_OUTPUT.put_line('add_person: ' || a_legal_entity);
+
         SELECT *
           INTO t_entity
           FROM JSON_TABLE(
                    a_legal_entity,
                    '$'
                    COLUMNS(
-                       TYPE VARCHAR2(4000) PATH '$.TYPE',
-                       ownertype VARCHAR2(4000) PATH '$.OWNER_TYPE',
+                       ownertype VARCHAR2(4000) PATH '$.OWNERTYPE',
                        percentage NUMBER PATH '$.PERCENTAGE',
                        firstname VARCHAR2(4000) PATH '$.FIRSTNAME',
                        middlename VARCHAR2(4000) PATH '$.MIDDLENAME',
@@ -444,125 +475,133 @@ IS
                        birthstate VARCHAR2(4000) PATH '$.BIRTHSTATE',
                        birthcountry VARCHAR2(4000) PATH '$.BIRTHCOUNTRY',
                        maritalstatus VARCHAR2(4000) PATH '$.MARITALSTATUS',
-                       federalemployeridentificationn VARCHAR2(4000)
-                           PATH '$.FEDERALEMPLOYERIDENTIFICATIONN',
                        address CLOB FORMAT JSON PATH '$.ADDRESS',
-                       legal_entities CLOB
-                           FORMAT JSON
-                           PATH '$.LEGAL_ENTITIES'));
+                       legal_entities CLOB FORMAT JSON PATH '$.LEGALENTITIES'));
 
         -- *****************************************************************
         -- create legal entity for the Application
         -- *****************************************************************
         t_entitydefid :=
-            api.pkg_configquery.objectdefidforname('o_legalentity');
+            api.pkg_configquery.objectdefidforname('o_LegalEntity');
         t_entityobjectid := api.pkg_objectupdate.new(t_entitydefid);
 
-        CASE t_entity.TYPE
-            WHEN 'PERSON'
-            THEN
-                -- *****************************************************************
-                -- create person object for the application legal entity object
-                -- *****************************************************************
-                t_objectdefid :=
-                    api.pkg_configquery.objectdefidforname('o_person');
-                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
+        -- *****************************************************************
+        -- create person object for the application legal entity object
+        -- *****************************************************************
+        t_objectdefid := api.pkg_configquery.objectdefidforname('o_Person');
+        t_objectid := api.pkg_objectupdate.new(t_objectdefid);
 
-                -- create first and last name from regression run
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'FirstName',
-                                              t_entity.firstname);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'LastName',
-                                              t_entity.lastname);
+        -- create first and last name from regression run
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'FirstName',
+                                      t_entity.firstname);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'MiddleName',
+                                      t_entity.middlename);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'LastName',
+                                      t_entity.lastname);
+        api.pkg_columnupdate.setvalue(t_entityobjectid,
+                                      'dup_LastName',
+                                      t_entity.lastname);
+        api.pkg_columnupdate.setvalue(t_objectid, 'Suffix', t_entity.suffix);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'AliasNames',
+                                      t_entity.aliasnames);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'SocialSecurityNumber',
+                                      t_entity.socialsecuritynumber);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'DriversLicenseNumber',
+                                      t_entity.driverslicensenumber);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'DriversLicenseState',
+                                      t_entity.driverslicensestate);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'PassportNumber',
+                                      t_entity.passportnumber);
+        api.pkg_columnupdate.setvalue(t_objectid, 'Gender', t_entity.gender);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'BirthDate',
+                                      t_entity.birthdate);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'BirthCity',
+                                      t_entity.birthcity);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'BirthState',
+                                      t_entity.birthstate);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'BirthCountry',
+                                      t_entity.birthcountry);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'MaritalStatus',
+                                      t_entity.maritalstatus);
 
-                -- update legal entity with needed information
-                api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                              'dup_lastname',
-                                              t_entity.lastname);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'OwnerType',
+                                      t_entity.ownertype);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'PercentageOfOwnership',
+                                      t_entity.percentage);
 
-                IF (t_entity.ownertype NOT IN ('SPOUSE'))
-                THEN
-                    api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                                  'OwnerType',
-                                                  t_entity.ownertype);
-                    api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                                  'PercentageOfOwnership',
-                                                  t_entity.percentage);
-                END IF;
+        -- create relationship from person object to legal entity object
+        t_endpointid :=
+            api.pkg_configquery.endpointidforname('o_legalentity', 'Person');
+        t_relid :=
+            api.pkg_relationshipupdate.new(t_endpointid,
+                                           t_entityobjectid,
+                                           t_objectid);
 
-                -- create relationship from person object to legal entity object
-                t_endpointid :=
-                    api.pkg_configquery.endpointidforname('o_legalentity',
-                                                          'Person');
-                t_relid :=
-                    api.pkg_relationshipupdate.new(t_endpointid,
-                                                   t_entityobjectid,
-                                                   t_objectid);
-
-                IF (t_entity.ownertype IS NOT NULL)
-                THEN
-                    CASE t_entity.ownertype
-                        WHEN 'SPOUSE'
-                        THEN
-                            t_endpointid :=
-                                api.pkg_configquery.endpointidforname(
-                                    'o_LegalEntity',
-                                    'Spouse1');
-                        WHEN 'GENERAL PARTNER'
-                        THEN
-                            NULL;
-                        WHEN 'LIMITED PARTNER'
-                        THEN
-                            NULL;
-                        WHEN 'MEMBER'
-                        THEN
-                            NULL;
-                        WHEN 'PUBLICLY TRADED'
-                        THEN
-                            NULL;
-                        WHEN 'STOCKHOLDER'
-                        THEN
-                            t_endpointid :=
-                                api.pkg_configquery.endpointidforname(
-                                    'o_LegalEntity',
-                                    'Stockholder');
-                        ELSE
-                            NULL;
-                    END CASE;
-                END IF;
-            WHEN 'COMPANY'
-            THEN
-                t_objectdefid :=
-                    api.pkg_configquery.objectdefidforname('o_Company');
-                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
-
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'CompanyName',
-                                              t_entity.lastname);
-
-                -- create relationship from company object to legal entity object
-                t_endpointid :=
-                    api.pkg_configquery.endpointidforname('o_legalentity',
-                                                          'Company');
-                t_relid :=
-                    api.pkg_relationshipupdate.new(t_endpointid,
-                                                   t_entityobjectid,
-                                                   t_objectid);
-            ELSE
-                NULL;
-        END CASE;
-
-        IF (api.pkg_columnquery.VALUE(a_jobid, 'ObjectDefName') =
-            'j_Application')
+        IF (t_entity.ownertype IS NOT NULL)
         THEN
-            t_endpointid :=
-                api.pkg_configquery.endpointidforname('j_Application',
-                                                      'Applicant');
-        --        ELSE
-        --            t_endpointid :=
-        --                api.pkg_configquery.endpointidforname('o_LegalEntity',
-        --                                                      'Node');
+            IF (api.pkg_columnquery.VALUE(a_jobid, 'ObjectDefName') =
+                'j_Application')
+            THEN
+                t_endpointid :=
+                    api.pkg_configquery.endpointidforname('j_Application',
+                                                          'Applicant');
+            ELSE
+                CASE t_entity.ownertype
+                    WHEN 'SPOUSE'
+                    THEN
+                        t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                'Spouse1');
+                    WHEN 'GENERAL PARTNER'
+                    THEN
+                        t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                '');
+                    WHEN 'LIMITED PARTNER'
+                    THEN
+                        t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                '');
+                    WHEN 'MEMBER'
+                    THEN
+                        t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                '');
+                    WHEN 'PUBLICLY TRADED'
+                    THEN
+                        t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                '');
+                    WHEN 'STOCKHOLDER'
+                    THEN
+                        t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                'Stockholder');
+                    ELSE
+                        NULL;
+                END CASE;
+            END IF;
         END IF;
 
         t_relid :=
@@ -588,19 +627,456 @@ IS
         END IF;
     END;
 
+    PROCEDURE add_company(a_jobid        IN api.pkg_definition.udt_id,
+                          a_legal_entity IN CLOB)
+    IS
+        t_entity       bizmod_api.utl_licenseinfo.gc_company_t;
+        t_objectdefid  api.pkg_definition.udt_id;
+        t_objectid     api.pkg_definition.udt_id;
+
+        t_entitydefid  api.pkg_definition.udt_id;
+        t_entityobjectid api.pkg_definition.udt_id;
+
+        t_relid        api.pkg_definition.udt_id;
+        t_endpointid   api.pkg_definition.udt_id;
+    BEGIN
+        DBMS_OUTPUT.put_line('add_company: ' || a_legal_entity);
+
+        SELECT *
+          INTO t_entity
+          FROM JSON_TABLE(
+                   a_legal_entity,
+                   '$'
+                   COLUMNS(
+                       companyname VARCHAR2(4000) PATH '$.COMPANYNAME',
+                       companystructure VARCHAR2(4000)
+                           PATH '$.COMPANYSTRUCTURE',
+                       dateofincorporation DATE PATH '$.DATEOFINCORPORATION',
+                       stateofincorporation VARCHAR2(4000)
+                           PATH '$.STATEOFINCORPORATION',
+                       casecretaryofstatenumber VARCHAR2(4000)
+                           PATH '$.CASECRETARYOFSTATENUMBER',
+                       federalemployeridentificationn VARCHAR2(4000)
+                           PATH '$.FEDERALEMPLOYERIDENTIFICATIONN',
+                       address CLOB FORMAT JSON PATH '$.ADDRESS',
+                       legal_entities CLOB FORMAT JSON PATH '$.LEGALENTITIES'));
+
+        -- *****************************************************************
+        -- create legal entity for the Application
+        -- *****************************************************************
+        t_entitydefid :=
+            api.pkg_configquery.objectdefidforname('o_LegalEntity');
+        t_entityobjectid := api.pkg_objectupdate.new(t_entitydefid);
+
+        -- *****************************************************************
+        -- create person object for the application legal entity object
+        -- *****************************************************************
+        t_objectdefid := api.pkg_configquery.objectdefidforname('o_Company');
+        t_objectid := api.pkg_objectupdate.new(t_objectdefid);
+
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'CompanyName',
+                                      t_entity.companyname);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'CompanyStructure',
+                                      t_entity.companystructure);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'DateOfIncorporation',
+                                      t_entity.dateofincorporation);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'StateoFinCorporation',
+                                      t_entity.stateofincorporation);
+        api.pkg_columnupdate.setvalue(t_objectid,
+                                      'CaSecretaryOfStateNumber',
+                                      t_entity.casecretaryofstatenumber);
+        api.pkg_columnupdate.setvalue(
+            t_objectid,
+            'FederalEmployerIdentificationN',
+            t_entity.federalemployeridentificationn);
+
+
+        -- create relationship from company object to legal entity object
+        t_endpointid :=
+            api.pkg_configquery.endpointidforname('o_LegalEntity', 'Company');
+        t_relid :=
+            api.pkg_relationshipupdate.new(t_endpointid,
+                                           t_entityobjectid,
+                                           t_objectid);
+
+        t_endpointid :=
+            CASE api.pkg_columnquery.VALUE(a_jobid, 'ObjectDefName')
+                WHEN 'j_Application'
+                THEN
+                    api.pkg_configquery.endpointidforname('j_Application',
+                                                          'Applicant')
+                ELSE
+                    api.pkg_configquery.endpointidforname('o_LegalEntity',
+                                                          'Node')
+            END;
+        t_relid :=
+            api.pkg_relationshipupdate.new(t_endpointid,
+                                           a_jobid,
+                                           t_entityobjectid);
+
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+
+        -- add address to this legal entity
+        IF (t_entity.address IS NOT NULL)
+        THEN
+            add_address(a_jobid     => t_objectid,
+                        a_address_type => 'Address',
+                        a_address   => t_entity.address);
+        END IF;
+
+        IF (t_entity.legal_entities IS NOT NULL)
+        THEN
+            add_legal_entities(a_jobid     => t_entityobjectid,
+                               a_legal_entity => t_entity.legal_entities);
+        END IF;
+    END;
+
+
+    PROCEDURE add_legal_entities(a_jobid        IN api.pkg_definition.udt_id,
+                                 a_legal_entity IN CLOB)
+    IS
+        --        t_entity       bizmod_api.utl_licenseinfo.gc_entity_t;
+        t_objectdefid  api.pkg_definition.udt_id;
+        t_objectid     api.pkg_definition.udt_id;
+
+        t_entitydefid  api.pkg_definition.udt_id;
+        t_entityobjectid api.pkg_definition.udt_id;
+
+        t_relid        api.pkg_definition.udt_id;
+        t_endpointid   api.pkg_definition.udt_id;
+    BEGIN
+        DBMS_OUTPUT.put_line('a_legal_entity: ' || a_legal_entity);
+
+        FOR rec
+            IN (SELECT *
+                  FROM JSON_TABLE(
+                           a_legal_entity,
+                           '$'
+                           COLUMNS(
+                               legalentitytype VARCHAR2(4000)
+                                   PATH '$.LEGALENTITYTYPE',
+                               company CLOB FORMAT JSON PATH '$.COMPANY',
+                               person CLOB FORMAT JSON PATH '$.PERSON',
+                               legalentities CLOB
+                                   FORMAT JSON
+                                   PATH '$.LEGALENTITIES')))
+        LOOP
+            DBMS_OUTPUT.put_line('legalentitytype: ' || rec.legalentitytype);
+            DBMS_OUTPUT.put_line('company: ' || rec.company);
+            DBMS_OUTPUT.put_line('company: ' || rec.company);
+
+            CASE rec.legalentitytype
+                WHEN 'Company'
+                THEN
+                    add_company(a_jobid     => a_jobid,
+                                a_legal_entity => rec.company);
+                WHEN 'Person'
+                THEN
+                    add_person(a_jobid     => a_jobid,
+                               a_legal_entity => rec.person);
+                ELSE
+                    NULL;
+            END CASE;
+
+            --                -- *****************************************************************
+            --                -- create person object for the application legal entity object
+            --                -- *****************************************************************
+            --                t_objectdefid :=
+            --                    api.pkg_configquery.objectdefidforname('o_Person');
+            --                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
+            --
+            --                -- create first and last name from regression run
+            --                api.pkg_columnupdate.setvalue(t_objectid,
+            --                                              'FirstName',
+            --                                              t_entity.firstname);
+            --                api.pkg_columnupdate.setvalue(t_objectid,
+            --                                              'MiddleName',
+            --                                              t_entity.middlename);
+            --                api.pkg_columnupdate.setvalue(t_objectid,
+            --                                              'LastName',
+            --                                              t_entity.lastname);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'dup_LastName',
+            --                                              t_entity.lastname);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'Suffix',
+            --                                              t_entity.suffix);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'AliasNames',
+            --                                              t_entity.aliasnames);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'SocialSecurityNumber',
+            --                                              t_entity.socialsecuritynumber);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'DriversLicenseNumber',
+            --                                              t_entity.driverslicensenumber);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'DriversLicenseState',
+            --                                              t_entity.driverslicensestate);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'PassportNumber',
+            --                                              t_entity.passportnumber);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'Gender',
+            --                                              t_entity.gender);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'BirthDate',
+            --                                              t_entity.birthdate);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'BirthCity',
+            --                                              t_entity.birthcity);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'BirthState',
+            --                                              t_entity.birthstate);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'BirthCountry',
+            --                                              t_entity.birthcountry);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'MaritalStatus',
+            --                                              t_entity.maritalstatus);
+            --                api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                              'FederalEmployerIdentificationn',
+            --                                              t_entity.federalemployeridentificationn);
+            --
+            --                IF (t_entity.ownertype NOT IN ('SPOUSE'))
+            --                THEN
+            --                    api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                                  'OwnerType',
+            --                                                  t_entity.ownertype);
+            --                    api.pkg_columnupdate.setvalue(t_entityobjectid,
+            --                                                  'PercentageOfOwnership',
+            --                                                  t_entity.percentage);
+            --                END IF;
+            --
+            --                -- create relationship from person object to legal entity object
+            --                t_endpointid :=
+            --                    api.pkg_configquery.endpointidforname('o_legalentity',
+            --                                                          'Person');
+            --                t_relid :=
+            --                    api.pkg_relationshipupdate.new(t_endpointid,
+            --                                                   t_entityobjectid,
+            --                                                   t_objectid);
+            --
+            --                IF (t_entity.ownertype IS NOT NULL)
+            --                THEN
+            --                    CASE t_entity.ownertype
+            --                        WHEN 'SPOUSE'
+            --                        THEN
+            --                            t_endpointid :=
+            --                                api.pkg_configquery.endpointidforname(
+            --                                    'o_LegalEntity',
+            --                                    'Spouse1');
+            --                        WHEN 'GENERAL PARTNER'
+            --                        THEN
+            --                            NULL;
+            --                        WHEN 'LIMITED PARTNER'
+            --                        THEN
+            --                            NULL;
+            --                        WHEN 'MEMBER'
+            --                        THEN
+            --                            NULL;
+            --                        WHEN 'PUBLICLY TRADED'
+            --                        THEN
+            --                            NULL;
+            --                        WHEN 'STOCKHOLDER'
+            --                        THEN
+            --                            t_endpointid :=
+            --                                api.pkg_configquery.endpointidforname(
+            --                                    'o_LegalEntity',
+            --                                    'Stockholder');
+            --                        ELSE
+            --                            NULL;
+            --                    END CASE;
+            --                END IF;
+            --            WHEN 'COMPANY'
+            --            THEN
+            --                t_objectdefid :=
+            --                    api.pkg_configquery.objectdefidforname('o_Company');
+            --                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
+            --
+            --                api.pkg_columnupdate.setvalue(t_objectid,
+            --                                              'CompanyName',
+            --                                              t_entity.lastname);
+            --
+            --                -- create relationship from company object to legal entity object
+            --                t_endpointid :=
+            --                    api.pkg_configquery.endpointidforname('o_LegalEntity',
+            --                                                          'Company');
+            --                t_relid :=
+            --                    api.pkg_relationshipupdate.new(t_endpointid,
+            --                                                   t_entityobjectid,
+            --                                                   t_objectid);
+            --            ELSE
+            --                NULL;
+            --        END CASE;
+
+            --        IF (api.pkg_columnquery.VALUE(a_jobid, 'ObjectDefName') =
+            --            'j_Application')
+            --        THEN
+            --            t_endpointid :=
+            --                api.pkg_configquery.endpointidforname('j_Application',
+            --                                                      'Applicant');
+            --        --        ELSE
+            --        --            t_endpointid :=
+            --        --                api.pkg_configquery.endpointidforname('o_LegalEntity',
+            --        --                                                      'Node');
+            --        END IF;
+            --
+            --        t_relid :=
+            --            api.pkg_relationshipupdate.new(t_endpointid,
+            --                                           a_jobid,
+            --                                           t_entityobjectid);
+            --
+            --        api.pkg_logicaltransactionupdate.endtransaction;
+            --        COMMIT;
+
+            -- add address to this legal entity
+            --        IF (rec.address IS NOT NULL)
+            --        THEN
+            --            add_address(a_jobid     => t_objectid,
+            --                        a_address_type => 'Address',
+            --                        a_address   => rec.address);
+            --        END IF;
+
+            IF (rec.legalentities IS NOT NULL)
+            THEN
+                add_legal_entities(a_jobid     => t_entityobjectid,
+                                   a_legal_entity => rec.legalentities);
+            END IF;
+        END LOOP;
+    END;
+
     PROCEDURE add_attorney(a_jobid        IN api.pkg_definition.udt_id,
                            a_attorney     IN CLOB)
     IS
+        t_objectdefid  api.pkg_definition.udt_id;
+        t_objectid     api.pkg_definition.udt_id;
+
+        t_relid        api.pkg_definition.udt_id;
+        t_endpointid   api.pkg_definition.udt_id;
     BEGIN
-        NULL;
-    END;
+        IF (a_attorney IS NOT NULL)
+        THEN
+            FOR rec
+                IN (SELECT *
+                      FROM JSON_TABLE(
+                               a_attorney,
+                               '$'
+                               COLUMNS(
+                                   firstname VARCHAR2(4000)
+                                       PATH '$.FIRSTNAME',
+                                   middlename VARCHAR2(4000)
+                                       PATH '$.MIDDLENAME',
+                                   lastname VARCHAR2(4000) PATH '$.LASTNAME',
+                                   firmname VARCHAR2(4000) PATH '$.FIRMNAME',
+                                   phonenumber VARCHAR2(4000)
+                                       PATH '$.PHONENUMBER',
+                                   faxnumber VARCHAR2(4000)
+                                       PATH '$.FAXNUMBER',
+                                   email VARCHAR2(4000) PATH '$.EMAIL',
+                                   address VARCHAR2(4000)
+                                       FORMAT JSON
+                                       PATH '$.ADDRESS')))
+            LOOP
+                t_objectdefid :=
+                    api.pkg_configquery.objectdefidforname('o_Attorney');
+                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
+
+                api.pkg_columnupdate.setvalue(t_objectid,
+                                              'FirstName',
+                                              rec.firstname);
+                api.pkg_columnupdate.setvalue(t_objectid,
+                                              'MiddleName',
+                                              rec.middlename);
+                api.pkg_columnupdate.setvalue(t_objectid,
+                                              'LastName',
+                                              rec.lastname);
+                api.pkg_columnupdate.setvalue(t_objectid,
+                                              'FirmName',
+                                              rec.firmname);
+                api.pkg_columnupdate.setvalue(t_objectid,
+                                              'PhoneNumber',
+                                              rec.phonenumber);
+                api.pkg_columnupdate.setvalue(t_objectid,
+                                              'FaxNumber',
+                                              rec.faxnumber);
+                api.pkg_columnupdate.setvalue(t_objectid, 'Email', rec.email);
+
+                IF (rec.address IS NOT NULL)
+                THEN
+                    add_address(a_jobid     => t_objectid,
+                                a_address_type => 'Address',
+                                a_address   => rec.address);
+                END IF;
+            END LOOP;
+
+            t_relid :=
+                api.pkg_relationshipupdate.new(
+                    api.pkg_configquery.endpointidforname('j_Application',
+                                                          'Attorney'),
+                    a_jobid,
+                    t_objectid);
+
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
+        END IF;
+    END add_attorney;
 
     PROCEDURE add_escrow(a_jobid        IN api.pkg_definition.udt_id,
                          a_escrow       IN CLOB)
     IS
+        t_objectdefid  api.pkg_definition.udt_id;
+        t_objectid     api.pkg_definition.udt_id;
+
+        t_relid        api.pkg_definition.udt_id;
+        t_endpointid   api.pkg_definition.udt_id;
     BEGIN
-        NULL;
-    END;
+        IF (a_escrow IS NOT NULL)
+        THEN
+            FOR rec
+                IN (SELECT *
+                      FROM JSON_TABLE(
+                               a_escrow,
+                               '$'
+                               COLUMNS(
+                                   escrowcompanyname VARCHAR2(4000)
+                                       PATH '$.ESCROWCOMPANYNAME',
+                                   address VARCHAR2(4000)
+                                       FORMAT JSON
+                                       PATH '$.ADDRESS')))
+            LOOP
+                t_objectdefid :=
+                    api.pkg_configquery.objectdefidforname('o_Escrow');
+                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
+
+                api.pkg_columnupdate.setvalue(t_objectid,
+                                              'EscrowCompanyName',
+                                              rec.escrowcompanyname);
+
+                IF (rec.address IS NOT NULL)
+                THEN
+                    add_address(a_jobid     => t_objectid,
+                                a_address_type => 'Address',
+                                a_address   => rec.address);
+                END IF;
+            END LOOP;
+
+            t_relid :=
+                api.pkg_relationshipupdate.new(
+                    api.pkg_configquery.endpointidforname('j_Application',
+                                                          'Escrow'),
+                    a_jobid,
+                    t_objectid);
+
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
+        END IF;
+    END add_escrow;
 -- ************************************************************************
 -- Main Process
 -- ************************************************************************
@@ -626,9 +1102,13 @@ BEGIN
           FROM bizmod_api.eservices_log_t
          WHERE seq = a_seq;
 
-
         SELECT applicationtype,
                lspid,
+               underconstruction,
+               dba,
+               felony,
+               violation,
+               REGEXP_REPLACE(licensepurchaseprice, '[^.[:digit:]]+', ''),
                primary_license_types,
                premise_address,
                mailing_address,
@@ -642,6 +1122,13 @@ BEGIN
                    COLUMNS(
                        applicationtype VARCHAR2(50) PATH '$.APPLICATIONTYPE',
                        lspid VARCHAR2(40) PATH '$.LSPAPPLICATIONID',
+                       underconstruction VARCHAR2(3)
+                           PATH '$.UNDERCONSTRUCTION',
+                       dba VARCHAR2(4000) PATH '$.DBA',
+                       felony VARCHAR2(3) PATH '$.FELONY',
+                       violation VARCHAR2(3) PATH '$.VIOLATION',
+                       licensepurchaseprice NUMBER
+                           PATH '$.LICENSEPURCHASEPRICE',
                        primary_license_types VARCHAR2(4000)
                            FORMAT JSON
                            PATH '$[*].PRIMARYLICENSETYPES',
@@ -653,9 +1140,7 @@ BEGIN
                            PATH '$.MAILINGADDRESS',
                        attorney VARCHAR2(4000) FORMAT JSON PATH '$.ATTORNEY',
                        escrow VARCHAR2(4000) FORMAT JSON PATH '$.ESCROW',
-                       legal_entities CLOB
-                           FORMAT JSON
-                           PATH '$.LEGAL_ENTITIES'));
+                       legal_entities CLOB FORMAT JSON PATH '$.LEGALENTITIES'));
 
         -- ************************************************************************
         -- Create new application job
@@ -671,16 +1156,21 @@ BEGIN
         api.pkg_columnupdate.setvalue(t_jobid,
                                       'ApplicationType',
                                       t_apprec.applicationtype);
-        api.pkg_columnupdate.setvalue(t_jobid, 'LSPID', t_apprec.lspapplicationid);
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'Felony', 'No');
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'Violation', 'No');
-        --        --            api.pkg_columnupdate.setvalue(t_jobid,
-        --        --                                          'CopiesMailed',
-        --        --                                          sysdate);
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'Fingerprints', 0);
-        --
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'BusinessPurchasePrice', 0);
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'LicensePurchasePrice', 0);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'LSPID',
+                                      t_apprec.lspapplicationid);
+        --        api.pkg_columnupdate.setvalue(t_jobid, 'DBA', t_apprec.dba);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'UnderConstruction',
+                                      t_apprec.underconstruction);
+        api.pkg_columnupdate.setvalue(t_jobid, 'Felony', t_apprec.felony);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'Violation',
+                                      t_apprec.violation);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'LicensePurchasePrice',
+                                      t_apprec.licensepurchaseprice);
+
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
@@ -732,7 +1222,9 @@ BEGIN
         --        DBMS_OUTPUT.put_line(t_apprec.mailing_address);
 
         -- "ApplicationCreatedDate" must be set last before save
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'ApplicationCreatedDate', SYSDATE);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'ApplicationCreatedDate',
+                                      SYSDATE);
 
         INSERT INTO bizmod_api.license_app_t(lspid,
                                              jobid,

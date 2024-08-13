@@ -11,40 +11,29 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
-    --   1.1  07/01/2024 TJL  BIZ-1515812  Initial Procedure Created
+    --   1.2  07/01/2024 TJL  BIZ-15812  Initial Procedure Created
     -- ****************************************************************************
-    t_parameternames json_object_t;
-    t_replacementvalues json_object_t;
+    t_url         constant varchar2(1000) := '/api/licensing/internal/licenseapp/applications/<<applicationId>>/fees';
+    t_method      constant varchar2(10) := 'PATCH';
+    t_urlinfo     VARCHAR2(10000);
+    t_process     constant VARCHAR2(32) := 'NEWFEEJOB';
     t_response     json_object_t;
     t_applicationid NUMBER;
     t_status       VARCHAR2(50);
-    t_process      VARCHAR2(32) := 'NEWFEEJOB';
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_info         VARCHAR2(4000);
     t_results      CLOB;
 BEGIN
     BEGIN
+        
         t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
-        -- update LSP of any changes to application data
-        t_parameternames :=
-            json_object_t('{"URL":"URL_STATUS","METHOD":"METHOD"}');
-        t_replacementvalues :=
-            json_object_t(
-                '{"<<applicationId>>":"' || t_applicationid || '"}');
-
-        t_info :=
-            'Parameters: '
-            || t_parameternames.to_string
-            || CHR(13)
-            || 'Replacement Values: '
-            || t_replacementvalues.to_string;
+        t_urlinfo := REPLACE(t_url, '<<applicationId>>', t_applicationid);
 
         t_results :=
             bizmod_api.utl_licenseinfo.calllsp(
-                a_process   => t_process,
-                a_parameternames => t_parameternames,
-                a_replacementvalues => t_replacementvalues);
+                a_urlinfo   => t_urlinfo,
+                a_method    => t_method);
         t_response := json_object_t.parse(t_results);
     EXCEPTION
         WHEN OTHERS

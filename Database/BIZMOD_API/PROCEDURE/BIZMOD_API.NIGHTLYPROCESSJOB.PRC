@@ -36,9 +36,11 @@ IS
     --   9.0    07/09/2024  TJL  BIZ-15837  Removed Fee Waiver Exception
     --  10.0    07/11/2024  TJL  BIZ-       Corrected bug when secondaries are added licensetype_t
     --                                        table not updated
-    --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring 
+    --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring
     --                                        out which renewal fee to use for AWF.
-    --  11.0.3  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
+    --  11.0.4  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
+    --  12.0    08/12/2024  TJL  BIZ-16036  Changed when awf report is avaliable after renewal
+    --                                        Incorprated BIZ-15991 fix
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -272,7 +274,7 @@ IS
         t_awfdate      DATE;
         t_expiration   DATE;
         t_awfrequired  VARCHAR2(2) := 'NA';
-        t_fiscalstart   DATE := Add_months(a_fiscalend, - 12) + 1;
+        t_fiscalstart  DATE := ADD_MONTHS(a_fiscalend, -12) + 1;
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
@@ -419,12 +421,16 @@ IS
     AS
     BEGIN
         DECLARE
-            t_msgno             NUMBER;
-            t_feeobjid          NUMBER;
-            t_feeid             NUMBER;
-            t_old               NUMBER;
-            t_cnt               NUMBER;
-            t_expirationdate    DATE
+            t_msgno        NUMBER;
+            t_feeobjid     NUMBER;
+            t_feeid        NUMBER;
+            t_old          NUMBER;
+            t_cnt          NUMBER;
+            t_fiscalstart  DATE
+                := TO_DATE(
+                       '01-JUL-'
+                       || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)));
+            t_fiscalend    DATE
                 := TO_DATE(
                        '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)));
         BEGIN
@@ -509,11 +515,55 @@ IS
                        (SELECT expirationdate
                           FROM mart.licensetype l
                          WHERE l.objectid = lt.licensetypejobid),
-                   lt.statusname =
-                       (SELECT statusname
+                   lt.awfflag = 'x' -- force check to see if AWF is available
+             WHERE EXISTS
+                       (SELECT 1
                           FROM mart.licensetype l
-                         WHERE l.objectid = lt.licensetypejobid),
-                   lt.renfeeobjid = NULL,
+                         WHERE l.objectid = lt.licensetypejobid
+                           AND l.expirationdate !=
+                               lt.licensetypeexpirationdate);
+
+            -- 12.0    08/12/2024  TJL  BIZ-16036
+            -- do not reset flags if renewed prior to end of current fiscal year
+            UPDATE bizmod_api.licensetype_t lt
+               SET lt.renfeeobjid =
+                       CASE
+                           WHEN lt.licensetypeexpirationdate = t_fiscalend
+                           THEN
+                               NULL
+                           ELSE
+                               lt.renfeeobjid
+                       END,
+                   lt.renewalfeedate =
+                       CASE
+                           WHEN lt.licensetypeexpirationdate = t_fiscalend
+                           THEN
+                               NULL
+                           ELSE
+                               lt.renewalfeedate
+                       END,
+                   lt.awfstatusnumber =
+                       CASE
+                           WHEN lt.licensetypeexpirationdate = t_fiscalend
+                           THEN
+                               NULL
+                           ELSE
+                               lt.awfstatusnumber
+                       END,
+                   lt.awfflag =
+                       CASE
+                           WHEN lt.licensetypeexpirationdate = t_fiscalend
+                           THEN
+                               NULL
+                           ELSE
+                               'N' -- do not allow AWF until next fiscal year
+                       END
+             WHERE lt.awfflag = 'x';
+
+            -- 07/24/2024  TJL  BIZ-15915
+            -- reset only when status changes
+            UPDATE bizmod_api.licensetype_t lt
+               SET lt.renfeeobjid = NULL,
                    lt.renewalfeedate = NULL,
                    lt.awfstatusnumber = NULL,
                    lt.awfflag = NULL
@@ -521,9 +571,18 @@ IS
                        (SELECT 1
                           FROM mart.licensetype l
                          WHERE l.objectid = lt.licensetypejobid
-                           AND (l.expirationdate !=
-                                lt.licensetypeexpirationdate
-                             OR l.statusname != lt.statusname));
+                           AND l.statusname != lt.statusname);
+
+            -- 12.0    08/12/2024  TJL  BIZ-16036
+            -- reset AWF flags at begining of fiscal year
+            UPDATE bizmod_api.licensetype_t lt
+               SET lt.renfeeobjid = NULL,
+                   lt.renewalfeedate = NULL,
+                   lt.awfstatusnumber = NULL,
+                   lt.awfflag = NULL
+             WHERE t_fiscalstart = TRUNC(SYSDATE)
+               AND NVL(lt.awfflag, 'Y') != 'NA'
+               AND lt.licensetypeexpirationdate = t_fiscalend;
 
             -- update awfflag for non 02 and 22 and update 02 and 22 that are not active
             UPDATE bizmod_api.licensetype_t lt
@@ -635,11 +694,13 @@ IS
                                                 'REVPEN',
                                                 'SLMSHD'))
             LOOP
-                t_msgno := awfrequired(a_fiscalend => greatest(lt.licensetypeexpirationdate, t_expirationdate), -- 07/24/2024  TJL  BIZ-15915
-                                       a_licensetypeobjectid     => lt.licensetypejobid);
+                t_msgno :=
+                    awfrequired(a_fiscalend => lt.licensetypeexpirationdate,
+                                a_licensetypeobjectid => lt.licensetypejobid);
                 t_feeobjid :=
-                    get_awfreninfo(a_fiscalend => greatest(lt.licensetypeexpirationdate, t_expirationdate), -- 07/24/2024  TJL  BIZ-15915
-                                   a_jobid     => lt.licensetypejobid);
+                    get_awfreninfo(
+                        a_fiscalend => lt.licensetypeexpirationdate,
+                        a_jobid     => lt.licensetypejobid);
 
                 UPDATE bizmod_api.licensetype_t lic
                    SET lic.renfeeobjid = t_feeobjid,
@@ -648,8 +709,7 @@ IS
                                                          'TransactionDate'),
                        lic.awfstatusnumber = t_msgno,
                        lic.awfflag =
-                           CASE NVL(t_msgno, 0) WHEN 0 THEN 'Y'
-                             ELSE 'N' END
+                           CASE NVL(t_msgno, 0) WHEN 0 THEN 'Y' ELSE 'N' END
                  WHERE lic.licensetypejobid = lt.licensetypejobid;
             END LOOP;
 
@@ -957,7 +1017,7 @@ BEGIN
                                    api.pkg_columnquery.numericvalue(
                                        rec.feeobjid,
                                        'FeeId')
-                               AND rownum = 1);
+                               AND ROWNUM = 1);
 
                     SELECT r.toobjectid
                       INTO t_paymentbatch
@@ -1113,16 +1173,18 @@ BEGIN
 
             UPDATE bizmod_api.e_payments_t p
                SET p.feeobjid =
-                       (SELECT reo.objectid     feeobjid
-                          FROM bizmod_api.awf_t  a
-                               JOIN api.registeredexternalobjects reo
-                                   ON (reo.linkvalue = TO_CHAR(a.awffeeid)
-                                   AND reo.objectdefid =
-                                       api.pkg_configquery.objectdefidforname(
-                                           'o_Fee'))
-                         WHERE a.awffeeid IS NOT NULL
-                           AND p.licensenumber = a.licensenumber
-                           AND p.licensetypecode = a.licensetypecode)
+                       (     SELECT reo.objectid     feeobjid
+                               FROM bizmod_api.awf_t a
+                                    JOIN api.registeredexternalobjects reo
+                                        ON (reo.linkvalue = TO_CHAR(a.awffeeid)
+                                        AND reo.objectdefid =
+                                            api.pkg_configquery.objectdefidforname(
+                                                'o_Fee'))
+                              WHERE a.awffeeid IS NOT NULL
+                                AND p.licensenumber = a.licensenumber
+                                AND p.licensetypecode = a.licensetypecode
+                           ORDER BY submitteddate DESC
+                        FETCH FIRST 1 ROWS ONLY) -- BIZ-15991
              WHERE p.feeobjid IS NULL
                AND p.description LIKE 'AWF';
 

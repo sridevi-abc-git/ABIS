@@ -12,10 +12,11 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
-    --   1.2  07/01/2024 TJL  BIZ-15808  Initial Procedure Created
+    --   1.3  07/01/2024 TJL  BIZ-15808  Initial Procedure Created
     -- ****************************************************************************
-    t_parameternames json_object_t;
-    t_replacementvalues json_object_t;
+    t_url         constant varchar2(1000) := '/api/licensing/internal/licenseapp/applications/<<applicationId>>?status=<<status>>';
+    t_method      constant varchar2(10) := 'PATCH';
+    t_urlinfo     VARCHAR2(10000);
     t_response     json_object_t;
     t_applicationid VARCHAR2(40);
     t_process      VARCHAR2(32) := 'APPLICATIONSAVEJOB';
@@ -28,34 +29,21 @@ BEGIN
     BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
 
-        t_status := api.pkg_columnquery.VALUE(a_jobid, 'StatusName');
+        t_status := case api.pkg_columnquery.VALUE(a_jobid, 'StatusName') 
+                      when 'NEW' then 'PEND'
+                      
+                      else api.pkg_columnquery.VALUE(a_jobid, 'StatusName')
+                    end;
 
         IF (t_status IS NOT NULL)
         THEN
-            -- update LSP of any changes to application data
-            t_parameternames :=
-                json_object_t(
-                    '{"URL":"URL_STATUS","METHOD":"METHOD_STATUS"}');
-            t_replacementvalues :=
-                json_object_t(
-                    '{"<<applicationId>>":"'
-                    || t_applicationid
-                    || '","<<status>>":"'
-                    || t_status
-                    || '"}');
 
-            t_info :=
-                'Parameters: '
-                || t_parameternames.to_string
-                || CHR(13)
-                || 'Replacement Values: '
-                || t_replacementvalues.to_string;
+       t_urlinfo := REPLACE(REPLACE(t_url, '<<applicationId>>', t_applicationid), '<<status>>', t_status);
 
-            t_results :=
-                bizmod_api.utl_licenseinfo.calllsp(
-                    a_process   => t_process,
-                    a_parameternames => t_parameternames,
-                    a_replacementvalues => t_replacementvalues);
+        t_results :=
+            bizmod_api.utl_licenseinfo.calllsp(
+                a_urlinfo   => t_urlinfo,
+                a_method    => t_method);
 
             t_response := json_object_t.parse(t_results);
         END IF;
@@ -97,9 +85,6 @@ BEGIN
                  || CHR(13)
                  || 'j_Application: '
                  || a_jobid
-                 || CHR(13)
-                 || 'process object id: '
-                 || a_objectid
                  || CHR(13)
                  || CASE
                         WHEN t_results IS NOT NULL or t_sqlerrm is not null
