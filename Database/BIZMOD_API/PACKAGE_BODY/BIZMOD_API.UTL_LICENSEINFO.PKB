@@ -37,6 +37,7 @@ AS
     --                                          changed calllsp parameters and parameter types
     --   7.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
     --   8.0.1  07/08/2024  TJL  BIZ-15808    Updated callsp with more exception handling    
+    --   9.0    08/07/2024  TJL  BIZ-15800    Added new CALLLSP Function
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -50,13 +51,14 @@ AS
 
     TYPE t_recp IS TABLE OF VARCHAR(512);
 
-    FUNCTION calllsp(a_process      IN     VARCHAR,
-                     a_parameternames IN OUT json_object_t,
-                     a_replacementvalues IN json_object_t,
+    FUNCTION calllsp(a_urlinfo      IN     VARCHAR2,
+                     a_method       IN     VARCHAR2,
                      a_content      IN     CLOB DEFAULT NULL,
                      a_file         IN     BLOB DEFAULT NULL)
         RETURN CLOB
     IS
+        t_url          varchar2(10000);
+        t_wallet       varchar2(10000);
         t_seq          NUMBER;
         t_boundary     VARCHAR2(100)
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
@@ -88,55 +90,35 @@ AS
         t_length       NUMBER;
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
-        t_keys         json_key_list;
-        t_column       VARCHAR2(100);
-        t_columns      VARCHAR2(4000);
+--        t_keys         json_key_list;
+--        t_column       VARCHAR2(100);
+--        t_columns      VARCHAR2(4000);
         t_value        VARCHAR2(4000);
         t_info         json_object_t := json_object_t();
         t_header       json_object_t := json_object_t();
     BEGIN
         BEGIN
-            -- add wallet to get wallet location from configuration table
-            a_parameternames.put('WALLET', 'WALLET');
-            t_keys := a_parameternames.get_keys;
-
             BEGIN
-            -- get configuration information
-            FOR i IN 1 .. t_keys.COUNT
-            LOOP
-                t_column := a_parameternames.get_string(t_keys(i));
-                t_columns := t_columns || t_column || '; ';
-                
-                --dbms_output.put_line('Columns: ' || t_column);
-                SELECT c.parametervalue
-                  INTO t_value
+select  url || a_urlinfo, wallet
+  into t_url, t_wallet 
+FROM (SELECT c.process, c.parametername, c.parametervalue
                   FROM bizmod_api.eservices_config_t c
-                 WHERE c.dbname = UPPER(ora_database_name)
-                   AND c.process = a_process
-                   AND c.parametername = t_column;
+                 WHERE c.process = 'CALLLSP'
+                   AND c.dbname = UPPER(ora_database_name))
+               PIVOT (MAX(parametervalue)
+                     FOR parametername
+                     IN ( 'URL' url
+	    		   , 'WALLET'WALLET));
 
-                t_info.put(t_keys(i), t_value);
-            END LOOP;
             
             EXCEPTION when no_data_found then
-                RAISE_APPLICATION_ERROR(-20001,'Parameter Not Found: ' || t_column, TRUE);
+                RAISE_APPLICATION_ERROR(-20001,'Parameter Not Found', TRUE);
             END;
             
-            -- replace the replacement keys from values provided
-            t_keys := a_replacementvalues.get_keys;
-
-            FOR i IN 1 .. t_keys.COUNT
-            LOOP
-                t_info.put(
-                    'URL',
-                    REPLACE(t_info.get_string('URL'),
-                            t_keys(i),
-                            a_replacementvalues.get_string(t_keys(i))));
-            END LOOP;
-
-            t_infotext := t_info.TO_CLOB;
-
-            --dbms_output.put_line(t_infotext);
+t_info.put('URL', t_url);
+t_info.put('METHOD', a_method);
+t_info.put('WALLET', t_wallet);
+t_infotext := t_info.TO_CLOB;
 
             INSERT INTO eservices_log_t(request,
                                         packet,
@@ -153,13 +135,13 @@ AS
 
             COMMIT;
 
-            UTL_HTTP.set_wallet(t_info.get_string('WALLET'), NULL);
+            UTL_HTTP.set_wallet(t_wallet, NULL);
 
             -- Open the HTTP request
             t_request :=
                 UTL_HTTP.begin_request(
-                    url         => t_info.get_string('URL'),
-                    method      => t_info.get_string('METHOD'));
+                    url         => t_url,
+                    method      => a_method);
 
             UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
             UTL_HTTP.set_body_charset(t_request, 'UTF-8');
