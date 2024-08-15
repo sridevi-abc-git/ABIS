@@ -82,6 +82,8 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 01/21/2022 PK  WO 27037  LSP ABIS license renewal payment error with previous due fee line
 --                          Added t_transactiondate and additional logic of date to bring total owing to PROCEDURE initialize
 -- 12/28/2022 PK WO 30274   Added code to make type 68 work when added as secondary on new LT 90
+-- 6/92023 NZA              Updated TransferPayment, FingerPrintFee and SetPaymentTransactionFlag for max object id issue.
+-- 08/14/2024 PK WO 35273  Added code for Craft Distillers not to include in produce license batch if they did not report recently produced gallonage
 -------------------------------------------------------------------------------
 
 IS
@@ -6441,7 +6443,7 @@ IS
                                                                    || (TO_CHAR(ltc_1.expirationdate, 'YYYY') - 1),
                                                                    'MM/DD/YYYY'))))
                         OR d.feeactivity NOT IN ('REN', 'REN50', 'REN100') THEN
-                         begin 
+                         begin
                             SELECT r.toobjectid
                               INTO t_StatusObjectId
                               FROM api.relationships r
@@ -6451,13 +6453,13 @@ IS
                                FETCH FIRST 1 ROWS ONLY;
 
                             t_paymentstatusstatus := api.pkg_columnquery.VALUE(t_StatusObjectId, 'Status');
-                            
+
                           exception when no_data_found then
                             pkg_debug.putline('    Payment Status not found, setting to Null');
                             t_StatusObjectId := null;
                             t_paymentstatusstatus := null;
                           end; -- Added as per Dalainya to resolve no data found on produce license5/9/2023
-                          
+
 
                             IF t_paymentstatusstatus IS NULL
                             OR t_paymentstatusstatus = 'UNEARNED' THEN
@@ -7649,12 +7651,14 @@ IS
                              ON fs.objectid = ffs.licensefeescheduleid
                        WHERE f.jobid = a_jobid
                          AND fs.feeactivity = t_feeactivity(c)
-                         AND f.feeid = (SELECT MAX(f.feeid)
+                         AND f.feeid = (SELECT f.feeid
                                           FROM api.fees f
                                                JOIN sitespecific.feeschedule_t fs
                                                ON fs.objectid = sitespecific.pkg_fees.getlicfeeschedulobjid(f.feeid)
                                          WHERE f.jobid = a_jobid
-                                           AND fs.feeactivity = t_feeactivity(c))
+                                           AND fs.feeactivity = t_feeactivity(c)
+                                         ORDER BY f.logicaltransactionid DESC
+                                          FETCH FIRST 1 ROWS ONLY)
                          AND NOT EXISTS
                                  (SELECT 1
                                     FROM query.r_modifyfeefee r
@@ -7664,6 +7668,7 @@ IS
                                      AND m.outcome IS NOT NULL
                                      AND m.modifytype = 'Void Fee'))
             LOOP
+
                 -- Check to see if it needs adjusting
                 -- if x.SecondaryCount <> a_FingerPrints then
                 IF x.secondarycount <> a_fingerprints THEN
@@ -8807,17 +8812,18 @@ IS
             FOR ovr IN 1 .. a_ovrfeeids.COUNT
             LOOP
                 --Select max Payment Transaction where feeid and amount are in array
-                SELECT MAX(reo.objectid)
-                  INTO t_paytransobjectid
-                  FROM api.feetransactions ft
-                       JOIN api.registeredexternalobjects reo  --TAyers: PIP Task 8.5
-                       ON reo.linkvalue = TO_CHAR(ft.transactionid)
-                      AND reo.objectdefid = t_paytransobjectdefid
-                       JOIN api.fees f
-                       ON f.feeid = ft.feeid
-                 WHERE ft.feeid = a_ovrfeeids(ovr)
-                   AND -ft.amount = a_ovramountstopay(ovr);
-
+                SELECT reo.objectid
+                      INTO t_paytransobjectid
+                      FROM api.feetransactions ft
+                           JOIN api.registeredexternalobjects reo  --TAyers: PIP Task 8.5
+                           ON reo.linkvalue = TO_CHAR(ft.transactionid)
+                          AND reo.objectdefid = t_paytransobjectdefid
+                           JOIN api.fees f
+                           ON f.feeid = ft.feeid
+                     WHERE ft.feeid = a_ovrfeeids(ovr)
+                       AND -ft.amount = a_ovramountstopay(ovr)
+                     ORDER BY f.logicaltransactionid DESC
+                     FETCH FIRST 1 ROWS ONLY;
                 --Set Payment Transaction Flag to Y
                 api.pkg_columnupdate.setvalue(t_paytransobjectid, a_columnname, 'Y');
             END LOOP;
@@ -8842,6 +8848,7 @@ IS
         t_renexpdate          DATE;
         t_ltexpirationdate    DATE;
         t_ltcode              VARCHAR2(10);
+        t_Reporteddate        DATE;
         t_continue            VARCHAR2(1);
         t_jobid               NUMBER := 0;
         t_licensetypecode     VARCHAR2(2) := '';
@@ -9007,6 +9014,12 @@ IS
                                         api.pkg_columnupdate.setvalue(z.jobid, 'RENFeeCreated', 'N');
                                         --Update the dup column because post verify did not run on the job
                                         api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'Y');
+                                        
+                                         IF c.licensetypecode = '74' and (t_Reporteddate < ADD_MONTHS(t_ltexpirationdate, -3) or t_Reporteddate is null)  THEN -- WO 35273 Added by Pawan Craft Distillers 
+                                       
+                                            api.pkg_columnupdate.setvalue(z.jobid, 'IncludeInProduceLicenseBatch', 'N');
+                                               --Update the dup column because post verify did not run on the job
+                                            api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'N'); -- WO 35273 Added by Pawan Craft Distillers 
 
                                         IF api.pkg_columnquery.VALUE(z.jobid, 'SeasonStartMonthNumber') IS NULL THEN
                                             api.pkg_columnupdate.setvalue(z.jobid,
