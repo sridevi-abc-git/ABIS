@@ -28,7 +28,7 @@ IS
     --   5.0     03/26/2024 APD  BIZ-14849    Increased email limit to 320 chars
     --   6.0.2   05/24/2024 TJL  BIZ-15485    Changed to call the new calllsp function.
     --   6.0.2   05/28/2024 TJL  BIZ-15021    Added field OutsideEvent
-    --   7.0     08/13/2024 TJL  BIZ-15808    Change call to new calllsp function
+    --   7.1     08/13/2024 TJL  BIZ-15808    Change call to new calllsp function
     -- ****************************************************************************
     --************************
     --Object Id
@@ -568,7 +568,7 @@ BEGIN
     IF (t_response IS NULL)
     THEN
         t_urlinfo :=
-            REPLACE(t_url_status, '<<lsppaymentid>>', t_lsppaymentid);
+            REPLACE(t_url_fees, '<<lsppaymentid>>', t_lsppaymentid);
 
         t_response :=
             bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
