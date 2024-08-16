@@ -39,7 +39,7 @@ IS
     --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring
     --                                        out which renewal fee to use for AWF.
     --  11.0.4  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
-    --  12.0.1  08/12/2024  TJL  BIZ-16036  Changed when awf report is avaliable after renewal
+    --  12.0.2  08/12/2024  TJL  BIZ-16036  Changed when awf report is avaliable after renewal
     --                                        Incorprated BIZ-15991 fix
     -- ****************************************************************************
 
@@ -289,6 +289,18 @@ IS
         t_issuedate :=
             api.pkg_columnquery.datevalue(a_licensetypeobjectid, 'IssueDate');
 
+dbms_output.put(a_licensetypeobjectid || chr(9) || t_issuedate || chr(9) || t_expiration || ' - ' || TO_DATE(
+                       '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6))));
+        -- do not allow AWF before begining of fiscal year the expiration is in
+        IF (t_expiration > TO_DATE(
+                       '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6))))
+        then 
+        
+            t_msgno := 10;
+        end if;
+dbms_output.put(chr(9) || nvl(t_msgno, 0));        
+        if (t_msgno is null)
+        then
         SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
           INTO t_msgno
           FROM (SELECT COUNT(1)     cnt
@@ -305,7 +317,8 @@ IS
                     AND p.licensetypecode IN ('02', '22')
                     AND p.description LIKE '%AWF%'
                     AND TRUNC(p.createddate) >= t_fiscalstart));
-
+        end if;
+        
         -- check if this was liense was just issued or was transfered
         IF (t_msgno IS NULL
         AND t_issuedate > ADD_MONTHS(GREATEST(t_fiscalstart - 1, t_expiration), -24))
@@ -406,6 +419,7 @@ IS
             END CASE;
         END IF;
 
+dbms_output.put_line(chr(9) || t_msgno);
         RETURN t_msgno;
     END;
 
@@ -683,6 +697,7 @@ IS
                          FROM bizmod_api.licensetype_t lt
                         WHERE lt.licensetypecode IN ('02', '22')
                           AND lt.renfeeobjid IS NULL
+                          AND nvl(lt.awfstatusnumber, 0) != 10
                           AND NVL(lt.awfflag, 'Y') != 'NA' -- 05/14/2024  TJL  BIZ-15461
                           AND lt.statusname IN ('ACTIVE',
                                                 'SUREND',
