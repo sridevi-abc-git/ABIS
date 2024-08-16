@@ -27,6 +27,18 @@ IS
     --   6.0    04/18/2024  TJL  BIZ-15102  Fix bug in get_awfreninfo where transfer points
     --                                         back to itself which caused a recursion loop
     --                                         that eventually failed.
+    --   7.0    04/26/2024  TJL  BIZ-15142  Fixed bug in AWF process in trying to reprocess
+    --                                         Fee that failed
+    --   7.1    05/14/2024  TJL  BIZ-15461  Fixed bug that indicated branch 02 required AWF
+    --                                         Report in LSP.
+    --   8.0    05/20/2024  TJL  BIZ-15523  Added test to see if AWF batch needs to be created
+    --   8.1    05/24/2024  TJL  BIZ-15485  Removed sending emails on job being completed
+    --   9.0    07/09/2024  TJL  BIZ-15837  Removed Fee Waiver Exception
+    --  10.0    07/11/2024  TJL  BIZ-       Corrected bug when secondaries are added licensetype_t
+    --                                        table not updated
+    --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring 
+    --                                        out which renewal fee to use for AWF.
+    --  11.0.3  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
@@ -102,7 +114,7 @@ IS
 
         -- Older license don't have applications in ABIS
         --   Applications not need for licenses issued over 3 years ago
-        IF (TRUNC(t_issuedate) >= ADD_MONTHS(a_fiscalend + 1, -36))
+        IF (TRUNC(t_issuedate) >= t_start_date) -- 07/15/2024  TJL  BIZ-15858
         THEN
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
@@ -110,8 +122,6 @@ IS
             -- assume original for applications issued over 3 years ago
             t_applicationtype := 'Original';
         END IF;
-
-        --        DBMS_OUTPUT.put_line('type: ' || t_applicationtype);
 
         IF (t_applicationtype = 'Transfer')
         THEN
@@ -146,8 +156,7 @@ IS
                 -- check to make sure transfer not pointing back to current
                 --   license when another transer from license has already been selected
                 IF (rec.licenseobjectid !=
-                    api.pkg_columnquery.numericvalue(a_jobid,
-                                                     'LicenseJobId'))
+                    api.pkg_columnquery.numericvalue(a_jobid, 'LicenseJobId'))
                 THEN
                     t_transferfromobjectid := rec.transferfromobjectid;
                 END IF;
@@ -168,6 +177,7 @@ IS
                    AND f.transactiondate BETWEEN t_start_date AND t_end_date;
             -- for licenses issued was a transfer this year get renewal fees
             --    from the transfer from license
+
             WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalend + 1, -12)
                                         AND a_fiscalend
             THEN
@@ -254,7 +264,7 @@ IS
 
     -- ****************************************************************************
     -- ****************************************************************************
-    FUNCTION awfrequired(a_licensetypeobjectid IN NUMBER)
+    FUNCTION awfrequired(a_fiscalend DATE, a_licensetypeobjectid IN NUMBER)
         RETURN NUMBER
     IS
         t_issuedate    DATE;
@@ -262,33 +272,16 @@ IS
         t_awfdate      DATE;
         t_expiration   DATE;
         t_awfrequired  VARCHAR2(2) := 'NA';
-        t_start_date   DATE
-            := TO_DATE(
-                   '01-07-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)),
-                   'dd-mm-yyyy');
-        t_end_date     DATE
-            := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
-                       'dd-mm-yyyy');
+        t_fiscalstart   DATE := Add_months(a_fiscalend, - 12) + 1;
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
         t_feeobjid     NUMBER;
         t_feeid        NUMBER;
         t_msgno        NUMBER;
-        t_licensetypejobid NUMBER;
     BEGIN
-        SELECT api.pkg_columnquery.datevalue(lt.licensetypejobid,
-                                             'ExpirationDate'),
-               ADD_MONTHS(
-                   api.pkg_columnquery.datevalue(lt.licensetypejobid,
-                                                 'ExpirationDate'),
-                   -12), -- lt.renewalfeedate, --), , nvl(api.pkg_columnquery.datevalue(lt.licensetypejobid, 'ReadyToIssueDate')
-               lt.applicationjobid,
-               lt.licensetypejobid
-          INTO t_expiration,
-               t_start_date,
-               t_application,
-               t_licensetypejobid
+        SELECT lt.applicationjobid
+          INTO t_application
           FROM bizmod_api.licensetype_t lt
          WHERE lt.licensetypejobid = a_licensetypeobjectid;
 
@@ -296,18 +289,16 @@ IS
             api.pkg_columnquery.datevalue(a_licensetypeobjectid, 'IssueDate');
 
         SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
-          INTO t_msgno 
+          INTO t_msgno
           FROM (SELECT COUNT(1)     cnt
                   FROM api.fees  f
                        LEFT OUTER JOIN bizmod_api.awf_t a
                            ON (f.feeid = a.awffeeid)
                  WHERE f.jobid = a_licensetypeobjectid
                    AND f.description LIKE '%AWF%'
-                   AND (api.pkg_columnquery.datevalue(f.jobid,
-                                                      'expirationdate') =
-                        a.expirationdate
+                   AND (t_expiration = a.expirationdate
                      OR a.expirationdate IS NULL)
-                   AND TRUNC(f.transactiondate) > t_start_date
+                   AND TRUNC(f.transactiondate) >= t_fiscalstart
                 UNION
                 SELECT COUNT(1)     cnt
                   FROM bizmod_api.e_payments_t p
@@ -316,7 +307,7 @@ IS
                                                   'LicenseNumber')
                     AND p.licensetypecode IN ('02', '22')
                     AND p.description LIKE '%AWF%'
-                    AND TRUNC(p.createddate) > t_start_date));
+                    AND TRUNC(p.createddate) >= t_fiscalstart));
 
         -- check if this was liense was just issued or was transfered
         IF (t_msgno IS NULL
@@ -396,8 +387,8 @@ IS
                           FROM (SELECT COUNT(1)     cnt
                                   FROM api.fees f
                                  WHERE f.jobid = t_transferfromobjectid
-                                   AND TRUNC(f.transactiondate) BETWEEN t_start_date
-                                                                    AND t_end_date
+                                   AND TRUNC(f.transactiondate) BETWEEN t_fiscalstart
+                                                                    AND a_fiscalend
                                    AND f.description LIKE '%AWF%'
                                 UNION
                                 SELECT COUNT(1)     cnt
@@ -407,8 +398,8 @@ IS
                                            t_transferfromobjectid,
                                            'LicenseNumber')
                                    AND p.licensetypecode IN ('02', '22')
-                                   AND TRUNC(p.createddate) BETWEEN t_start_date
-                                                                AND t_end_date
+                                   AND TRUNC(p.createddate) BETWEEN t_fiscalstart
+                                                                AND a_fiscalend
                                    AND p.description LIKE '%AWF%');
                     ELSE
                         t_msgno := 10;
@@ -424,20 +415,32 @@ IS
     -- ****************************************************************************
     -- ****************************************************************************
 
-    PROCEDURE awfupdateinfo
+    PROCEDURE updateinfo
     AS
     BEGIN
         DECLARE
-            t_msgno        NUMBER;
-            t_feeobjid     NUMBER;
-            t_feeid        NUMBER;
-            t_fiscalend    DATE
+            t_msgno             NUMBER;
+            t_feeobjid          NUMBER;
+            t_feeid             NUMBER;
+            t_old               NUMBER;
+            t_cnt               NUMBER;
+            t_expirationdate    DATE
                 := TO_DATE(
                        '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)));
-            t_old          NUMBER;
         BEGIN
-            -- create awf payment batches
-            bizmod_api.createawfpaymentsjob(0, SYSDATE);
+            -- check to see if AWF batch needs to be created
+            SELECT COUNT(1)
+              INTO t_cnt
+              FROM bizmod_api.awf_t a
+             WHERE a.awffeeamount <= 0
+               AND a.paymentbatch IS NULL
+               AND a.submitteddate IS NOT NULL;
+
+            IF (t_cnt > 0)
+            THEN
+                -- create awf payment batches
+                bizmod_api.createawfpaymentsjob(0, SYSDATE);
+            END IF;
 
             -- check for any new license types added
             MERGE INTO bizmod_api.licensetype_t l
@@ -539,8 +542,9 @@ IS
 
             -- check if new 02 and 22 was a branch license
             UPDATE bizmod_api.licensetype_t lt
-               SET lt.awfflag =
-                       (SELECT CASE WHEN COUNT(1) > 0 THEN 'NA' ELSE NULL END    req
+               SET (lt.awfflag, lt.awfstatusnumber) =
+                       (SELECT CASE WHEN COUNT(1) > 0 THEN 'NA' ELSE NULL END,
+                               CASE WHEN COUNT(1) > 0 THEN 8 ELSE NULL END -- 05/14/2024  TJL  BIZ-15461
                           FROM api.relationships r
                          WHERE (r.endpointid =
                                 api.pkg_configquery.endpointidforname(
@@ -578,11 +582,52 @@ IS
 
             COMMIT;
 
+            -- 07/11/2024  TJL  BIZ-
+            -- Update secondaries that have changed with new values
+            UPDATE bizmod_api.licensetype_t lt2
+               SET lt2.secondaries =
+                       (SELECT json_arrayagg(
+                                   json_object(
+                                       'LTC' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               slt.toobjectid,
+                                               'LicenseTypeCode'),
+                                       'ID' VALUE slt.relationshipid))
+                          FROM api.relationships  slt
+                               JOIN mart.licensetype lt
+                                   ON (lt.objectid = slt.fromobjectid)
+                         WHERE (lt.objectid = slt.fromobjectid
+                            AND slt.endpointid =
+                                api.pkg_configquery.endpointidforname(
+                                    'j_LicenseType',
+                                    'LicTypeCatSecondary'))
+                           AND lt.objectid = lt2.licensetypejobid)
+             WHERE NVL(lt2.secondaries, 'none') !=
+                   NVL(
+                       (SELECT json_arrayagg(
+                                   json_object(
+                                       'LTC' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               slt.toobjectid,
+                                               'LicenseTypeCode'),
+                                       'ID' VALUE slt.relationshipid))
+                          FROM api.relationships  slt
+                               JOIN mart.licensetype lt
+                                   ON (lt.objectid = slt.fromobjectid)
+                         WHERE (lt.objectid = slt.fromobjectid
+                            AND slt.endpointid =
+                                api.pkg_configquery.endpointidforname(
+                                    'j_LicenseType',
+                                    'LicTypeCatSecondary'))
+                           AND lt.objectid = lt2.licensetypejobid),
+                       'none');
+
             -- get awf renewal fee
             FOR lt IN (SELECT lt.*
                          FROM bizmod_api.licensetype_t lt
                         WHERE lt.licensetypecode IN ('02', '22')
                           AND lt.renfeeobjid IS NULL
+                          AND NVL(lt.awfflag, 'Y') != 'NA' -- 05/14/2024  TJL  BIZ-15461
                           AND lt.statusname IN ('ACTIVE',
                                                 'SUREND',
                                                 'SUSPEN',
@@ -590,40 +635,11 @@ IS
                                                 'REVPEN',
                                                 'SLMSHD'))
             LOOP
-                t_msgno := awfrequired(lt.licensetypejobid);
+                t_msgno := awfrequired(a_fiscalend => greatest(lt.licensetypeexpirationdate, t_expirationdate), -- 07/24/2024  TJL  BIZ-15915
+                                       a_licensetypeobjectid     => lt.licensetypejobid);
                 t_feeobjid :=
-                    get_awfreninfo(a_fiscalend => t_fiscalend,
+                    get_awfreninfo(a_fiscalend => greatest(lt.licensetypeexpirationdate, t_expirationdate), -- 07/24/2024  TJL  BIZ-15915
                                    a_jobid     => lt.licensetypejobid);
-
-                IF (t_feeobjid IS NOT NULL
-                AND t_msgno IS NULL)
-                THEN
-                    t_feeid :=
-                        api.pkg_columnquery.numericvalue(t_feeobjid, 'FeeId');
-
-                    FOR rec
-                        IN (SELECT api.pkg_columnquery.VALUE(reo.objectid,
-                                                             'BatchId')    batchid
-                              FROM api.paymenttransactions  pt
-                                   JOIN api.feetransactions ft
-                                       ON pt.transactionid = ft.transactionid
-                                   JOIN api.registeredexternalobjects reo
-                                       ON (reo.linkvalue =
-                                           TO_CHAR(pt.paymentid)
-                                       AND reo.objectdefid =
-                                           api.pkg_configquery.objectdefidforname(
-                                               'o_Payment'))
-                             WHERE ft.feeid = t_feeid -- rec.renfeeid
-                                                     )
-                    LOOP
-                        -- look for batch id with CVR in it
-                        IF (rec.batchid LIKE '%CVR%')
-                        THEN
-                            t_msgno := 14;
-                            EXIT;
-                        END IF;
-                    END LOOP;
-                END IF;
 
                 UPDATE bizmod_api.licensetype_t lic
                    SET lic.renfeeobjid = t_feeobjid,
@@ -632,19 +648,9 @@ IS
                                                          'TransactionDate'),
                        lic.awfstatusnumber = t_msgno,
                        lic.awfflag =
-                           CASE NVL(t_msgno, 0)
-                               WHEN 0 THEN 'Y'
-                               WHEN 14 THEN 'CVR'
-                               ELSE 'N'
-                           END
+                           CASE NVL(t_msgno, 0) WHEN 0 THEN 'Y'
+                             ELSE 'N' END
                  WHERE lic.licensetypejobid = lt.licensetypejobid;
-
-                DBMS_OUTPUT.put_line(
-                    'feeobjid: '
-                    || t_feeobjid
-                    || ' - '
-                    || api.pkg_columnquery.datevalue(t_feeobjid,
-                                                     'TransactionDate'));
             END LOOP;
 
             COMMIT;
@@ -664,10 +670,6 @@ BEGIN
         t_awfbatch     NUMBER;
 
         t_body         VARCHAR2(32000);
-        t_to           VARCHAR2(4000);
-        t_from         VARCHAR2(4000);
-        t_cc           VARCHAR2(4000);
-        t_bcc          VARCHAR2(4000);
         t_rowcount     NUMBER;
 
         t_error        VARCHAR2(32000);
@@ -682,13 +684,7 @@ BEGIN
         t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
 
         -- ********************************************************************
-        -- ************************************************************
-        -- Update AWF
-        -- ************************************************************
         BEGIN
-            awfupdateinfo;
-
-            -- ********************************************************************
             -- ************************************************************
             -- Check for payments being removed from original transmittal and
             --   updating payment record with new transmittal batch id or
@@ -870,6 +866,12 @@ BEGIN
                     || CHR(13);
             END IF;
 
+            -- ************************************************************
+            -- Update license and AWF info
+            -- ************************************************************
+            updateinfo;
+
+            -- ********************************************************************
             -- ********************************************************************
             --  Update awf fee id and fee object id after payments have been completed
             -- ********************************************************************
@@ -932,7 +934,7 @@ BEGIN
             FOR rec IN (SELECT p.feeobjid, p.seq
                           FROM bizmod_api.e_payments_t p
                          WHERE p.feeobjid IS NOT NULL
-                           AND NVL(p.paymentobjectid, 0) = 0
+                           AND NVL(p.paymentobjectid, 1) > 0 -- 04/26/2024 TJL BIZ-15142
                            AND p.description LIKE '%AWF%')
             LOOP
                 BEGIN
@@ -954,7 +956,8 @@ BEGIN
                              WHERE feeid =
                                    api.pkg_columnquery.numericvalue(
                                        rec.feeobjid,
-                                       'FeeId'));
+                                       'FeeId')
+                               AND rownum = 1);
 
                     SELECT r.toobjectid
                       INTO t_paymentbatch
@@ -1129,49 +1132,7 @@ BEGIN
             THEN
                 t_sqlerrm := SQLERRM;
                 t_trace := DBMS_UTILITY.format_error_backtrace;
-
-                t_error :=
-                    t_error
-                    || CHR(13)
-                    || 'Nightly Processing ERROR'
-                    || CHR(13)
-                    || t_sqlerrm
-                    || CHR(13)
-                    || t_trace;
         END;
-
-        -- Generate email of completion of first data processing
-        SELECT pto,
-               pfrom,
-               pcc,
-               pbcc
-          INTO t_to,
-               t_from,
-               t_cc,
-               t_bcc
-          FROM (SELECT m.parametername, m.parametervalue
-                  FROM abc.email_parameters m
-                 WHERE app = 'EPAYMENT')
-               PIVOT (MAX(parametervalue)
-                     FOR parametername
-                     IN ('TO' pto, 'FROM' pfrom, 'CC' pcc, 'BCC' pbcc));
-
-        IF (t_from IS NOT NULL)
-        THEN
-            sitespecific.pkg_tlemail.sendemail(
-                p_fromaddress => t_from,
-                p_toaddress => t_to,
-                p_cc        => t_cc,
-                p_bcc       => t_bcc,
-                p_subject   =>
-                    'Nightly Job Completed '
-                    || CASE
-                           WHEN t_error IS NOT NULL THEN 'with errors'
-                           ELSE NULL
-                       END,
-                p_body      => t_body || CHR(13) || t_error,
-                p_mimetype  => 'text/plain');
-        END IF;
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,

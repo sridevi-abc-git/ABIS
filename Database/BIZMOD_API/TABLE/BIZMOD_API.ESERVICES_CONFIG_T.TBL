@@ -1,0 +1,112 @@
+DROP TABLE BIZMOD_API.ESERVICES_CONFIG_T CASCADE CONSTRAINTS;
+
+CREATE TABLE BIZMOD_API.ESERVICES_CONFIG_T
+(
+  DBNAME          VARCHAR2(32 BYTE) COLLATE USING_NLS_COMP NOT NULL,
+  PROCESS         VARCHAR2(32 BYTE) COLLATE USING_NLS_COMP NOT NULL,
+  PARAMETERNAME   VARCHAR2(100 BYTE) COLLATE USING_NLS_COMP NOT NULL,
+  PARAMETERVALUE  VARCHAR2(4000 BYTE) COLLATE USING_NLS_COMP,
+  COMMENTS        VARCHAR2(4000 BYTE) COLLATE USING_NLS_COMP,
+  UPDATEDBY       VARCHAR2(100 BYTE) COLLATE USING_NLS_COMP NOT NULL,
+  UPDATEDDATE     DATE                          NOT NULL,
+  CREATEDDATE     DATE                          NOT NULL
+)
+DEFAULT COLLATION USING_NLS_COMP
+TABLESPACE API_ENC_DATA
+PCTUSED    0
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE
+MONITORING;
+
+
+CREATE UNIQUE INDEX BIZMOD_API.DPP_C ON BIZMOD_API.ESERVICES_CONFIG_T
+(DBNAME, PROCESS, PARAMETERNAME)
+LOGGING
+TABLESPACE API_ENC_DATA
+PCTFREE    10
+INITRANS   2
+MAXTRANS   255
+STORAGE    (
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           );
+
+CREATE OR REPLACE TRIGGER BIZMOD_API.ESERVICES_CONFIG_TRG
+    BEFORE INSERT OR UPDATE OR DELETE
+    ON bizmod_api.eservices_config_t
+    FOR EACH ROW
+BEGIN
+    IF DELETING
+    THEN
+        -- copy to history table
+        INSERT INTO bizmod_api.eservices_config_hist_t(dbname,
+                                                       process,
+                                                       parametername,
+                                                       parametervalue,
+                                                       comments,
+                                                       updatedby,
+                                                       updateddate,
+                                                       createddate,
+                                                       deleted,
+													   deletedby)
+             VALUES (:old.dbname,
+                     :old.process,
+                     :old.parametername,
+                     :old.parametervalue,
+                     :old.comments,
+                     :old.updatedby,
+                     :old.updateddate,
+                     SYSDATE,
+                     'Y',
+					 SYS_CONTEXT('userenv', 'os_user'));
+    END IF;
+
+    IF UPDATING
+    THEN
+        -- copy to history table
+        INSERT INTO bizmod_api.eservices_config_hist_t(dbname,
+                                                       process,
+                                                       parametername,
+                                                       parametervalue,
+                                                       comments,
+                                                       updatedby,
+                                                       updateddate,
+                                                       createddate,
+                                                       deleted)
+             VALUES (:old.dbname,
+                     :old.process,
+                     :old.parametername,
+                     :old.parametervalue,
+                     :old.comments,
+                     :old.updatedby,
+                     :old.updateddate,
+                     SYSDATE,
+                     'N');
+
+        :new.updatedby := SYS_CONTEXT('userenv', 'os_user');
+        :new.updateddate := SYSDATE;
+    END IF;
+
+    IF INSERTING
+    THEN
+        :new.updatedby := SYS_CONTEXT('userenv', 'os_user');
+        :new.updateddate := SYSDATE;
+        :new.createddate := SYSDATE;
+    END IF;
+END;
+/
+
+
+ALTER TABLE BIZMOD_API.ESERVICES_CONFIG_T ADD (
+  CONSTRAINT DPP_C
+  UNIQUE (DBNAME, PROCESS, PARAMETERNAME)
+  USING INDEX BIZMOD_API.DPP_C
+  ENABLE VALIDATE);

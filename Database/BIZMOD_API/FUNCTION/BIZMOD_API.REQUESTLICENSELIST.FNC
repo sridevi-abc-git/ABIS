@@ -18,6 +18,8 @@ IS
     --          11/07/2023  JS  BIZ-13008   Added premise zip and state to return packet
     --    4.0   03/26/2024  TJL BIZ-14833   Rewrote function on how data is selected and from
     --                                        where.
+    --    5.0   07/31/2024  TJL BIZ-15915   Change to using experation date -12 months when checking
+    --                                        checking for AWF being paid for current fiscal year 
     -- ****************************************************************************
 
     t_json_obj     json_object_t := json_object_t();
@@ -73,11 +75,9 @@ BEGIN
                                                        a_licensetypecode =>
                                                            lt.licensetypecode,
                                                        a_renewalfeedate =>
-                                                           NVL(
-                                                               lt.renewalfeedate,
                                                                ADD_MONTHS(
                                                                    lt.licensetypeexpirationdate,
-                                                                   -12)))
+                                                                   -12))
                                                ELSE
                                                    lt.awfflag
                                            END,

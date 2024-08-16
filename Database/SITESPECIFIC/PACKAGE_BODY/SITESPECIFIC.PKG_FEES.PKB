@@ -8916,6 +8916,7 @@ IS
 
                     t_ltexpirationdate    := api.pkg_columnquery.datevalue(z.jobid, 'ExpirationDate');
                     t_ltcode              := api.pkg_columnquery.VALUE(z.jobid, 'LicenseTypeCode');
+                    t_Reporteddate        := api.pkg_columnquery.datevalue(z.jobid, 'ReportedDate'); --WO 35273 Added by Pawan Craft Distillers 
 
                     -- Get the Issue Tolerance user constant
                     t_issuetolerance      := api.pkg_constantquery.VALUE('ISSUETOLERANCE');
