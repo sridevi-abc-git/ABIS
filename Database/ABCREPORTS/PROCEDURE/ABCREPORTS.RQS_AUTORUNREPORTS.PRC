@@ -20,6 +20,7 @@ CREATE OR REPLACE PROCEDURE ABCREPORTS.RQS_AUTORUNREPORTS(p_override      IN VAR
 -- 03/07/2016 TJL   9131    Added logging report that were exported
 -- 09/22/2016 TJL   7213    Added parameter finialize id
 -- 10/12/2017 TJL           Corrected formating of report
+-- 5/28/2024  PK            Run Report 46 with office flag 'Y' without changing it in config table.
 -- ****************************************************************************
             
     PROCEDURE get_last_report_date(p_cycle             IN  VARCHAR2,
@@ -266,7 +267,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                         report_day,
                         finalize_id
                    FROM v_scheduled_reports
-                  WHERE report_number = NVL(p_report_number, report_number)
+                  WHERE  report_number = NVL(p_report_number, report_number)
                   ORDER BY report_number)
             LOOP
                 -- create report parameters from report schedule data
@@ -278,7 +279,7 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                 lt_parameters.add_value('REPORT_NAME', reports.report_name);            
                 lt_parameters.add_value('PROCESS', reports.process);            
                 lt_parameters.add_value('CYCLE_IND', reports.cycle_ind);            
-                lt_parameters.add_value('BY_OFFICE_FLG', reports.by_office_flg);            
+                lt_parameters.add_value('BY_OFFICE_FLG', case reports.report_number when 46 Then 'Y' else reports.by_office_flg End);            
                 lt_parameters.add_value('DATA_FORMAT', reports.data_format);            
                 lt_parameters.add_value('FINALIZE_ID', reports.finalize_id);            
                 lt_parameters.add_value('REPORT_DAY', reports.report_day);            
@@ -299,14 +300,21 @@ PROCEDURE sendreport(p_job_id IN NUMBER) IS
                 LOOP
                     lt_parameters.upd_value(parameter.parameter_name,
                                             rqs_process_parameters.process(parameter.parameter_value, 
-                                                                           lt_parameters));                
-                END LOOP;                                                     
+                                                                           lt_parameters));    
+                         --  for i in 1.. lt_parameters.count loop
+                     
+       
+         --dbms_Output.put_Line('perameters value: ' ||  parameters.parameter_value); 
+       --   end loop;                                               
+                                                                         
+                END LOOP;  
+                                                 
                 
                 -- queue up the report(s) to be executed.
                 create_queue_rec(p_parms      => lt_parameters, 
                                  p_job_id     => ln_, 
                                  p_status_msg => lv_status_msg); 
-
+         --   dbms_Output.put_Line(lt_parameters);
                 -- check if error in handling queueing
                 
                 -- remove any old reports over month old
