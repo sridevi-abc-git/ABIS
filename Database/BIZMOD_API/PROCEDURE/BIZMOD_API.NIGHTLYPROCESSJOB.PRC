@@ -39,15 +39,18 @@ IS
     --  10.1    07/15/2024  TJL  BIZ-15858  change fiscal end date to expiration date for figuring
     --                                        out which renewal fee to use for AWF.
     --  11.0.4  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
-    --  12.0.2  08/12/2024  TJL  BIZ-16036  Changed when awf report is avaliable after renewal
+    --  12.0.3  08/12/2024  TJL  BIZ-16036  Changed when awf report is avaliable after renewal
     --                                        Incorprated BIZ-15991 fix
     -- ****************************************************************************
 
-    FUNCTION get_awfreninfo(a_fiscalend DATE, a_jobid NUMBER)
+    -- ****************************************************************************
+    --  a_fiscalstart - 3 months and a_fiscalend dates should be for the previous fiscal year
+    -- ****************************************************************************
+    FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
+                            a_fiscalend       DATE,
+                            a_jobid           NUMBER)
         RETURN NUMBER
     AS
-        t_start_date   DATE;
-        t_end_date     DATE;
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
@@ -56,15 +59,12 @@ IS
         t_feeobjid     NUMBER;
         t_old          NUMBER;
     BEGIN
-        SELECT lt.applicationjobid
+        SELECT MAX(lt.applicationjobid)
           INTO t_application
           FROM bizmod_api.licensetype_t lt
          WHERE lt.licensetypejobid = a_jobid;
 
         t_issuedate := api.pkg_columnquery.datevalue(a_jobid, 'IssueDate');
-
-        t_start_date := ADD_MONTHS(a_fiscalend + 1, -36);
-        t_end_date := ADD_MONTHS(a_fiscalend, -12);
 
         IF (t_application IS NULL)
         THEN
@@ -116,7 +116,7 @@ IS
 
         -- Older license don't have applications in ABIS
         --   Applications not need for licenses issued over 3 years ago
-        IF (TRUNC(t_issuedate) >= t_start_date) -- 07/15/2024  TJL  BIZ-15858
+        IF (TRUNC(t_issuedate) >= a_fiscalstart) -- 07/15/2024  TJL  BIZ-15858
         THEN
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
@@ -129,6 +129,7 @@ IS
         THEN
             -- find license transfer from license. can have multiple transfer from's
             --   for an application
+
             FOR rec
                 IN (  SELECT lt.toobjectid                             transferfromobjectid,
                              r.toobjectid                              licenseobjectid,
@@ -167,37 +168,110 @@ IS
 
         CASE
             -- get renewal fee information for licenses over a couple of years old
-            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalend + 1, -24)
+            WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalstart, 3)
             THEN
-                -- get renewal fee
-                SELECT MAX(f.feeid)
-                  INTO t_feeid
-                  FROM api.fees f
-                 WHERE f.jobid = a_jobid
-                   AND (f.description LIKE '02 - REN%'
-                     OR f.description LIKE '22 - REN%')
-                   AND f.transactiondate BETWEEN t_start_date AND t_end_date;
+                     -- get renewal fee
+                     SELECT f.feeid
+                       INTO t_feeid
+                       FROM api.fees f
+                      WHERE f.jobid = a_jobid
+                        AND (f.description LIKE '02 - REN%'
+                          OR f.description LIKE '22 - REN%')
+                        AND f.transactiondate BETWEEN a_fiscalstart
+                                                  AND a_fiscalend
+                   ORDER BY f.transactiondate ASC
+                FETCH FIRST 1 ROWS ONLY;
             -- for licenses issued was a transfer this year get renewal fees
             --    from the transfer from license
-
-            WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalend + 1, -12)
+            WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalstart, 3)
                                         AND a_fiscalend
             THEN
                 CASE
                     WHEN (t_applicationtype = 'Transfer'
                       AND api.pkg_columnquery.VALUE(t_application,
                                                     'PersonToPerson') =
-                          'N')
+                          'Y')
                     THEN
-                        --                        DBMS_OUTPUT.put_line('calling recursive');
+                        -- get ANN Fees
+                        FOR rec
+                            IN (SELECT f.feeid, f.paidamount
+                                  FROM api.fees f
+                                 WHERE f.jobid = t_application
+                                   AND SUBSTR(f.description, 1, 2) IN
+                                           ('02', '22')
+                                   AND f.description LIKE '%ANN%')
+                        LOOP
+                            t_feeid := rec.feeid;
+                            EXIT WHEN rec.paidamount != 0;
+                        END LOOP;
+                    WHEN (t_applicationtype = 'Transfer'
+                      AND api.pkg_columnquery.VALUE(t_application,
+                                                    'PremiseToPremise') =
+                          'Y')
+                    THEN
+                        -- get ANN Fees if 02 added during application
+                        FOR rec
+                            IN (SELECT f.feeid, f.paidamount
+                                  FROM api.fees f
+                                 WHERE f.jobid = t_application
+                                   AND SUBSTR(f.description, 1, 2) IN
+                                           ('02', '22')
+                                   AND f.description LIKE '%ANN%')
+                        LOOP
+                            t_feeid := rec.feeid;
+                            EXIT WHEN rec.paidamount != 0;
+                        END LOOP;
+
+                        IF (t_feeid IS NULL)
+                        THEN
+                            -- get fee from transfer from license
+                            t_feeid :=
+                                api.pkg_columnquery.numericvalue(
+                                    get_awfreninfo(
+                                        a_fiscalstart => a_fiscalstart,
+                                        a_fiscalend => a_fiscalend,
+                                        a_jobid     => t_transferfromobjectid),
+                                    'FeeId');
+                        END IF;
+                    WHEN (t_applicationtype = 'Original')
+                    THEN
+                        -- get ANN Fees
+                        FOR rec
+                            IN (SELECT f.feeid, f.paidamount
+                                  FROM api.fees f
+                                 WHERE f.jobid = t_application
+                                   AND SUBSTR(f.description, 1, 2) IN
+                                           ('02', '22')
+                                   AND f.description LIKE '%ANN%')
+                        LOOP
+                            t_feeid := rec.feeid;
+                            EXIT WHEN rec.paidamount != 0;
+                        END LOOP;
+                    WHEN (t_applicationtype = 'Change'
+                      AND api.pkg_columnquery.VALUE(t_application,
+                                                    'AddPrimaryLicenseType') =
+                          'Y')
+                    THEN
+                        -- get ANN Fees
+                        FOR rec
+                            IN (SELECT f.feeid, f.paidamount
+                                  FROM api.fees f
+                                 WHERE f.jobid = t_application
+                                   AND SUBSTR(f.description, 1, 2) IN
+                                           ('02', '22')
+                                   AND f.description LIKE '%ANN%')
+                        LOOP
+                            t_feeid := rec.feeid;
+                            EXIT WHEN rec.paidamount != 0;
+                        END LOOP;
+                    ELSE
                         t_feeid :=
                             api.pkg_columnquery.numericvalue(
                                 get_awfreninfo(
+                                    a_fiscalstart => a_fiscalstart,
                                     a_fiscalend => a_fiscalend,
                                     a_jobid     => t_transferfromobjectid),
                                 'FeeId');
-                    ELSE
-                        NULL;
                 END CASE;
             ELSE
                 -- get renewal fee or ANN fee for licenses issued last fiscal year
@@ -230,19 +304,22 @@ IS
                         t_feeid :=
                             api.pkg_columnquery.numericvalue(
                                 get_awfreninfo(
+                                    a_fiscalstart => a_fiscalstart,
                                     a_fiscalend => a_fiscalend,
                                     a_jobid     => t_transferfromobjectid),
                                 'FeeId');
                     ELSE
-                        -- get ren fees from job
-                        SELECT MAX(f.feeid)
-                          INTO t_feeid
-                          FROM api.fees f
-                         WHERE f.jobid = a_jobid
-                           AND (f.description LIKE '02 - REN%'
-                             OR f.description LIKE '22 - REN%')
-                           AND f.transactiondate BETWEEN t_start_date
-                                                     AND t_end_date;
+                             -- get ren fees from job
+                             SELECT f.feeid
+                               INTO t_feeid
+                               FROM api.fees f
+                              WHERE f.jobid = a_jobid
+                                AND (f.description LIKE '02 - REN%'
+                                  OR f.description LIKE '22 - REN%')
+                                AND f.transactiondate BETWEEN a_fiscalstart
+                                                          AND a_fiscalend
+                           ORDER BY f.transactiondate ASC
+                        FETCH FIRST 1 ROWS ONLY;
                     END IF;
                 END IF;
         END CASE;
@@ -257,6 +334,8 @@ IS
                AND reo.linkvalue = TO_CHAR(t_feeid);
         END IF;
 
+        COMMIT;
+
         RETURN t_feeobjid;
     EXCEPTION
         WHEN NO_DATA_FOUND
@@ -265,15 +344,14 @@ IS
     END;
 
     -- ****************************************************************************
+    --  a_fiscalstart - 3 months and a_fiscalend dates should be for the previous fiscal year
     -- ****************************************************************************
-    FUNCTION awfrequired(a_fiscalend DATE, a_licensetypeobjectid IN NUMBER)
+    FUNCTION awfrequired(a_fiscalstart  IN DATE,
+                         a_fiscalend       DATE,
+                         a_licensetypeobjectid IN NUMBER)
         RETURN NUMBER
     IS
         t_issuedate    DATE;
-        t_branchapplies VARCHAR2(1);
-        t_awfdate      DATE;
-        t_expiration   DATE;
-        t_fiscalstart  DATE := ADD_MONTHS(a_fiscalend, -12) + 1;
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
@@ -281,33 +359,22 @@ IS
         t_feeid        NUMBER;
         t_msgno        NUMBER;
     BEGIN
-        SELECT lt.applicationjobid, lt.licensetypeexpirationdate
-          INTO t_application, t_expiration
+        SELECT lt.applicationjobid
+          INTO t_application
           FROM bizmod_api.licensetype_t lt
          WHERE lt.licensetypejobid = a_licensetypeobjectid;
 
         t_issuedate :=
             api.pkg_columnquery.datevalue(a_licensetypeobjectid, 'IssueDate');
 
-dbms_output.put(a_licensetypeobjectid || chr(9) || t_issuedate || chr(9) || t_expiration || ' - ' || TO_DATE(
-                       '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6))));
-        -- do not allow AWF before begining of fiscal year the expiration is in
-        IF (t_expiration > TO_DATE(
-                       '30-JUN-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6))))
-        then 
-        
-            t_msgno := 10;
-        end if;
-dbms_output.put(chr(9) || nvl(t_msgno, 0));        
-        if (t_msgno is null)
-        then
         SELECT CASE WHEN SUM(cnt) = 0 THEN NULL ELSE 9 END
           INTO t_msgno
           FROM (SELECT COUNT(1)     cnt
-                  FROM api.fees  f
+                  FROM api.fees f
                  WHERE f.jobid = a_licensetypeobjectid
-                   AND f.description LIKE '%AWF%'
-                   AND TRUNC(f.transactiondate) >= GREATEST(t_fiscalstart, t_expiration + 1)
+                   AND f.description LIKE '%AWF%' -- renewal transaction before fiscal start by couple of months
+                   AND TRUNC(f.transactiondate) BETWEEN a_fiscalstart
+                                                    AND a_fiscalend
                 UNION
                 SELECT COUNT(1)     cnt
                   FROM bizmod_api.e_payments_t p
@@ -316,28 +383,28 @@ dbms_output.put(chr(9) || nvl(t_msgno, 0));
                                                   'LicenseNumber')
                     AND p.licensetypecode IN ('02', '22')
                     AND p.description LIKE '%AWF%'
-                    AND TRUNC(p.createddate) >= t_fiscalstart));
-        end if;
-        
+                    AND TRUNC(p.createddate) BETWEEN a_fiscalstart
+                                                 AND a_fiscalend));
+
         -- check if this was liense was just issued or was transfered
         IF (t_msgno IS NULL
-        AND t_issuedate > ADD_MONTHS(GREATEST(t_fiscalstart - 1, t_expiration), -24))
+        AND t_issuedate >= a_fiscalstart)
         THEN
             t_applicationtype :=
                 api.pkg_columnquery.VALUE(t_application, 'ApplicationType');
 
             -- make sure that this license has been renewed in the pass not issued this year
             CASE
-                WHEN ((t_issuedate >= ADD_MONTHS(GREATEST(t_fiscalstart - 1, t_expiration), -12)
-                   AND ((t_applicationtype = 'Original')
-                     OR (t_applicationtype = 'Transfer'
-                     AND api.pkg_columnquery.VALUE(t_application,
-                                                   'PersonToPerson') =
-                         'Y')
-                     OR (t_applicationtype = 'Change'
-                     AND api.pkg_columnquery.VALUE(t_application,
-                                                   'AddPrimaryLicenseType') =
-                         'Y'))))
+                WHEN ((t_issuedate >= a_fiscalstart)
+                  AND ((t_applicationtype = 'Original')
+                    OR (t_applicationtype = 'Transfer'
+                    AND api.pkg_columnquery.VALUE(t_application,
+                                                  'PersonToPerson') =
+                        'Y')
+                    OR (t_applicationtype = 'Change'
+                    AND api.pkg_columnquery.VALUE(t_application,
+                                                  'AddPrimaryLicenseType') =
+                        'Y')))
                 THEN
                     t_msgno := 10;
                 WHEN t_applicationtype = 'Transfer'
@@ -397,7 +464,7 @@ dbms_output.put(chr(9) || nvl(t_msgno, 0));
                           FROM (SELECT COUNT(1)     cnt
                                   FROM api.fees f
                                  WHERE f.jobid = t_transferfromobjectid
-                                   AND TRUNC(f.transactiondate) BETWEEN t_fiscalstart
+                                   AND TRUNC(f.transactiondate) BETWEEN a_fiscalstart
                                                                     AND a_fiscalend
                                    AND f.description LIKE '%AWF%'
                                 UNION
@@ -408,7 +475,9 @@ dbms_output.put(chr(9) || nvl(t_msgno, 0));
                                            t_transferfromobjectid,
                                            'LicenseNumber')
                                    AND p.licensetypecode IN ('02', '22')
-                                   AND TRUNC(p.createddate) BETWEEN t_fiscalstart
+                                   AND TRUNC(p.createddate) BETWEEN ADD_MONTHS(
+                                                                        a_fiscalstart,
+                                                                        -3)
                                                                 AND a_fiscalend
                                    AND p.description LIKE '%AWF%');
                     ELSE
@@ -419,7 +488,6 @@ dbms_output.put(chr(9) || nvl(t_msgno, 0));
             END CASE;
         END IF;
 
-dbms_output.put_line(chr(9) || t_msgno);
         RETURN t_msgno;
     END;
 
@@ -519,70 +587,34 @@ dbms_output.put_line(chr(9) || t_msgno);
                             a2.createddate);
 
             -- update expiration dates or status that have changed and reset AWF control values
-            UPDATE bizmod_api.licensetype_t lt
-               SET lt.licensetypeexpirationdate =
-                       (SELECT expirationdate
-                          FROM mart.licensetype l
-                         WHERE l.objectid = lt.licensetypejobid),
-                   lt.awfflag = 'x' -- force check to see if AWF is available
-             WHERE EXISTS
-                       (SELECT 1
-                          FROM mart.licensetype l
-                         WHERE l.objectid = lt.licensetypejobid
-                           AND l.expirationdate !=
-                               lt.licensetypeexpirationdate);
+            FOR rec
+                IN (SELECT l.expirationdate,
+                           l.statusname,
+                           lt.licensetypejobid,
+                           lt.licensenumber
+                      FROM mart.licensetype  l
+                           JOIN bizmod_api.licensetype_t lt
+                               ON (lt.licensetypejobid = l.objectid)
+                     WHERE l.objectid = lt.licensetypejobid
+                       AND (l.expirationdate != lt.licensetypeexpirationdate
+                         OR l.statusname != lt.statusname))
+            LOOP
+                UPDATE bizmod_api.licensetype_t lt
+                   SET lt.licensetypeexpirationdate = rec.expirationdate,
+                       lt.statusname = rec.statusname,
+                       lt.renfeeobjid = NULL,
+                       lt.renewalfeedate = NULL,
+                       lt.awfstatusnumber = NULL,
+                       lt.awfflag = NULL
+                 WHERE lt.licensetypejobid = rec.licensetypejobid;
 
-            -- 12.0    08/12/2024  TJL  BIZ-16036
-            -- do not reset flags if renewed prior to end of current fiscal year
-            UPDATE bizmod_api.licensetype_t lt
-               SET lt.renfeeobjid =
-                       CASE
-                           WHEN lt.licensetypeexpirationdate = t_fiscalend
-                           THEN
-                               NULL
-                           ELSE
-                               lt.renfeeobjid
-                       END,
-                   lt.renewalfeedate =
-                       CASE
-                           WHEN lt.licensetypeexpirationdate = t_fiscalend
-                           THEN
-                               NULL
-                           ELSE
-                               lt.renewalfeedate
-                       END,
-                   lt.awfstatusnumber =
-                       CASE
-                           WHEN lt.licensetypeexpirationdate = t_fiscalend
-                           THEN
-                               NULL
-                           ELSE
-                               10
-                       END,
-                   lt.awfflag =
-                       CASE
-                           WHEN lt.licensetypeexpirationdate = t_fiscalend
-                           THEN
-                               NULL
-                           ELSE
-                               'N' -- do not allow AWF until next fiscal year
-                       END
-             WHERE lt.awfflag = 'x';
+                DBMS_OUTPUT.put_line(
+                    rec.licensenumber
+                    || '  expiration updated: '
+                    || SQL%ROWCOUNT);
 
-            -- 07/24/2024  TJL  BIZ-15915
-            -- reset only when status changes
-            UPDATE bizmod_api.licensetype_t lt
-               SET lt.statusname = (select l.statusname FROM mart.licensetype l
-                         WHERE l.objectid = lt.licensetypejobid),
-                   lt.renfeeobjid = NULL,
-                   lt.renewalfeedate = NULL,
-                   lt.awfstatusnumber = NULL,
-                   lt.awfflag = NULL
-             WHERE EXISTS
-                       (SELECT 1
-                          FROM mart.licensetype l
-                         WHERE l.objectid = lt.licensetypejobid
-                           AND l.statusname != lt.statusname);
+                COMMIT;
+            END LOOP;
 
             -- 12.0    08/12/2024  TJL  BIZ-16036
             -- reset AWF flags at begining of fiscal year (JULY 1 only)
@@ -697,7 +729,7 @@ dbms_output.put_line(chr(9) || t_msgno);
                          FROM bizmod_api.licensetype_t lt
                         WHERE lt.licensetypecode IN ('02', '22')
                           AND lt.renfeeobjid IS NULL
-                          AND nvl(lt.awfstatusnumber, 0) != 10
+                          AND NVL(lt.awfstatusnumber, 0) != 10
                           AND NVL(lt.awfflag, 'Y') != 'NA' -- 05/14/2024  TJL  BIZ-15461
                           AND lt.statusname IN ('ACTIVE',
                                                 'SUREND',
@@ -707,11 +739,15 @@ dbms_output.put_line(chr(9) || t_msgno);
                                                 'SLMSHD'))
             LOOP
                 t_msgno :=
-                    awfrequired(a_fiscalend => lt.licensetypeexpirationdate,
+                    awfrequired(a_fiscalstart => t_fiscalstart,
+                                a_fiscalend => t_fiscalend,
                                 a_licensetypeobjectid => lt.licensetypejobid);
+
+                -- use previous fiscal year to find renewal fee paid
                 t_feeobjid :=
                     get_awfreninfo(
-                        a_fiscalend => lt.licensetypeexpirationdate,
+                        a_fiscalstart => ADD_MONTHS(t_fiscalstart, -15),
+                        a_fiscalend => ADD_MONTHS(t_fiscalend, -12),
                         a_jobid     => lt.licensetypejobid);
 
                 UPDATE bizmod_api.licensetype_t lic
@@ -723,7 +759,8 @@ dbms_output.put_line(chr(9) || t_msgno);
                        lic.awfflag =
                            CASE NVL(t_msgno, 0) WHEN 0 THEN 'Y' ELSE 'N' END
                  WHERE lic.licensetypejobid = lt.licensetypejobid;
-                 COMMIT;
+
+                COMMIT;
             END LOOP;
 
             COMMIT;
@@ -755,6 +792,9 @@ BEGIN
     BEGIN
         -- ********************************************************************
         t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
+
+        api.pkg_logicaltransactionupdate.resettransaction;
+        ROLLBACK;
 
         -- ********************************************************************
         BEGIN
@@ -876,7 +916,8 @@ BEGIN
                 IN (SELECT api.pkg_columnquery.numericvalue(p.feeobjid,
                                                             'JobId')
                                jobid,
-                           p.rowid id,    
+                           p.ROWID
+                               id,
                            p.licensetypecode,
                            ltc.color,
                            TRUNC(
@@ -916,7 +957,7 @@ BEGIN
                 LOOP
                     UPDATE bizmod_api.e_payments_t p
                        SET p.issued = 'Y'
-                     WHERE rowid = lts.id
+                     WHERE ROWID = lts.id
                        LOG ERRORS INTO bizmod_api.err$_e_payments_t
                                ('UPDATE')
                                REJECT LIMIT UNLIMITED;

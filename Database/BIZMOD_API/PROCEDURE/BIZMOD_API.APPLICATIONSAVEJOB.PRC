@@ -13,11 +13,14 @@ AS
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
     --   1.3  07/01/2024 TJL  BIZ-15808  Initial Procedure Created
+    --   2.0  08/14/2014 TJL  BIZ-16073  Added URL info and status packet
+    --                                   Reference BIZ-15319
     -- ****************************************************************************
-    t_url         constant varchar2(1000) := '/api/licensing/internal/licenseapp/applications/<<applicationId>>?status=<<status>>';
+    t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
     t_method      constant varchar2(10) := 'PATCH';
     t_urlinfo     VARCHAR2(10000);
     t_response     json_object_t;
+    t_body         json_object_t := json_object_t();
     t_applicationid VARCHAR2(40);
     t_process      VARCHAR2(32) := 'APPLICATIONSAVEJOB';
     t_sqlerrm      VARCHAR2(4000);
@@ -29,8 +32,8 @@ BEGIN
     BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
 
-        t_status := case api.pkg_columnquery.VALUE(a_jobid, 'StatusName') 
-                      when 'NEW' then 'PEND'
+        t_status := case upper(api.pkg_columnquery.VALUE(a_jobid, 'StatusName')) 
+                      when 'NEW' then 'PENDING'
                       
                       else api.pkg_columnquery.VALUE(a_jobid, 'StatusName')
                     end;
@@ -38,12 +41,17 @@ BEGIN
         IF (t_status IS NOT NULL)
         THEN
 
-       t_urlinfo := REPLACE(REPLACE(t_url, '<<applicationId>>', t_applicationid), '<<status>>', t_status);
+       t_urlinfo := REPLACE(t_url, '<<applicationId>>', t_applicationid);
 
+        t_body.put('status', t_status);
+        t_body.put('objectId', a_jobid);
+        t_body.put('licenseNumber', api.pkg_columnquery.value(a_jobid, 'ExternalFileNum'));
+        
         t_results :=
             bizmod_api.utl_licenseinfo.calllsp(
                 a_urlinfo   => t_urlinfo,
-                a_method    => t_method);
+                a_method    => t_method,
+                a_content   => t_body.to_clob);
 
             t_response := json_object_t.parse(t_results);
         END IF;
