@@ -38,6 +38,8 @@ AS
     --   7.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
     --   8.0.1  07/08/2024  TJL  BIZ-15808    Updated callsp with more exception handling    
     --   9.0    08/07/2024  TJL  BIZ-15800    Added new CALLLSP Function
+    --   9.1    08/19/2024  TJL  BIZ-16036    Change how get_application finds the requested application
+    --   9.1.1  08/26/2024  TJL  BIZ-16121    Trunc date test in checkpayment function
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -356,23 +358,27 @@ t_infotext := t_info.TO_CLOB;
     BEGIN
         SELECT DISTINCT applicationobjectid
           INTO t_applicationjobid
-          FROM (  SELECT lic.fromobjectid
-                             licensetypejobid,
+          FROM (  SELECT --lic.fromobjectid
+                         --    licensetypejobid,
                          app.toobjectid
                              applicationobjectid,
-                         api.pkg_columnquery.VALUE(plt.toobjectid,
-                                                   'LicenseTypeCode')
-                             licensetypecode,
-                         api.pkg_columnquery.VALUE(app.toobjectid,
-                                                   'CreatedDate')
-                             createddate,
-                         RANK()
-                             OVER(
-                                 PARTITION BY lic.fromobjectid
-                                 ORDER BY
-                                     api.pkg_columnquery.VALUE(app.toobjectid,
-                                                               'CreatedDate') DESC)
-                             rnk
+--                         api.pkg_columnquery.VALUE(plt.toobjectid,
+--                                                   'LicenseTypeCode')
+--                             licensetypecode,
+--                         api.pkg_columnquery.VALUE(app.toobjectid,
+--                                                   'CreatedDate')
+--                             createddate,
+                         api.pkg_columnquery.dateVALUE(lic.fromobjectid,
+                                                   'issuedate') issuedate,
+                         trunc(api.pkg_columnquery.dateVALUE(p.processid,
+                                                   'datecompleted')) datecompleted
+--                         RANK()
+--                             OVER(
+--                                 PARTITION BY lic.fromobjectid
+--                                 ORDER BY
+--                                     api.pkg_columnquery.VALUE(app.toobjectid,
+--                                                               'CreatedDate') DESC)
+--                             rnk
                     -- point to license (lic.toobjectid) from license type object id
                     FROM api.relationships lic
                          -- point to application (app.toobjectid) from license object id
@@ -389,6 +395,9 @@ t_infotext := t_info.TO_CLOB;
                                  api.pkg_configquery.endpointidforname(
                                      'j_application',
                                      'PrimaryLicenseType'))
+                         join api.processes p
+                             on (p.processtypeid = api.pkg_configquery.objectdefidforname('p_IssueLicense')
+                               and p.jobid = app.toobjectid)
                    WHERE lic.endpointid =
                          api.pkg_configquery.endpointidforname('j_LicenseType',
                                                                'License')
@@ -398,8 +407,7 @@ t_infotext := t_info.TO_CLOB;
                                                        'LicenseTypeCode'),
                              a_licensetypecode)
                 ORDER BY createddate) app
-         WHERE app.rnk = 1
-           AND createddate IS NOT NULL;
+        where app.issuedate = app.datecompleted;                     
 
         RETURN t_applicationjobid;
     END;
@@ -410,7 +418,7 @@ t_infotext := t_info.TO_CLOB;
                           a_renewalfeedate IN DATE)
         RETURN VARCHAR2
     AS
-        t_awfflag      VARCHAR2(10);
+        t_awfflag       VARCHAR2(10);
     BEGIN
         SELECT CASE COUNT(1) WHEN 0 THEN 'Y' ELSE 'N' END     awfflag
           INTO t_awfflag
@@ -422,7 +430,7 @@ t_infotext := t_info.TO_CLOB;
                  WHERE p.description = 'AWF'
                    AND p.licensenumber = a_licensenumber
                    AND p.licensetypecode = a_licensetypecode
-                   AND p.datepaid > a_renewalfeedate) lic
+                   AND trunc(p.datepaid) >= trunc(a_renewalfeedate)) lic -- 08/26/2024 TJL BIZ-16121  
          WHERE lic.rnk = 1;
 
         RETURN t_awfflag;

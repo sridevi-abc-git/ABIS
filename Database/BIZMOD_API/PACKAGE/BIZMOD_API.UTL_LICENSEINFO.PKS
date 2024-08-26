@@ -21,7 +21,7 @@ AS
     --   8.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
     --   8.0.1  07/08/2024  TJL  BIZ-15800    Updated gc_apprec_t record
     --   9.0.1  07/22/2024  TJL  BIZ-15800    Updated gc_* records
-    --  10.0    08/07/2024  TJL  BIZ-15800    Added new CALLLSP Function
+    --  10.0.1  08/07/2024  TJL  BIZ-16000    Added new CALLLSP Function
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -56,31 +56,29 @@ AS
                              noevent VARCHAR2(3),
                              eligiblefortransfer VARCHAR2(3));
 
-    TYPE gc_entity_t IS RECORD(TYPE VARCHAR2(4000),
-                               ownertype VARCHAR2(4000),
-                               percentage NUMBER,
-                               firstname VARCHAR2(4000),
-                               middlename VARCHAR2(4000),
-                               lastname VARCHAR2(4000),
-                               suffix VARCHAR2(20),
-                               aliasnames VARCHAR2(4000),
-                               socialsecuritynumber VARCHAR2(4),
-                               driverslicensenumber VARCHAR2(4000),
-                               driverslicensestate VARCHAR2(4000),
-                               passportnumber VARCHAR2(4000),
-                               gender VARCHAR2(4000),
-                               birthdate DATE,
-                               birthcity VARCHAR2(4000),
-                               birthstate VARCHAR2(4000),
-                               birthcountry VARCHAR2(4000),
-                               maritalstatus VARCHAR2(4000),
-                               federalemployeridentificationn VARCHAR2(4000),
-                               address CLOB,
-                               legal_entities CLOB);
+--    TYPE gc_entity_t IS RECORD(TYPE VARCHAR2(4000),
+--                               ownertype VARCHAR2(4000),
+--                               percentage NUMBER,
+--                               firstname VARCHAR2(4000),
+--                               middlename VARCHAR2(4000),
+--                               lastname VARCHAR2(4000),
+--                               suffix VARCHAR2(20),
+--                               aliasnames VARCHAR2(4000),
+--                               socialsecuritynumber VARCHAR2(4),
+--                               driverslicensenumber VARCHAR2(4000),
+--                               driverslicensestate VARCHAR2(4000),
+--                               passportnumber VARCHAR2(4000),
+--                               gender VARCHAR2(4000),
+--                               birthdate DATE,
+--                               birthcity VARCHAR2(4000),
+--                               birthstate VARCHAR2(4000),
+--                               birthcountry VARCHAR2(4000),
+--                               maritalstatus VARCHAR2(4000),
+--                               federalemployeridentificationn VARCHAR2(4000),
+--                               address CLOB,
+--                               legal_entities CLOB);
 
-    TYPE gc_person_t IS RECORD(ownertype VARCHAR2(4000),
-                               percentage NUMBER,
-                               firstname VARCHAR2(4000),
+    TYPE gc_person_t IS RECORD(firstname VARCHAR2(4000),
                                middlename VARCHAR2(4000),
                                lastname VARCHAR2(4000),
                                suffix VARCHAR2(20),
@@ -95,8 +93,7 @@ AS
                                birthstate VARCHAR2(4000),
                                birthcountry VARCHAR2(4000),
                                maritalstatus VARCHAR2(4000),
-                               address CLOB,
-                               legal_entities CLOB);
+                               address CLOB);
 
     TYPE gc_company_t IS RECORD(companyname VARCHAR2(4000),
                                 companystructure VARCHAR2(4000), 
@@ -104,8 +101,7 @@ AS
                                 stateofincorporation  VARCHAR2(4000),
                                 casecretaryofstatenumber  VARCHAR2(4000),
                                 federalemployeridentificationn  VARCHAR2(4000),
-                                address CLOB,
-                                legal_entities CLOB);
+                                address CLOB);
 
     FUNCTION calllsp(a_urlinfo     IN     VARCHAR2,
                      a_method       IN     VARCHAR2,
