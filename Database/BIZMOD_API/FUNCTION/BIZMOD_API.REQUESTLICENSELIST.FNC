@@ -19,7 +19,8 @@ IS
     --    4.0   03/26/2024  TJL BIZ-14833   Rewrote function on how data is selected and from
     --                                        where.
     --    5.0   07/31/2024  TJL BIZ-15915   Change to using experation date -12 months when checking
-    --                                        checking for AWF being paid for current fiscal year 
+    --                                        checking for AWF being paid for current fiscal year
+    --    6.0   08/26/2024 TJL  BIZ-16121   Change what date is used to call checkpayment function  
     -- ****************************************************************************
 
     t_json_obj     json_object_t := json_object_t();
@@ -30,6 +31,10 @@ IS
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000 BYTE);
+    t_fiscal_start DATE         -- 08/26/2024 TJL  BIZ-16121
+        := TO_DATE('01-07-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)),
+                   'dd-mm-yyyy');
+
 BEGIN
     SELECT json_arrayagg(
                json_object(
@@ -74,10 +79,8 @@ BEGIN
                                                            lt.licensenumber,
                                                        a_licensetypecode =>
                                                            lt.licensetypecode,
-                                                       a_renewalfeedate =>
-                                                               ADD_MONTHS(
-                                                                   lt.licensetypeexpirationdate,
-                                                                   -12))
+                                                       -- 08/26/2024 TJL  BIZ-16121    
+                                                       a_renewalfeedate => t_fiscal_start)
                                                ELSE
                                                    lt.awfflag
                                            END,

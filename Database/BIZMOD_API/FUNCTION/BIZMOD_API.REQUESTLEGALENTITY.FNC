@@ -246,7 +246,7 @@ IS
                                     '[^/]+',
                                     1,
                                     1));
-        t_array := a_json.get_array('DATA');
+        t_array := a_json.get_array('LEGALENTITIES');
 
         -- get next level down
         t_pos :=
@@ -302,14 +302,11 @@ IS
                 api.pkg_columnquery.VALUE(t_value, 'LegalEntityType'));
             t_entity.put(
                 'P12TYPE',
-                CASE SUBSTR(
-                         api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'),
-                         1,
-                         3)
-                    WHEN 'P12'
+                CASE WHEN 
+                         api.pkg_columnquery.VALUE(t_value, 'P12Status') = 'Y'
                     THEN
                         'P12'
-                    WHEN 'P12A'
+                    WHEN api.pkg_columnquery.VALUE(t_value, 'P12AStatus') = 'Y'
                     THEN
                         'P12A'
                     ELSE
@@ -361,7 +358,10 @@ BEGIN
         t_msgno        NUMBER;
         t_array        json_array_t := json_array_t();
         t_json         json_object_t := json_object_t();
+        t_entities     json_object_t := json_object_t();
         t_jobid        api.pkg_definition.udt_id;
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
     BEGIN
         t_licensenumber := json_value(a_packet, '$.*.LICENSENUMBER');
         t_jobid :=
@@ -372,8 +372,8 @@ BEGIN
 
         IF (t_jobid IS NOT NULL)
         THEN
+            t_entities.put('LEGALENTITIES', t_array);
             t_json.put('PACKET_TYPE', 'LEGALENTITIES');
-            t_json.put('DATA', t_array);
 
             FOR rec
                 IN (    SELECT DISTINCT
@@ -386,7 +386,7 @@ BEGIN
                                     'o_LegalEntity')
                              OR f.objectdefid =
                                 api.pkg_configquery.objectdefidforname(
-                                    'j_Application'))
+                                    'j_License'))
                            AND r.endpointid IN (292101,
                                                 338110,
                                                 310133,
@@ -395,7 +395,7 @@ BEGIN
                                                 314059,
                                                 329508,
                                                 427253,
-                                                447075)
+                                                447075,340283)
                     CONNECT BY r.fromobjectid = PRIOR r.toobjectid
                            AND r.relationshipid != PRIOR r.relationshipid
                            AND f.objectdefid =
@@ -409,19 +409,21 @@ BEGIN
                                                 314059,
                                                 329508,
                                                 427253,
-                                                447075)
+                                                447075,340283)
                       ORDER BY path2)
             LOOP
-                get_legalentity(a_json => t_json, a_list => rec.path2);
+                get_legalentity(a_json => t_entities, a_list => rec.path2);
             END LOOP;
+            
+            t_json.put('DATA', t_entities);
         ELSE
-            t_json :=
+            t_json := json_object_t(
                 '{"PACKET_TYPE":"MESSAGE","DATA":{"MSGNO":"1","MSG":"License Number '
                 || t_licensenumber
-                || ' Not Found"}}';
+                || ' Not Found"}}');
         END IF;
 
-        RETURN t_json;
+        RETURN t_json.to_clob;
     EXCEPTION
         WHEN OTHERS
         THEN
@@ -435,16 +437,14 @@ BEGIN
 
             COMMIT;
 
-            t_json :=
+            DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || CHR(10) || t_trace);
+            RETURN
                 json_object(
                     'PACKET_TYPE' VALUE 'MESSAGE',
                     'DATA' VALUE
                         json_object('MSGNO' VALUE 5,
                                     'MSG' VALUE 'Oracle Exception',
                                     'EXCEPTION' VALUE t_sqlerrm));
-            DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || CHR(10) || t_trace);
-
-            RETURN t_json;
     END;
 END;
 /

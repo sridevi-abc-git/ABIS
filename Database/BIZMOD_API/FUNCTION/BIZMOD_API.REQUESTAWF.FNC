@@ -32,6 +32,7 @@ IS
     --   4.0    03/26/2024 TJL  BIZ-14833   Change where and how information is retrieve for AWF Report
     --   4.1    03/29/2024 TJL  BIZ-14833   Fix bug of not getting renew fee activity
     --   5.0    08/07/2024 TJL  BIZ-15995   Made checking for payments using license expiration date.
+    --   6.0    08/26/2024 TJL  BIZ-16121   Change what date is used to call checkpayment function  
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -41,6 +42,9 @@ IS
     t_licensenumber VARCHAR2(10);
     t_licensetypecode VARCHAR2(3);
     t_expiration   DATE;
+    t_fiscal_start DATE
+        := TO_DATE('01-07-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)),
+                   'dd-mm-yyyy');
     t_fiscal_end   DATE
         := TO_DATE('30-06-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, 6)),
                    'dd-mm-yyyy');
@@ -75,10 +79,8 @@ BEGIN
                            bizmod_api.utl_licenseinfo.checkpayment(
                                a_licensenumber => lt.licensenumber,
                                a_licensetypecode => lt.licensetypecode,
-                               -- 08/07/2024 TJL  BIZ-15995
-                               a_renewalfeedate => ADD_MONTHS(
-                                           lt.licensetypeexpirationdate,
-                                           -12))
+                               --08/26/2024 TJL  BIZ-16121
+                               a_renewalfeedate => t_fiscal_start)
                        ELSE
                            lt.awfflag
                    END
