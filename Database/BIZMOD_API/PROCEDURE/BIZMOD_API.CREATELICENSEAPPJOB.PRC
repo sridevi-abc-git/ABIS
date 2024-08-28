@@ -1,5 +1,5 @@
 CREATE OR REPLACE PROCEDURE BIZMOD_API.createlicenseappjob(a_seq          IN NUMBER,
-                                                a_asofdate     IN DATE)
+                                                           a_asofdate     IN DATE)
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.CREATELICENSEAPPJOB.PRC
@@ -11,7 +11,7 @@ IS
     -------------------------------------------------------------------------------
     --             Date                         Comment
     --   1.2    05/09/2024  TJL  BIZ-15800  Initial Package Created
-    --   2.0.2  07/19/2024  TJL  BIZ-16000  Added additional fields for application
+    --   2.0.3  07/19/2024  TJL  BIZ-16000  Added additional fields for application
     --                                      update.
     -- ****************************************************************************
 
@@ -349,6 +349,15 @@ IS
             api.pkg_columnupdate.setvalue(t_addressobjectid,
                                           'ZipCode',
                                           t_addr.zipcode);
+            api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                          'PhoneNumber',
+                                          regexp_replace(t_addr.phonenumber, '[^[:digit:]]+'));
+            api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                          'InternationalPhoneNumber',
+                                          regexp_replace(t_addr.internationalphonenumber, '[^[:digit:]]+'));
+            api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                          'FaxNumber',
+                                          regexp_replace(t_addr.faxnumber, '[^[:digit:]]+'));
 
             IF (SUBSTR(t_addr.usastate, 1, 2) = 'CA')
             THEN
@@ -602,7 +611,7 @@ IS
             'FederalEmployerIdentificationN',
             t_entity.federalemployeridentificationn);
 
-
+dbms_output.put_line('ent: ' || a_entityobjectid || 'cmpy: ' || t_objectid);
         -- create relationship from company object to legal entity object
         t_endpointid :=
             api.pkg_configquery.endpointidforname('o_LegalEntity', 'Company');
@@ -615,12 +624,12 @@ IS
         COMMIT;
 
         -- add address to this legal entity
---        IF (t_entity.address IS NOT NULL)
---        THEN
---            add_address(a_jobid     => t_objectid,
---                        a_address_type => 'Address',
---                        a_address   => t_entity.address);
---        END IF;
+        IF (t_entity.address IS NOT NULL)
+        THEN
+            add_address(a_jobid     => t_objectid,
+                        a_address_type => 'Address',
+                        a_address   => t_entity.address);
+        END IF;
 
     END;
 
@@ -699,6 +708,7 @@ dbms_output.put_line(chr(9) || t_objectid);
                                title CLOB FORMAT JSON PATH '$.TITLE',
                                lestructurerel VARCHAR2(4000) PATH '$.LESTRUCTUREREL',
                                percentageofownership NUMBER PATH '$.PERCENTAGEOFOWNERSHIP',
+                               phonenumber VARCHAR2(100) PATH '$.PHONENUMBER',
                                company CLOB FORMAT JSON PATH '$.COMPANY',
                                person CLOB FORMAT JSON PATH '$.PERSON',
                                legalentities CLOB
@@ -857,10 +867,10 @@ dbms_output.put_line(chr(13));
                                               rec.firmname);
                 api.pkg_columnupdate.setvalue(t_objectid,
                                               'PhoneNumber',
-                                              rec.phonenumber);
-                api.pkg_columnupdate.setvalue(t_objectid,
+                                              regexp_replace(rec.phonenumber, '[^[:digit:]]+'));
+               api.pkg_columnupdate.setvalue(t_objectid,
                                               'FaxNumber',
-                                              rec.faxnumber);
+                                              regexp_replace(rec.faxnumber, '[^[:digit:]]+'));
                 api.pkg_columnupdate.setvalue(t_objectid, 'Email', rec.email);
 
                 IF (rec.address IS NOT NULL)
@@ -990,7 +1000,7 @@ BEGIN
                            PATH '$[*].PRIMARYLICENSETYPES',
                        premise_address VARCHAR2(4000)
                            FORMAT JSON
-                           PATH '$.PREMISEADDRESS',
+                           PATH '$.PREMISESADDRESS',
                        mailing_address VARCHAR2(4000)
                            FORMAT JSON
                            PATH '$.MAILINGADDRESS',

@@ -11,13 +11,13 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
-    --   1.2  07/01/2024 TJL  BIZ-15812  Initial Procedure Created
-    --   2.0  08/14/2014 TJL  BIZ-16069  Added URL info and status packet
-    --                                   Reference BIZ-15319
+    --   1.2    07/01/2024 TJL  BIZ-15812  Initial Procedure Created
+    --   2.0.1  08/14/2014 TJL  BIZ-16069  Added URL info and status packet
+    --                                      Reference BIZ-15319
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
     t_method      constant varchar2(10) := 'PATCH';
-    t_status      constant VARCHAR2(50) := 'FEE';
+    t_status      constant VARCHAR2(50) := 'FEES_DUE';
     t_urlinfo     VARCHAR2(10000);
     t_process     constant VARCHAR2(32) := 'NEWFEEJOB';
     t_body         json_object_t := json_object_t();
