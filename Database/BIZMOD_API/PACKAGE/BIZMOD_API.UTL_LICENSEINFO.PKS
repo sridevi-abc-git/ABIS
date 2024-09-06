@@ -22,11 +22,17 @@ AS
     --   8.0.1  07/08/2024  TJL  BIZ-15800    Updated gc_apprec_t record
     --   9.0.1  07/22/2024  TJL  BIZ-15800    Updated gc_* records
     --  10.0.1  08/07/2024  TJL  BIZ-16000    Added new CALLLSP Function
+    --  10.1.0  08/29/2024  TJL  BIZ-16000    Added columns to gc_apprec
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
+                               transferchangetype VARCHAR2(100),
+                               transferchangelicensenumber VARCHAR2(50),
+                               multiplestockmembershiptrans VARCHAR2(1),    
                                lspapplicationid VARCHAR2(40),
                                underconstruction VARCHAR2(3),
+                               prioritydrawapplication VARCHAR2(1),
+                               prioritydrawcounty VARCHAR2(4000),
                                dba VARCHAR2(4000),
                                felony VARCHAR2(3),
                                violation VARCHAR2(3),
