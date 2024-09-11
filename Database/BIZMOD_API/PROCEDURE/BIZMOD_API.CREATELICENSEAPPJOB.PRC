@@ -14,6 +14,7 @@ IS
     --   1.2    05/09/2024  TJL  BIZ-15800  Initial Package Created
     --   2.1    07/19/2024  TJL  BIZ-16000  Added additional fields for application
     --                                      update.
+    --   3.0.0  09/09/2024  TJL  BIZ-16077  Added country to add address process
     -- ****************************************************************************
 
     PROCEDURE add_legal_entities(a_objectid     IN api.pkg_definition.udt_id,
@@ -315,9 +316,11 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                            PATH '$.ADDRESSLOCATION',
                        addressline1 VARCHAR2(4000) PATH '$.ADDRESSLINE1',
                        addressline2 VARCHAR2(4000) PATH '$.ADDRESSLINE2',
+                       addressline3 VARCHAR2(4000) PATH '$.ADDRESSLINE3',
                        usacity VARCHAR2(4000) PATH '$.USACITY',
                        usastate VARCHAR2(4000) PATH '$.USASTATE',
                        zipcode VARCHAR2(4000) PATH '$.ZIPCODE',
+                       country VARCHAR2(4000) PATH '$.COUNTRY',
                        phonenumber VARCHAR2(4000) PATH '$.PHONENUMBER',
                        faxnumber VARCHAR2(4000) PATH '$.FAXNUMBER',
                        internationalphonenumber VARCHAR2(4000)
@@ -351,10 +354,12 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                                        || '%'
                                        || t_addr.addressline2
                                        || '%'
+                                       || t_addr.addressline3
+                                       || '%'
                                        || t_addr.usacity
                                        || '%') AS api.udt_objectlist)))
         LOOP
-            IF (UPPER(t_addr.addressline1) =
+            IF (UPPER(t_addr.addressline1)) =
                 UPPER(
                     api.pkg_columnquery.VALUE(rec.objectid, 'addressline1'))
             AND UPPER(NVL(t_addr.addressline2, 'X')) =
@@ -363,8 +368,16 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                         api.pkg_columnquery.VALUE(rec.objectid,
                                                   'addressline2'),
                         'X'))
-            AND UPPER(t_addr.usacity) =
-                UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'USACity')))
+            AND UPPER(NVL(t_addr.addressline3, 'X')) =
+                UPPER(
+                    NVL(
+                        api.pkg_columnquery.VALUE(rec.objectid,
+                                                  'addressline3'),
+                        'X'))
+            AND UPPER(NVL(t_addr.usacity, 'X')) =
+                UPPER(NVL(api.pkg_columnquery.VALUE(rec.objectid, 'USACity'), 'X'))
+            AND UPPER(NVL(t_addr.country, 'X')) =
+                UPPER(NVL(api.pkg_columnquery.VALUE(rec.objectid, 'Country'), 'X'))
             THEN
                 t_addressobjectid := rec.objectid;
                 EXIT WHEN t_addressobjectid IS NOT NULL;
@@ -393,8 +406,14 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                                           'AddressLine2',
                                           t_addr.addressline2);
             api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                          'AddressLine3',
+                                          t_addr.addressline3);
+            api.pkg_columnupdate.setvalue(t_addressobjectid,
                                           'ZipCode',
                                           t_addr.zipcode);
+            api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                          'Country',
+                                          t_addr.country);
             api.pkg_columnupdate.setvalue(
                 t_addressobjectid,
                 'PhoneNumber',
@@ -1226,11 +1245,9 @@ BEGIN
 
         INSERT INTO bizmod_api.license_app_t(lspid,
                                              jobid,
-                                             newfee,
                                              createddate)
              VALUES (t_apprec.lspapplicationid,
                      t_jobid,
-                     NULL,
                      SYSDATE);
 
         sitespecific.pkg_license.generateappexternalfilenum(t_jobid, SYSDATE);
@@ -1245,9 +1262,9 @@ BEGIN
             || t_jobid);
 
         -- notify LSP application has completed
---        bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
---                                            a_asofdate  => SYSDATE,
---                                            a_jobid     => t_jobid);
+        bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
+                                            a_asofdate  => SYSDATE,
+                                            a_jobid     => t_jobid);
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
