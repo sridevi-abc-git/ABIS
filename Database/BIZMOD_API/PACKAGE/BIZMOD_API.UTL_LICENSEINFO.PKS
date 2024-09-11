@@ -23,6 +23,8 @@ AS
     --   9.0.1  07/22/2024  TJL  BIZ-15800    Updated gc_* records
     --  10.0.1  08/07/2024  TJL  BIZ-16000    Added new CALLLSP Function
     --  10.1.0  08/29/2024  TJL  BIZ-16000    Added columns to gc_apprec
+    --  11.0.0  09/09/2024  TJL  BIZ-16077    Added columns country, addressline3 
+    --                                          to gc_addr_t
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -47,9 +49,11 @@ AS
     TYPE gc_addr_t IS RECORD(addresslocation VARCHAR2(4000), 
                              addressline1 VARCHAR2(4000),
                              addressline2 VARCHAR2(4000),
+                             addressline3 VARCHAR2(4000),
                              usacity VARCHAR2(4000),
                              usastate VARCHAR2(4000),
                              zipcode VARCHAR2(4000),
+                             country VARCHAR2(4000),
                              phonenumber VARCHAR2(4000),
                              faxnumber VARCHAR2(4000),
                              internationalphonenumber VARCHAR2(4000),
