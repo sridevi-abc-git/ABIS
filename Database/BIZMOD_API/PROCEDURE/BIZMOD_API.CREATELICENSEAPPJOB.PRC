@@ -109,7 +109,7 @@ IS
                                    FORMAT JSON
                                    PATH '$.SECONDARYLICENSETYPES')))
         LOOP
-dbms_output.put_line('ltc: ' || rec.licensetypecode);
+--dbms_output.put_line('ltc: ' || rec.licensetypecode);
             SELECT ltc.objectid
               INTO t_licensetypecodeobjectid
               FROM query.o_licensetypecategory ltc
@@ -523,7 +523,7 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
     BEGIN
-        DBMS_OUTPUT.put_line('add_person: ' || a_legal_entity);
+--        DBMS_OUTPUT.put_line('add_person: ' || a_legal_entity);
 
         SELECT *
           INTO t_entity
@@ -633,7 +633,7 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
     BEGIN
-        DBMS_OUTPUT.put_line('add_company: ' || a_legal_entity);
+--        DBMS_OUTPUT.put_line('add_company: ' || a_legal_entity);
 
         SELECT *
           INTO t_entity
@@ -679,8 +679,8 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
             'FederalEmployerIdentificationN',
             t_entity.federalemployeridentificationn);
 
-        DBMS_OUTPUT.put_line(
-            'ent: ' || a_entityobjectid || 'cmpy: ' || t_objectid);
+--        DBMS_OUTPUT.put_line(
+--            'ent: ' || a_entityobjectid || 'cmpy: ' || t_objectid);
         -- create relationship from company object to legal entity object
         t_endpointid :=
             api.pkg_configquery.endpointidforname('o_LegalEntity', 'Company');
@@ -710,7 +710,7 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
     BEGIN
-        DBMS_OUTPUT.put_line('add_title: ' || a_legal_entity);
+--        DBMS_OUTPUT.put_line('add_title: ' || a_legal_entity);
 
         FOR rec
             IN (SELECT *
@@ -719,8 +719,8 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                            '$[*]'
                            COLUMNS(description VARCHAR2(4000) PATH '$')))
         LOOP
-            DBMS_OUTPUT.put(
-                a_entityobjectid || '  Desc: ' || rec.description);
+--            DBMS_OUTPUT.put(
+--                a_entityobjectid || '  Desc: ' || rec.description);
             -- *****************************************************************
             -- create person object for the application legal entity object
             -- *****************************************************************
@@ -733,7 +733,7 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                     a_lowvalue  => rec.description);
 
 
-            DBMS_OUTPUT.put_line(CHR(9) || t_objectid);
+--            DBMS_OUTPUT.put_line(CHR(9) || t_objectid);
 
             -- create relationship from title object to legal entity object
             t_endpointid :=
@@ -813,7 +813,7 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
 --                    COMMIT;
 
 
-                    DBMS_OUTPUT.put_line('ownertype: ' || rec.ownertype);
+--                    DBMS_OUTPUT.put_line('ownertype: ' || rec.ownertype);
 
                     api.pkg_columnupdate.setvalue(t_entityobjectid,
                                                   'OwnerType',
@@ -825,8 +825,8 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                                                   'PercentageOfOwnership',
                                                   rec.percentageofownership);
 
-                    DBMS_OUTPUT.put_line(
-                        'rec.lestructurerel: ' || rec.lestructurerel);
+--                    DBMS_OUTPUT.put_line(
+--                        'rec.lestructurerel: ' || rec.lestructurerel);
 
                     IF (api.pkg_columnquery.VALUE(a_objectid,
                                                   'ObjectDefName') =
@@ -864,10 +864,10 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
                         END CASE;
                     END IF;
 
-                    DBMS_OUTPUT.put_line('t_endpointid -' || t_endpointid);
-                    DBMS_OUTPUT.put_line('a_objectid - ' || a_objectid);
-                    DBMS_OUTPUT.put_line(
-                        't_entityobjectid - ' || t_entityobjectid);
+--                    DBMS_OUTPUT.put_line('t_endpointid -' || t_endpointid);
+--                    DBMS_OUTPUT.put_line('a_objectid - ' || a_objectid);
+--                    DBMS_OUTPUT.put_line(
+--                        't_entityobjectid - ' || t_entityobjectid);
 
                     t_relid :=
                         api.pkg_relationshipupdate.new(t_endpointid,
@@ -893,7 +893,7 @@ dbms_output.put_line('ltc: ' || rec.licensetypecode);
 
                     IF (rec.legalentities IS NOT NULL)
                     THEN
-                        DBMS_OUTPUT.put_line(CHR(13));
+--                        DBMS_OUTPUT.put_line(CHR(13));
                         add_legal_entities(
                             a_objectid  => t_entityobjectid,
                             a_legal_entity => rec.legalentities);
@@ -1145,6 +1145,13 @@ BEGIN
                                       'LicensePurchasePrice',
                                       t_apprec.licensepurchaseprice);
 
+        INSERT INTO bizmod_api.license_app_t(lspid,
+                                             jobid,
+                                             createddate)
+             VALUES (t_apprec.lspapplicationid,
+                     t_jobid,
+                     SYSDATE);
+
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
@@ -1243,24 +1250,17 @@ BEGIN
                                       'ApplicationCreatedDate',
                                       SYSDATE);
 
-        INSERT INTO bizmod_api.license_app_t(lspid,
-                                             jobid,
-                                             createddate)
-             VALUES (t_apprec.lspapplicationid,
-                     t_jobid,
-                     SYSDATE);
-
         sitespecific.pkg_license.generateappexternalfilenum(t_jobid, SYSDATE);
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
-        DBMS_OUTPUT.put_line(
-            'Application: '
-            || api.pkg_columnquery.VALUE(t_jobid, 'ExternalFileNum')
-            || ' *  '
-            || CHR(9)
-            || t_jobid);
-
+--        DBMS_OUTPUT.put_line(
+--            'Application: '
+--            || api.pkg_columnquery.VALUE(t_jobid, 'ExternalFileNum')
+--            || ' *  '
+--            || CHR(9)
+--            || t_jobid);
+--
         -- notify LSP application has completed
         bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
                                             a_asofdate  => SYSDATE,
@@ -1318,6 +1318,7 @@ BEGIN
                      t_trace);
 
         COMMIT;
+--                DBMS_OUTPUT.put_line('error');
     END;
 END;
 /
