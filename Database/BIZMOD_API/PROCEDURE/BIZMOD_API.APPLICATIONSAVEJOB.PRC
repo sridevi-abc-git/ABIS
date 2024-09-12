@@ -12,9 +12,10 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
-    --   1.3  07/01/2024 TJL  BIZ-15808  Initial Procedure Created
-    --   2.0  08/14/2014 TJL  BIZ-16073  Added URL info and status packet
+    --   1.3    07/01/2024 TJL  BIZ-15808  Initial Procedure Created
+    --   2.0    08/14/2014 TJL  BIZ-16073  Added URL info and status packet
     --                                   Reference BIZ-15319
+    --   3.0.0  09/12/2014 TJL  BIZ-16077  Added logging email info
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
     t_method      constant varchar2(10) := 'PATCH';
@@ -27,6 +28,7 @@ AS
     t_trace        VARCHAR2(4000);
     t_status       VARCHAR2(40);
     t_info         VARCHAR2(4000);
+    t_value        CLOB;
     t_results      CLOB;
 BEGIN
     BEGIN
@@ -77,11 +79,13 @@ BEGIN
             END;
     END IF;
 
+    t_value := t_body.to_clob;
     INSERT INTO bizmod_api.e_process_log_t(seq,
                                            processjob,
                                            info,
                                            errmsg,
-                                           bktrace)
+                                           bktrace,
+                                           packet)
              VALUES (
                  0,
                  t_process,
@@ -106,7 +110,8 @@ BEGIN
                             NULL
                     END,
                  t_sqlerrm,
-                 t_trace);
+                 t_trace,
+                 t_value);
 
     COMMIT;
 END;

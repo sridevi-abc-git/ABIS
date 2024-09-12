@@ -14,7 +14,7 @@ IS
     --   1.2    05/09/2024  TJL  BIZ-15800  Initial Package Created
     --   2.1    07/19/2024  TJL  BIZ-16000  Added additional fields for application
     --                                      update.
-    --   3.0.0  09/09/2024  TJL  BIZ-16077  Added country to add address process
+    --   3.0.1  09/09/2024  TJL  BIZ-16077  Added country to add address process
     -- ****************************************************************************
 
     PROCEDURE add_legal_entities(a_objectid     IN api.pkg_definition.udt_id,
@@ -1261,11 +1261,6 @@ BEGIN
 --            || CHR(9)
 --            || t_jobid);
 --
-        -- notify LSP application has completed
-        bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
-                                            a_asofdate  => SYSDATE,
-                                            a_jobid     => t_jobid);
-
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
                                                info,
@@ -1286,8 +1281,13 @@ BEGIN
                         '  (' || json_value(t_packet, '$.*.SOURCEAPP') || ')' else null end,
                      t_sqlerrm,
                      t_trace);
-
         COMMIT;
+
+        -- notify LSP application has completed
+        bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
+                                            a_asofdate  => SYSDATE,
+                                            a_jobid     => t_jobid);
+
     EXCEPTION WHEN OTHERS THEN
             t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
             t_trace :=
