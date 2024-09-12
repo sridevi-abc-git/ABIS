@@ -11,6 +11,7 @@ AS
     --                          (BIZ-15812)   SITESPECIFIC.PKG_CATERING and added
     --                                        new procedures and functions to support
     --                                        License Applications
+    --     2.0   09/12/2024  TJL BIZ-16077  adjusted logging
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -72,7 +73,7 @@ AS
     PROCEDURE newfee(a_objectid     IN api.pkg_definition.udt_id,
                      a_asofdate        DATE)
     IS
-        
+
     BEGIN
         IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPID') IS NOT NULL)
         THEN
@@ -80,16 +81,16 @@ AS
                    set newfee = 'Y'
                  where jobid = a_objectid;
         END IF;
-        
+
     END;
-    
+
 --    PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
 --                              a_asofdate     IN DATE,
 --                              a_jobid        IN VARCHAR2) IS
 --    begin
 --        applicationsave(a_objectid, a_asofdate, to_number(a_jobid));
 --    end;
-    
+
     PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
                               a_asofdate     IN DATE,
                               a_jobid        IN api.pkg_definition.udt_id)
@@ -106,21 +107,21 @@ AS
                     a_argument1 => a_objectid,
                     a_argument2 => SYSDATE,
                     a_argument3 => a_jobid);
-    
+
         end if;
-        
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg,
-                                                   bktrace)
-                 VALUES (0,
-                         'APPLICATIONSAVE',
-                         'Application Object Id: ' || a_jobid || chr(13) ||
-                         'Process Id: ' || a_objectid,
-                         t_sqlerrm,
-                         t_trace);
-                         
+
+--            INSERT INTO bizmod_api.e_process_log_t(seq,
+--                                                   processjob,
+--                                                   info,
+--                                                   errmsg,
+--                                                   bktrace)
+--                 VALUES (0,
+--                         'APPLICATIONSAVE',
+--                         'Application Object Id: ' || a_jobid || chr(13) ||
+--                         'Process Id: ' || a_objectid,
+--                         t_sqlerrm,
+--                         t_trace);
+
     EXCEPTION
         WHEN OTHERS
         THEN
@@ -138,9 +139,6 @@ AS
                          'Process Id: ' || a_objectid,
                          t_sqlerrm,
                          t_trace);
-    end;                                  
+    end;
 END;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.PKG_ABIS TO PUBLIC;
