@@ -85,6 +85,7 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 6/92023 NZA              Updated TransferPayment, FingerPrintFee and SetPaymentTransactionFlag for max object id issue.
 -- 08/14/2024 PK WO 35273  Added code for Craft Distillers not to include in produce license batch if they did not report recently produced gallonage
 -- 08/20/2024 TJL BIZ-15444  Added a call to bizmod_api.pkg_abis.newfee in newfee procedure
+-- 09/11/2024 PK            made change to application fee calc api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
 -------------------------------------------------------------------------------
 
 IS
@@ -4059,7 +4060,8 @@ IS
         ELSE
             -- Set t_EstimatedIssueDate to j_Application.EstimatedIssueDate
             t_issuedate   :=  --  08/01/2019 TJL  18697   changed to 'CopiesMailed' from 'EstimatedIssueDate'
-                             api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                             --api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                             api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
         -- End If
         END IF;
 
@@ -10138,8 +10140,3 @@ IS
     END createinterimpermitrenewalfee;
 END pkg_fees;
 /
-
-
-GRANT EXECUTE, DEBUG ON SITESPECIFIC.PKG_FEES TO BIZMOD_API;
-
-GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO POSSEEXTENSIONS;
