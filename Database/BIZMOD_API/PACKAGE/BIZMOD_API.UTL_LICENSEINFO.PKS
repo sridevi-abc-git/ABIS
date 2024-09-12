@@ -20,11 +20,25 @@ AS
     --   7.1    05/24/2024  TJL  BIZ-15485    Add email function to use new configuration table
     --   8.0    07/01/2024  TJL  BIZ-15444    Added procedure CREATEJOB
     --   8.0.1  07/08/2024  TJL  BIZ-15800    Updated gc_apprec_t record
-    --   9.0    07/22/2024  TJL  BIZ-15800    Updated gc_* records
+    --   9.0.1  07/22/2024  TJL  BIZ-15800    Updated gc_* records
+    --  10.0.1  08/07/2024  TJL  BIZ-16000    Added new CALLLSP Function
+    --  10.1.0  08/29/2024  TJL  BIZ-16000    Added columns to gc_apprec
+    --  11.0.0  09/09/2024  TJL  BIZ-16077    Added columns country, addressline3 
+    --                                          to gc_addr_t
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
+                               transferchangetype VARCHAR2(100),
+                               transferchangelicensenumber VARCHAR2(50),
+                               multiplestockmembershiptrans VARCHAR2(1),    
                                lspapplicationid VARCHAR2(40),
+                               underconstruction VARCHAR2(3),
+                               prioritydrawapplication VARCHAR2(1),
+                               prioritydrawcounty VARCHAR2(4000),
+                               dba VARCHAR2(4000),
+                               felony VARCHAR2(3),
+                               violation VARCHAR2(3),
+                               licensepurchaseprice NUMBER,                               
                                primarylicensetypes VARCHAR2(4000),
                                premiseaddress VARCHAR2(4000),
                                mailingaddress VARCHAR2(4000),
@@ -35,9 +49,11 @@ AS
     TYPE gc_addr_t IS RECORD(addresslocation VARCHAR2(4000), 
                              addressline1 VARCHAR2(4000),
                              addressline2 VARCHAR2(4000),
+                             addressline3 VARCHAR2(4000),
                              usacity VARCHAR2(4000),
                              usastate VARCHAR2(4000),
                              zipcode VARCHAR2(4000),
+                             country VARCHAR2(4000),
                              phonenumber VARCHAR2(4000),
                              faxnumber VARCHAR2(4000),
                              internationalphonenumber VARCHAR2(4000),
@@ -50,10 +66,29 @@ AS
                              noevent VARCHAR2(3),
                              eligiblefortransfer VARCHAR2(3));
 
-    TYPE gc_entity_t IS RECORD(TYPE VARCHAR2(4000),
-                               ownertype VARCHAR2(4000),
-                               percentage NUMBER,
-                               firstname VARCHAR2(4000),
+--    TYPE gc_entity_t IS RECORD(TYPE VARCHAR2(4000),
+--                               ownertype VARCHAR2(4000),
+--                               percentage NUMBER,
+--                               firstname VARCHAR2(4000),
+--                               middlename VARCHAR2(4000),
+--                               lastname VARCHAR2(4000),
+--                               suffix VARCHAR2(20),
+--                               aliasnames VARCHAR2(4000),
+--                               socialsecuritynumber VARCHAR2(4),
+--                               driverslicensenumber VARCHAR2(4000),
+--                               driverslicensestate VARCHAR2(4000),
+--                               passportnumber VARCHAR2(4000),
+--                               gender VARCHAR2(4000),
+--                               birthdate DATE,
+--                               birthcity VARCHAR2(4000),
+--                               birthstate VARCHAR2(4000),
+--                               birthcountry VARCHAR2(4000),
+--                               maritalstatus VARCHAR2(4000),
+--                               federalemployeridentificationn VARCHAR2(4000),
+--                               address CLOB,
+--                               legal_entities CLOB);
+
+    TYPE gc_person_t IS RECORD(firstname VARCHAR2(4000),
                                middlename VARCHAR2(4000),
                                lastname VARCHAR2(4000),
                                suffix VARCHAR2(20),
@@ -68,13 +103,18 @@ AS
                                birthstate VARCHAR2(4000),
                                birthcountry VARCHAR2(4000),
                                maritalstatus VARCHAR2(4000),
-                               federalemployeridentificationn VARCHAR2(4000),
-                               address CLOB,
-                               legal_entities CLOB);
+                               address CLOB);
 
-    FUNCTION calllsp(a_process      IN     VARCHAR,
-                     a_parameternames IN OUT json_object_t,
-                     a_replacementvalues IN json_object_t,
+    TYPE gc_company_t IS RECORD(companyname VARCHAR2(4000),
+                                companystructure VARCHAR2(4000), 
+                                dateofincorporation  DATE,
+                                stateofincorporation  VARCHAR2(4000),
+                                casecretaryofstatenumber  VARCHAR2(4000),
+                                federalemployeridentificationn  VARCHAR2(4000),
+                                address CLOB);
+
+    FUNCTION calllsp(a_urlinfo     IN     VARCHAR2,
+                     a_method       IN     VARCHAR2,
                      a_content      IN     CLOB DEFAULT NULL,
                      a_file         IN     BLOB DEFAULT NULL)
         RETURN CLOB;

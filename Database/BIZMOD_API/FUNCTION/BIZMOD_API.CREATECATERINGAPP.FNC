@@ -16,6 +16,8 @@ IS
     --                          BIZ-12643   Validation Rules
     --    1.1   12/14/2023  TJL             Corrected bug in selecting license type
     --    2.0   01/11/2024  TJL BIZ-12162   Added validating License Type status
+    --    3.0   06/06/2024  BN  BIZ-15641   Fixed Duplicate Catering Auth packets issue
+    --    4.0   08/08/2024  TJL BIZ-16000   Change to new createjob procedure
     -- ****************************************************************************
     t_process      VARCHAR2(40);
     t_json_obj     json_object_t := json_object_t();
@@ -30,7 +32,9 @@ IS
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000 BYTE);
+    t_dupReqCount   NUMBER;
 BEGIN
+    DBMS_OUTPUT.PUT_LINE('packaet information: '|| a_packet);
     FOR rec
         IN (SELECT *
               FROM JSON_TABLE(
@@ -127,6 +131,22 @@ BEGIN
                 t_json_arr.append(
                     'Invalid License Type or Status');
         END;
+        
+        
+        -- BIZ-15641   Fixed Duplicate Catering Auth packets issue
+        -- Fetching on the number of request which have been present in the ESERVICES_LOG_T
+        
+        SELECT COUNT(*) INTO t_dupReqCount 
+        FROM bizmod_api.eservices_log_t eg 
+        WHERE JSON_VALUE(eg.packet, '$.DATA.APPLICATION.APPLICATIONID') = rec.applicationid  and eg.request = 'CREATECATERINGAPP';
+             
+        
+        DBMS_OUTPUT.PUT_LINE('t_dupReqCount: '|| t_dupReqCount);
+        if(t_dupReqCount >1)
+        THEN
+          t_json_arr.append('Duplicate Application Request');
+        END IF;
+            
 
         -- check if duplicate application
         IF (api.pkg_simplesearch.objectbyindex(
@@ -309,9 +329,9 @@ BEGIN
 
     IF (t_json_arr.get_size() = 0)
     THEN
-        bizmod_api.createjob(a_procedure => 'CREATECATERINGAPPJOB',
-                             a_description => 'Create Catering Application',
-                             a_argument1 => a_seq);
+        bizmod_api.utl_licenseinfo.createjob(a_procedure => 'CREATECATERINGAPPJOB',
+                                             a_description => 'Create Catering Application',
+                                             a_argument1 => a_seq);
 
         t_json_data.put('MSGNO', '0');
         t_json_data.put('MSG', 'E-Services ' || t_process || ' Scheduled');

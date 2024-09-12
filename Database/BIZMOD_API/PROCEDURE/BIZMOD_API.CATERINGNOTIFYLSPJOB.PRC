@@ -27,6 +27,7 @@ AS
     --   3.0.1   05/17/2024 TJL  BIZ-15485  Change parameters to call to calllsp. New calllsp uses
     --                                          configuration table for HTTP Calls
     --   3.1.1   05/24/2024 TJL  BIZ-15021  Added support for new field Outside Event
+    --   4.0     08/13/2024 TJL  BIZ-15808  Change call to new calllsp function
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
@@ -168,7 +169,7 @@ AS
             api.pkg_columnquery.VALUE(a_objectid, 'EventLocAddressObjectId');
 
         t_json_app.put('applicationId',
-                       api.pkg_columnquery.value(a_objectid, 'LSPId'));
+                       api.pkg_columnquery.VALUE(a_objectid, 'LSPId'));
         t_json_app.put(
             'eventStartDate',
             api.pkg_columnquery.datevalue(a_objectid, 'DateOfEventFrom'));
@@ -374,18 +375,20 @@ AS
 -- ****************************************************************************
 BEGIN
     DECLARE
+        t_url_update CONSTANT VARCHAR2(1000)
+            := '/api/licensing/internal/catering/applications/<<applicationId>>' ;
+        t_method_update CONSTANT VARCHAR2(10) := 'PUT';
+        t_url_status CONSTANT VARCHAR2(1000)
+            := '/api/licensing/internal/catering/applications/<<applicationId>>?status=<<status>>' ;
+        t_method_status CONSTANT VARCHAR2(10) := 'PATCH';
         t_process      VARCHAR2(32) := 'CATERINGNOTIFYLSPJOB';
+        t_urlinfo      VARCHAR2(10000);
         t_data         BLOB;
         t_outcome      VARCHAR2(20);
-        --        t_url          VARCHAR2(1000);
-        --        t_method       VARCHAR2(20);
         t_packet       CLOB;
         t_response     CLOB;
         t_results      CLOB;
         t_json_app     json_object_t;
-        t_parameternames json_object_t;
-        t_replacementvalues json_object_t;
-
         t_applicationid VARCHAR2(1000);
         t_licensenumber VARCHAR2(100);
         t_error        VARCHAR2(4000);
@@ -488,18 +491,13 @@ BEGIN
         IF (t_hashvalue != t_currhash)
         THEN
             -- update LSP of any changes to application data
-            t_parameternames :=
-                json_object_t(
-                    '{"URL":"URL_UPDATE","METHOD":"METHOD_UPDATE"}');
-            t_replacementvalues :=
-                json_object_t(
-                    '{"<<applicationId>>":"' || t_applicationid || '"}');
+            t_urlinfo :=
+                REPLACE(t_url_update, '<<applicationId>>', t_applicationid);
 
             t_response :=
                 bizmod_api.utl_licenseinfo.calllsp(
-                    a_process   => t_process,
-                    a_parameternames => t_parameternames,
-                    a_replacementvalues => t_replacementvalues,
+                    a_urlinfo   => t_urlinfo,
+                    a_method    => t_method_update,
                     a_content   => t_packet);
 
             IF (t_response IS NULL)
@@ -539,19 +537,17 @@ BEGIN
             COMMIT;
         END IF;
 
-        t_parameternames :=
-            json_object_t('{"URL":"URL_STATUS","METHOD":"METHOD_STATUS"}');
-        t_replacementvalues :=
-            json_object_t(
-                '{"<<applicationId>>":"'
-                || t_applicationid
-                || '","<<status>>":"'
-                || t_outcome
-                || '"}');
-
         IF (t_outcome IS NOT NULL
         AND t_response IS NULL)
         THEN
+            t_urlinfo :=
+                REPLACE(
+                    REPLACE(t_url_status,
+                            '<<applicationId>>',
+                            t_applicationid),
+                    '<<status>>',
+                    t_outcome);
+
             IF (t_outcome = 'Approved')
             THEN
                 -- get 218 file to send to LSP
@@ -569,26 +565,19 @@ BEGIN
                    AND r.fromobjectid = a_objectid
                    AND ROWNUM = 1;
 
-                t_replacementvalues :=
-                    json_object_t(
-                        '{"<<applicationId>>":"'
-                        || t_applicationid
-                        || '","<<status>>":"'
-                        || t_outcome
-                        || CHR(38)
-                        || 'file=ABC-218.pdf'
-                        || CHR(38)
-                        || 'metadata=ABC-218.pdf"}');
+                t_urlinfo :=
+                    t_urlinfo
+                    || CHR(38)
+                    || 'file=ABC-218.pdf'
+                    || CHR(38)
+                    || 'metadata=ABC-218.pdf';
             END IF;
 
-            t_response :=
+            t_results :=
                 bizmod_api.utl_licenseinfo.calllsp(
-                    a_process   => t_process,
-                    a_parameternames => t_parameternames,
-                    a_replacementvalues => t_replacementvalues,
-                    a_content   => t_packet,
+                    a_urlinfo   => t_urlinfo,
+                    a_method    => t_method_status,
                     a_file      => t_data);
-
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,

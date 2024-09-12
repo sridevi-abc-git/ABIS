@@ -20,6 +20,7 @@ IS
     --   4.0  04/24/2024  TJL  BIZ-15142  Added extra validation and enhance error logging
     --   4.1  05/13/2024  TJL  BIZ-15465  Corrected bug in AWF payment returning a message
     --                                      that fees already paid.
+    --   5.0  08/08/2024  TJL  BIZ-16000  Change to new createjob procedure
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
     t_packet       CLOB := EMPTY_CLOB();
@@ -242,7 +243,7 @@ BEGIN
         THEN
             COMMIT;
 
-            bizmod_api.createjob(
+            bizmod_api.utl_licenseinfo.createjob(
                 a_procedure => 'E_PAYMENT.MAKEPAYMENT',
                 a_description =>
                     'Pay License Number: '

@@ -27,6 +27,7 @@ IS
     --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
     --   7.0.3   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
     --   7.1.0   07/09/2024  TJL BIZ-15691  Made change to email message.
+    --   8.0     09/03/3034  TJL BIZ-16191  Add filter to the selection of AWF record to pay
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -111,6 +112,7 @@ BEGIN
                        ON (a.licensenumber = p.licensenumber
                        AND a.licensetypecode = p.licensetypecode) -- 04/23/2024  TJL BIZ-15138
              WHERE a.paymentbatch IS NULL
+               AND a.submitteddate IS NOT NULL  -- 8.0     09/03/3034  TJL BIZ-16191
                AND fd.abispayment = 'Y'
                AND fd.feeactivity LIKE '%AWF%'
                AND fd.logseq = a_seq;
@@ -126,8 +128,7 @@ BEGIN
               BULK COLLECT INTO t_awf
               FROM bizmod_api.awf_t a
              WHERE a.awffeeamount <= 0
-               AND a.paymentbatch IS NULL
-               AND a.submitteddate IS NOT NULL;
+               AND a.paymentbatch IS NULL;
 
             t_fd_payment_count := t_awf.COUNT;
         END IF;
@@ -514,3 +515,7 @@ BEGIN
 END;
 /
 
+
+GRANT EXECUTE ON BIZMOD_API.CREATEAWFPAYMENTSJOB TO ABC;
+
+GRANT EXECUTE ON BIZMOD_API.CREATEAWFPAYMENTSJOB TO POSSEEXTENSIONS;

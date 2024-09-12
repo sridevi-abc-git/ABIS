@@ -84,6 +84,8 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 12/28/2022 PK WO 30274   Added code to make type 68 work when added as secondary on new LT 90
 -- 6/92023 NZA              Updated TransferPayment, FingerPrintFee and SetPaymentTransactionFlag for max object id issue.
 -- 08/14/2024 PK WO 35273  Added code for Craft Distillers not to include in produce license batch if they did not report recently produced gallonage
+-- 08/20/2024 TJL BIZ-15444  Added a call to bizmod_api.pkg_abis.newfee in newfee procedure
+-- 09/11/2024 PK            made change to application fee calc api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
 -------------------------------------------------------------------------------
 
 IS
@@ -1376,6 +1378,9 @@ IS
                                       a_taxrateid,
                                       SYSDATE);
             a_feeobjid   := api.pkg_objectupdate.registerexternalobject('o_Fee', a_feeid, SYSDATE);
+
+            -- 07/01/2024 TJL BIZ-15444
+            bizmod_api.pkg_abis.newfee(a_objectid => a_jobid, a_asofdate => sysdate);
         ELSE
             NULL;
         END IF;
@@ -4055,7 +4060,8 @@ IS
         ELSE
             -- Set t_EstimatedIssueDate to j_Application.EstimatedIssueDate
             t_issuedate   :=  --  08/01/2019 TJL  18697   changed to 'CopiesMailed' from 'EstimatedIssueDate'
-                             api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                             --api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                             api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
         -- End If
         END IF;
 
@@ -8916,7 +8922,7 @@ IS
 
                     t_ltexpirationdate    := api.pkg_columnquery.datevalue(z.jobid, 'ExpirationDate');
                     t_ltcode              := api.pkg_columnquery.VALUE(z.jobid, 'LicenseTypeCode');
-                    t_Reporteddate        := api.pkg_columnquery.datevalue(z.jobid, 'ReportedDate'); --WO 35273 Added by Pawan Craft Distillers 
+                    t_Reporteddate        := api.pkg_columnquery.datevalue(z.jobid, 'ReportedDate'); --WO 35273 Added by Pawan Craft Distillers
 
                     -- Get the Issue Tolerance user constant
                     t_issuetolerance      := api.pkg_constantquery.VALUE('ISSUETOLERANCE');
@@ -9015,12 +9021,12 @@ IS
                                         api.pkg_columnupdate.setvalue(z.jobid, 'RENFeeCreated', 'N');
                                         --Update the dup column because post verify did not run on the job
                                         api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'Y');
-                                        
-                                         IF c.licensetypecode = '74' and (t_Reporteddate < ADD_MONTHS(t_ltexpirationdate, -3) or t_Reporteddate is null)  THEN -- WO 35273 Added by Pawan Craft Distillers 
-                                       
+
+                                         IF c.licensetypecode = '74' and (t_Reporteddate < ADD_MONTHS(t_ltexpirationdate, -3) or t_Reporteddate is null)  THEN -- WO 35273 Added by Pawan Craft Distillers
+
                                             api.pkg_columnupdate.setvalue(z.jobid, 'IncludeInProduceLicenseBatch', 'N');
                                                --Update the dup column because post verify did not run on the job
-                                            api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'N'); -- WO 35273 Added by Pawan Craft Distillers 
+                                            api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'N'); -- WO 35273 Added by Pawan Craft Distillers
 
                                         IF api.pkg_columnquery.VALUE(z.jobid, 'SeasonStartMonthNumber') IS NULL THEN
                                             api.pkg_columnupdate.setvalue(z.jobid,
@@ -10134,16 +10140,3 @@ IS
     END createinterimpermitrenewalfee;
 END pkg_fees;
 /
-
-
-GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO ABC;
-
-GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO ABCREPORTS;
-
-GRANT EXECUTE, DEBUG ON SITESPECIFIC.PKG_FEES TO BIZMOD_API;
-
-GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO CONV;
-
-GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO LASSO;
-
-GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO POSSEEXTENSIONS;

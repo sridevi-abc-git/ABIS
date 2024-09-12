@@ -20,6 +20,7 @@ IS
     --    3.1.2 05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
     --                                        and what email procedure is called
     --    4.0   07/08/2024 TJL              Add check to see if file already uploaded
+    --    5.0   08/08/2024  TJL  BIZ-16000  Change to new createjob procedure
     -- ****************************************************************************
 
     FUNCTION split_clob(a_clob         IN CLOB,
@@ -560,7 +561,7 @@ BEGIN
 
                     IF (t_awf > 0)
                     THEN
-                        bizmod_api.createjob(
+                        bizmod_api.utl_licenseinfo.createjob(
                             a_procedure => 'CREATEAWFPAYMENTSJOB',
                             a_description => 'Create AWF Payment Batch',
                             a_argument1 => a_seq);
@@ -568,7 +569,7 @@ BEGIN
 
                     IF (t_other > 0)
                     THEN
-                        bizmod_api.createjob(
+                        bizmod_api.utl_licenseinfo.createjob(
                             a_procedure => 'CREATETRANSMITTALJOB',
                             a_description => 'Create Transmittals',
                             a_argument1 => a_seq);
