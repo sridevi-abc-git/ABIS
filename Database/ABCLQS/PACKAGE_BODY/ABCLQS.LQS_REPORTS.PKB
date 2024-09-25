@@ -1192,11 +1192,11 @@ BEGIN
 														lpad(a.LicenseNumber,6) license_num, 
 														MART.GetLTCodesAndStatus(a.ObjectId) status_code, 
 														a.PremUSCity city  ,
-												       (select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+												  (select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
-														and bl.JOBOBJECTID = lt.LicenseJobId) prem_addr,
-														(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz
+														and bl.JOBOBJECTID = at.ApplicationObjectID) prem_addr,
+												(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')  prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = at.ApplicationObjectID) prem_csz
@@ -1328,11 +1328,11 @@ BEGIN
 														lpad(l.ExternalFileNum,6) license_num, 
 														MART.GetLTCodesAndStatus(L.JOBID) status_code, 
 														l.PremAddressUSCity city,
-                                                    (select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+                                                 (select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = lt.LicenseJobId) prem_addr,
-                                                    (select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz
+												(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = lt.LicenseJobId) prem_csz
@@ -1354,7 +1354,7 @@ BEGIN
 													(select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
-														and bl.JOBOBJECTID = lt.LicenseJobId) prem_addr,
+														and bl.JOBOBJECTID = at.ApplicationObjectID) prem_addr,
 													(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
