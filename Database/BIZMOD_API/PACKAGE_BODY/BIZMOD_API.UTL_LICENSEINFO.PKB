@@ -622,7 +622,8 @@ t_infotext := t_info.TO_CLOB;
                         a_description  IN VARCHAR2,
                         a_argument1    IN VARCHAR2 DEFAULT '0',
                         a_argument2    IN DATE DEFAULT SYSDATE,
-                        a_argument3    IN VARCHAR2 DEFAULT NULL)
+                        a_argument3    IN VARCHAR2 DEFAULT NULL,
+                        a_argument4    IN VARCHAR2 DEFAULT NULL)
     IS
         t_arguments    VARCHAR2(4000);
         t_schedulekey  api.pkg_definition.udt_id;
@@ -645,6 +646,12 @@ t_infotext := t_info.TO_CLOB;
             scheduler.pkg_scheduler.addargument(t_arguments,
                                                 'arg3',
                                                 a_argument3);
+        END IF;
+        IF (a_argument4 IS NOT NULL)
+        THEN
+            scheduler.pkg_scheduler.addargument(t_arguments,
+                                                'arg4',
+                                                a_argument4);
         END IF;
 
         --schedule item to be handled by the process server

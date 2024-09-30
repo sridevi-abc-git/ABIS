@@ -20,7 +20,8 @@ AS
 
     PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
                               a_asofdate     IN DATE,
-                              a_jobid        IN api.pkg_definition.udt_id);
+                              a_jobid        IN api.pkg_definition.udt_id,
+                              a_status       IN VARCHAR2 DEFAULT NULL);
 --    PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
 --                              a_asofdate     IN DATE,
 --                              a_jobid        IN VARCHAR2);

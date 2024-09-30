@@ -428,7 +428,7 @@ IS
                 'FaxNumber',
                 REGEXP_REPLACE(t_addr.faxnumber, '[^[:digit:]]+'));
 
-            IF (SUBSTR(t_addr.usastate, 1, 2) = 'CA')
+            IF (t_addr.addresslocation = 'In California')
             THEN
                 --******************
                 --Get CA city object id
@@ -1295,6 +1295,13 @@ BEGIN
 
             api.pkg_logicaltransactionupdate.resettransaction;
             ROLLBACK;
+            DBMS_OUTPUT.put_line('Exception occurred calling application save');
+            bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
+                                            a_asofdate  => SYSDATE,
+                                            a_jobid     => t_jobid,
+                                            a_status => 'ERRORED');
+            
+            
         
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
