@@ -145,7 +145,8 @@ AS
                         a_description  IN VARCHAR2,
                         a_argument1    IN VARCHAR2 DEFAULT '0',
                         a_argument2    IN DATE DEFAULT SYSDATE,
-                        a_argument3    IN VARCHAR2 DEFAULT NULL);
+                        a_argument3    IN VARCHAR2 DEFAULT NULL,
+                        a_argument4    IN VARCHAR2 DEFAULT NULL);
 END;
 /
 

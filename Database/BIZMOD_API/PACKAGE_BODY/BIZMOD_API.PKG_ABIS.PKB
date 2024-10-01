@@ -93,7 +93,8 @@ AS
 
     PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
                               a_asofdate     IN DATE,
-                              a_jobid        IN api.pkg_definition.udt_id)
+                              a_jobid        IN api.pkg_definition.udt_id, 
+                              a_status       IN VARCHAR2 DEFAULT NULL)
     is
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
@@ -106,7 +107,8 @@ AS
                         'Application Saved Notify LSP ID ' || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
                     a_argument1 => a_objectid,
                     a_argument2 => SYSDATE,
-                    a_argument3 => a_jobid);
+                    a_argument3 => a_jobid,
+                    a_argument4 => a_status);
 
         end if;
 

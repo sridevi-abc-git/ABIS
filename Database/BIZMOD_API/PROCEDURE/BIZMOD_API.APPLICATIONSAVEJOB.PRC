@@ -1,7 +1,8 @@
 CREATE OR REPLACE PROCEDURE BIZMOD_API.applicationsavejob(
     a_objectid     api.pkg_definition.udt_id,
     a_asofdate     DATE,
-    a_jobid        api.pkg_definition.udt_id)
+    a_jobid        api.pkg_definition.udt_id,
+    a_status       VARCHAR2 DEFAULT NULL)
 AS
     -- ****************************************************************************
     -- File:        BIZMOD_API.APPLICATIONSAVEJOB.PRC
@@ -33,12 +34,18 @@ AS
 BEGIN
     BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
-
-        t_status := case upper(api.pkg_columnquery.VALUE(a_jobid, 'StatusName')) 
+        
+         
+        IF(a_status IS NOT NULL )
+        THEN
+            t_status := a_status;
+        ELSE
+            t_status := case upper(api.pkg_columnquery.VALUE(a_jobid, 'StatusName')) 
                       when 'NEW' then 'PENDING'
                       
                       else api.pkg_columnquery.VALUE(a_jobid, 'StatusName')
                     end;
+        END IF;
 
         IF (t_status IS NOT NULL)
         THEN
