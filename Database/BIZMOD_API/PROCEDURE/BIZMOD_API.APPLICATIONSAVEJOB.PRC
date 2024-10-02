@@ -17,6 +17,7 @@ AS
     --   2.0    08/14/2014 TJL  BIZ-16073  Added URL info and status packet
     --                                   Reference BIZ-15319
     --   3.0.0  09/12/2014 TJL  BIZ-16077  Added logging email info
+    --   4.0    09/30/2024 BN   BIZ-16397  ERROR notification to LSP
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
     t_method      constant varchar2(10) := 'PATCH';
