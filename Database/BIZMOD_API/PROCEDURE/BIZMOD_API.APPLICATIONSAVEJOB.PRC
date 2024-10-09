@@ -14,13 +14,15 @@ AS
     -------------------------------------------------------------------------------
     --          Date           Ticket     Comment
     --   1.3    07/01/2024 TJL  BIZ-15808  Initial Procedure Created
-    --   2.0    08/14/2014 TJL  BIZ-16073  Added URL info and status packet
-    --                                   Reference BIZ-15319
-    --   3.0.0  09/12/2014 TJL  BIZ-16077  Added logging email info
+    --   2.0    08/14/2024 TJL  BIZ-16073  Added URL info and status packet
+    --                                       Reference BIZ-15319
+    --   3.0.0  09/12/2024 TJL  BIZ-16077  Added logging email info
+    --   4.0.0  10/09/2024 TJL  BIZ-16249  Correct ABIS 'NEW' status to return POSTED
     -- ****************************************************************************
-    t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
-    t_method      constant varchar2(10) := 'PATCH';
-    t_urlinfo     VARCHAR2(10000);
+    t_url CONSTANT VARCHAR2(1000)
+        := '/api/licensing/internal/license-applications/<<applicationId>>' ;
+    t_method CONSTANT VARCHAR2(10) := 'PATCH';
+    t_urlinfo      VARCHAR2(10000);
     t_response     json_object_t;
     t_body         json_object_t := json_object_t();
     t_applicationid VARCHAR2(40);
@@ -34,33 +36,33 @@ AS
 BEGIN
     BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
-        
-         
-        IF(a_status IS NOT NULL )
+
+
+        IF (a_status IS NOT NULL)
         THEN
             t_status := a_status;
         ELSE
-            t_status := case upper(api.pkg_columnquery.VALUE(a_jobid, 'StatusName')) 
-                      when 'NEW' then 'PENDING'
-                      
-                      else api.pkg_columnquery.VALUE(a_jobid, 'StatusName')
-                    end;
+            t_status :=
+                CASE UPPER(api.pkg_columnquery.VALUE(a_jobid, 'StatusName'))
+                    WHEN 'NEW' THEN 'POSTED'
+                    ELSE api.pkg_columnquery.VALUE(a_jobid, 'StatusName')
+                END;
         END IF;
 
         IF (t_status IS NOT NULL)
         THEN
+            t_urlinfo := REPLACE(t_url, '<<applicationId>>', t_applicationid);
 
-       t_urlinfo := REPLACE(t_url, '<<applicationId>>', t_applicationid);
+            t_body.put('status', t_status);
+            t_body.put('objectId', a_jobid);
+            t_body.put('licenseNumber',
+                       api.pkg_columnquery.VALUE(a_jobid, 'ExternalFileNum'));
 
-        t_body.put('status', t_status);
-        t_body.put('objectId', a_jobid);
-        t_body.put('licenseNumber', api.pkg_columnquery.value(a_jobid, 'ExternalFileNum'));
-        
-        t_results :=
-            bizmod_api.utl_licenseinfo.calllsp(
-                a_urlinfo   => t_urlinfo,
-                a_method    => t_method,
-                a_content   => t_body.to_clob);
+            t_results :=
+                bizmod_api.utl_licenseinfo.calllsp(
+                    a_urlinfo   => t_urlinfo,
+                    a_method    => t_method,
+                    a_content   => t_body.TO_CLOB);
 
             t_response := json_object_t.parse(t_results);
         END IF;
@@ -86,7 +88,8 @@ BEGIN
             END;
     END IF;
 
-    t_value := t_body.to_clob;
+    t_value := t_body.TO_CLOB;
+
     INSERT INTO bizmod_api.e_process_log_t(seq,
                                            processjob,
                                            info,
@@ -94,31 +97,32 @@ BEGIN
                                            bktrace,
                                            packet)
              VALUES (
-                 0,
-                 t_process,
-                 'Application Id: '
-                 || t_applicationid
-                 || CHR(13)
-                 || 'Status: '
-                 || t_status
-                 || CHR(13)
-                 || 'j_Application: '
-                 || a_jobid
-                 || CHR(13)
-                 || CASE
-                        WHEN t_results IS NOT NULL or t_sqlerrm is not null
-                        THEN
-                            'Info: '
-                            || t_info
-                            || CHR(13)
-                            || 'LSP Response: '
-                            || t_results
-                        ELSE
-                            NULL
-                    END,
-                 t_sqlerrm,
-                 t_trace,
-                 t_value);
+                        0,
+                        t_process,
+                        'Application Id: '
+                        || t_applicationid
+                        || CHR(13)
+                        || 'Status: '
+                        || t_status
+                        || CHR(13)
+                        || 'j_Application: '
+                        || a_jobid
+                        || CHR(13)
+                        || CASE
+                               WHEN t_results IS NOT NULL
+                                 OR t_sqlerrm IS NOT NULL
+                               THEN
+                                   'Info: '
+                                   || t_info
+                                   || CHR(13)
+                                   || 'LSP Response: '
+                                   || t_results
+                               ELSE
+                                   NULL
+                           END,
+                        t_sqlerrm,
+                        t_trace,
+                        t_value);
 
     COMMIT;
 END;
