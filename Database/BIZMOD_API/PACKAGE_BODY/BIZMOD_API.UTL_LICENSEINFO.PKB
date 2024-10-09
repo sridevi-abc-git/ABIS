@@ -40,6 +40,7 @@ AS
     --   9.0    08/07/2024  TJL  BIZ-15800    Added new CALLLSP Function
     --   9.1    08/19/2024  TJL  BIZ-16036    Change how get_application finds the requested application
     --   9.1.1  08/26/2024  TJL  BIZ-16121    Trunc date test in checkpayment function
+    --   9.2    09/30/2024  BN   BIZ-16397    ERROR notification to LSP
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 

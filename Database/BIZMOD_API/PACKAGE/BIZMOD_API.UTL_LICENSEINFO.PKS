@@ -25,6 +25,7 @@ AS
     --  10.1.0  08/29/2024  TJL  BIZ-16000    Added columns to gc_apprec
     --  11.0.0  09/09/2024  TJL  BIZ-16077    Added columns country, addressline3 
     --                                          to gc_addr_t
+	--  11.1    09/30/2024  BN   BIZ-16397    ERROR notification to LSP
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
