@@ -22,6 +22,7 @@ IS
     --   6.0.4  06/10/2024  TJL  BIZ-15612
     --                           BIZ-15616  Corrected bug in wrong message being returned to LSP
     --   7.0    07/11/2024  TJL  BIZ-15837  Removed CVR test
+    --   8.0.0  10/14/2024  TJL  BIZ-16408  Add filter to control what fees are returned
     -- ****************************************************************************
 
     PROCEDURE get_fee_amounts(fees IN OUT bizmod_api.fee_tbl)
@@ -181,7 +182,8 @@ IS
 -- ********************************************************
 BEGIN
     DECLARE
-        t_licensenumber VARCHAR2(40); -- := '550312'; -- '645954'; --'641428'; --'651570';
+        t_licensenumber VARCHAR2(40);
+        t_filter       VARCHAR2(200);
         t_msg          VARCHAR2(4000);
         t_msgno        NUMBER;
         t_fees         bizmod_api.fee_tbl := bizmod_api.fee_tbl();
@@ -193,7 +195,8 @@ BEGIN
         t_trace        VARCHAR2(4000);
     BEGIN
         t_licensenumber := json_value(a_packet, '$.*.LICENSENUMBER');
-
+        t_filter        := UPPER(json_value(a_packet, '$.*.FILTER')) || '%';  --10/14/2024  TJL  BIZ-16408
+dbms_output.put_line('filter: ' || t_filter);        
         WITH
             f
             AS
@@ -295,7 +298,7 @@ BEGIN
                                api.pkg_columnquery.numericvalue(
                                    reo.objectid,
                                    'LicenseFeeSchedid')
-                        JOIN query.o_licensetypecategory ltc
+                        LEFT OUTER JOIN query.o_licensetypecategory ltc
                             ON (ltc.licensetypecode = fs.licensetypecode)
                         LEFT OUTER JOIN api.relationships sltc
                             ON (sltc.endpointid =
@@ -316,7 +319,9 @@ BEGIN
                              'SLMS HOLD',
                              'SUSPENDED',
                              'REVPEN',
-                             'REV PENDING'))
+                             'REV PENDING',
+                             'NEW',
+                             'PEND'))
         SELECT bizmod_api.fee_rec(
                    f.jobid,
                    f.secondaryprimary,
@@ -355,7 +360,8 @@ BEGIN
                        END,
                    f.feeobjid)
           BULK COLLECT INTO t_fees
-          FROM f;
+          FROM f
+         WHERE f.feeactivity like t_filter; --10/14/2024  TJL  BIZ-16408
 
         IF (t_fees.COUNT = 0)
         THEN -- BIZ-15616
