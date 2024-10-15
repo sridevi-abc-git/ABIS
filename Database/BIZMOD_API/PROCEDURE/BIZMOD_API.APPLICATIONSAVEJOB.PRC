@@ -18,6 +18,7 @@ AS
     --                                       Reference BIZ-15319
     --   3.0.0  09/12/2024 TJL  BIZ-16077  Added logging email info
     --   4.0.0  10/09/2024 TJL  BIZ-16249  Correct ABIS 'NEW' status to return POSTED
+    --   5.0    10/09/2024 BN   BIZ-16432  Modified License umber to 6 digit
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
         := '/api/licensing/internal/license-applications/<<applicationId>>' ;
@@ -55,8 +56,7 @@ BEGIN
 
             t_body.put('status', t_status);
             t_body.put('objectId', a_jobid);
-            t_body.put('licenseNumber',
-                       api.pkg_columnquery.VALUE(a_jobid, 'ExternalFileNum'));
+            t_body.put('licenseNumber', to_number(api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER')));
 
             t_results :=
                 bizmod_api.utl_licenseinfo.calllsp(
