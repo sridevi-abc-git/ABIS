@@ -23,15 +23,14 @@ AS
     --   9.0.1  07/22/2024  TJL  BIZ-15800    Updated gc_* records
     --  10.0.1  08/07/2024  TJL  BIZ-16000    Added new CALLLSP Function
     --  10.1.0  08/29/2024  TJL  BIZ-16000    Added columns to gc_apprec
-    --  11.0.0  09/09/2024  TJL  BIZ-16077    Added columns country, addressline3
+    --  11.0.0  09/09/2024  TJL  BIZ-16077    Added columns country, addressline3 
     --                                          to gc_addr_t
-    --  12.0.0  10/08/2024  TJL  BIZ-16424    Added get_address and get_legalentity functions
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
                                transferchangetype VARCHAR2(100),
                                transferchangelicensenumber VARCHAR2(50),
-                               multiplestockmembershiptrans VARCHAR2(1),
+                               multiplestockmembershiptrans VARCHAR2(1),    
                                lspapplicationid VARCHAR2(40),
                                underconstruction VARCHAR2(3),
                                prioritydrawapplication VARCHAR2(1),
@@ -39,7 +38,7 @@ AS
                                dba VARCHAR2(4000),
                                felony VARCHAR2(3),
                                violation VARCHAR2(3),
-                               licensepurchaseprice NUMBER,
+                               licensepurchaseprice NUMBER,                               
                                primarylicensetypes VARCHAR2(4000),
                                premiseaddress VARCHAR2(4000),
                                mailingaddress VARCHAR2(4000),
@@ -47,7 +46,7 @@ AS
                                escrow CLOB,
                                legal_entities CLOB);
 
-    TYPE gc_addr_t IS RECORD(addresslocation VARCHAR2(4000),
+    TYPE gc_addr_t IS RECORD(addresslocation VARCHAR2(4000), 
                              addressline1 VARCHAR2(4000),
                              addressline2 VARCHAR2(4000),
                              addressline3 VARCHAR2(4000),
@@ -67,6 +66,28 @@ AS
                              noevent VARCHAR2(3),
                              eligiblefortransfer VARCHAR2(3));
 
+--    TYPE gc_entity_t IS RECORD(TYPE VARCHAR2(4000),
+--                               ownertype VARCHAR2(4000),
+--                               percentage NUMBER,
+--                               firstname VARCHAR2(4000),
+--                               middlename VARCHAR2(4000),
+--                               lastname VARCHAR2(4000),
+--                               suffix VARCHAR2(20),
+--                               aliasnames VARCHAR2(4000),
+--                               socialsecuritynumber VARCHAR2(4),
+--                               driverslicensenumber VARCHAR2(4000),
+--                               driverslicensestate VARCHAR2(4000),
+--                               passportnumber VARCHAR2(4000),
+--                               gender VARCHAR2(4000),
+--                               birthdate DATE,
+--                               birthcity VARCHAR2(4000),
+--                               birthstate VARCHAR2(4000),
+--                               birthcountry VARCHAR2(4000),
+--                               maritalstatus VARCHAR2(4000),
+--                               federalemployeridentificationn VARCHAR2(4000),
+--                               address CLOB,
+--                               legal_entities CLOB);
+
     TYPE gc_person_t IS RECORD(firstname VARCHAR2(4000),
                                middlename VARCHAR2(4000),
                                lastname VARCHAR2(4000),
@@ -85,7 +106,7 @@ AS
                                address CLOB);
 
     TYPE gc_company_t IS RECORD(companyname VARCHAR2(4000),
-                                companystructure VARCHAR2(4000),
+                                companystructure VARCHAR2(4000), 
                                 dateofincorporation  DATE,
                                 stateofincorporation  VARCHAR2(4000),
                                 casecretaryofstatenumber  VARCHAR2(4000),
@@ -126,13 +147,6 @@ AS
                         a_argument2    IN DATE DEFAULT SYSDATE,
                         a_argument3    IN VARCHAR2 DEFAULT NULL,
                         a_argument4    IN VARCHAR2 DEFAULT NULL);
-
-    FUNCTION get_legalentity(a_objectid IN NUMBER)
-        RETURN json_array_t;
-
-    FUNCTION get_address(a_objectid IN NUMBER, a_endpoint IN NUMBER)
-        RETURN json_object_t;
-
 END;
 /
 

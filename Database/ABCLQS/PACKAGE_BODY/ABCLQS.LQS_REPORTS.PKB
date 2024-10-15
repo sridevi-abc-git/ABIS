@@ -49,6 +49,10 @@ CREATE OR REPLACE PACKAGE BODY ABCLQS.LQS_REPORTS AS
 -- 10/08/2020 NW            Reformatting Indentations
 -- 10/09/2020 NW            Add Mailing Addresses
 -- 04/27/2022 NW    28140   Split up Premises and Mailing address fields  
+-- 09/25/2024 PK    35218   REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') LQS_BusAddr
+-- 09/25/2024 PK    35218    REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr to PROCEDURE LQS_LicenseeOrCompany
+-- 09/25/2024 PK    35218   REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')prem_csz LQS_BusAddr
+-- 09/25/2024 PK    35218   REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')prem_csz PROCEDURE LQS_LicenseeOrCompany
 -- ****************************************************************************
 
 -- Declare global variable to hold transaction status 
@@ -865,6 +869,8 @@ END LQS_SEARCH_DAILY;
 						if 	v_LicAddrCnt > 1 then 
 
 							-- re-route to LQSPREMLIST.asp from LQSBrkdwn.asp for a list of similar choices
+							-- 09/25/2024 PK    WO 35218   REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr to LQS_BusAddr
+							-- 09/25/2024 PK    35218   REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')prem_csz
 							OPEN cur_recs FOR select rownum, name, dba, prem_addr, prem_csz, license_num,Status_Code
 											from (
 											
@@ -872,7 +878,7 @@ END LQS_SEARCH_DAILY;
 													REGEXP_REPLACE (ap.PRIMARYDBA, '[[:cntrl:]]', '') dba,  --ap.PRIMARYDBA dba, 
 													ap.APPLICATIONOBJECTID licenses_eid, lpad(ap.LicenseNumber,6) license_num, MART.GetLTCodesAndStatus(ap.ApplicationObjectId) Status_Code, x.prem_addr,x.prem_csz 
 												from MART.APPLICTYPE ap  , mart.businesslocations l,
-												 (Select distinct a.AddressLine1 prem_addr, a.CACity||','||USASTATECODE||' '||zipcode prem_csz, a.ObjectId addresses_eid  
+												 (Select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr, REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz, a.ObjectId addresses_eid  
 												  from mart.address a
 												  where a.AddressLine1 like '%'||rec_parameters.address||'%' --'13%'
 												  and a.CACity = rec_parameters.City   -- 'SACRAMENTO'
@@ -888,7 +894,7 @@ END LQS_SEARCH_DAILY;
 														REGEXP_REPLACE (lt.PRIMARYDBA, '[[:cntrl:]]', '') dba, --PrimaryDBA dba,  --lt.primarydba dba, 
 														lt.LICENSEJOBID licenses_eid, lpad(lt.LicenseNumber,6) license_num, MART.GetLTCodesAndStatus(lt.LicenseJobId) Status_Code,  x.prem_addr,x.prem_csz 
 												from mart.licensetype lt, mart.businesslocations l ,  
-														(Select distinct  a.AddressLine1 prem_addr, a.CACity||','||USASTATECODE||' '||zipcode prem_csz, a.ObjectId addresses_eid 
+														(Select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr, REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz, a.ObjectId addresses_eid 
 																	  from mart.address a
 																	  where a.AddressLine1 like '%'||rec_parameters.address||'%' --'13%'
 																	  and a.CACity = rec_parameters.City   --'SACRAMENTO'
@@ -951,6 +957,8 @@ END LQS_SEARCH_DAILY;
 					elsif v_AddrCnt > 1 then 	
 					    -- re-route to LQSPREMLIST.asp for a list of similar choices
 						-- re-route to LQSPREMLIST.asp from LQSBrkdwn.asp for a list of similar choices
+							-- 09/25/2024 PK    WO 35218   REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr to LQS_BusAddr
+							-- 09/25/2024 PK    35218   REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')prem_csz
 						
 						OPEN cur_recs FOR select rownum, name, dba, prem_addr, prem_csz, license_num,Status_Code
 											from (
@@ -958,7 +966,7 @@ END LQS_SEARCH_DAILY;
 														REGEXP_REPLACE (ap.PRIMARYDBA, '[[:cntrl:]]', '') dba, --ap.PRIMARYDBA dba, 
 														ap.APPLICATIONOBJECTID licenses_eid, lpad(ap.LicenseNumber,6) license_num, MART.GetLTCodesAndStatus(ap.ApplicationObjectId) Status_Code, x.prem_addr,x.prem_csz   
 												from MART.APPLICTYPE ap  , mart.businesslocations l,
-												(Select distinct a.AddressLine1 prem_addr, a.CACity||','||USASTATECODE||' '||zipcode prem_csz, a.ObjectId addresses_eid 
+												(Select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr, REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz, a.ObjectId addresses_eid 
 												from mart.address a
 												where a.AddressLine1 like '%'||rec_parameters.address||'%' --'13%'
 												and a.CACity = rec_parameters.City   -- 'SACRAMENTO'
@@ -974,7 +982,7 @@ END LQS_SEARCH_DAILY;
 																REGEXP_REPLACE (lt.PRIMARYDBA, '[[:cntrl:]]', '') dba, --lt.primarydba dba, 
 																lt.LICENSEJOBID licenses_eid, lpad(lt.LicenseNumber,6) license_num, MART.GetLTCodesAndStatus(lt.LicenseJobId) Status_Code, x.prem_addr,x.prem_csz 
 												from mart.licensetype lt, mart.businesslocations l ,  
-												(Select distinct a.AddressLine1 prem_addr, a.CACity||','||USASTATECODE||' '||zipcode prem_csz, a.ObjectId addresses_eid 
+												(Select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr, REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz, a.ObjectId addresses_eid 
 															  from mart.address a
 															  where a.AddressLine1 like '%'||rec_parameters.address||'%' --'13%'
 															  and a.CACity = rec_parameters.City   --'SACRAMENTO'
@@ -1150,6 +1158,8 @@ BEGIN
 						elsif v_rec_cnt > 1 then 	
 							-- re-route to LQSPREMLIST.asp for a list of similar choices
 							-- re-route to LQSPREMLIST.asp from LQSBrkdwn.asp for a list of similar choices
+							-- 09/25/2024 PK    WO 35218   REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr to LQS_BusAddr
+							-- 09/25/2024 PK    35218   REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')prem_csz
 							
 							OPEN cur_recs FOR 	Select distinct  p.FormattedPersonName Name,  
 														REGEXP_REPLACE (lt.PRIMARYDBA, '[[:cntrl:]]', '') dba, --lt.primarydba dba, 
@@ -1157,11 +1167,11 @@ BEGIN
 														lpad(l.ExternalFileNum,6) license_num, 
 														MART.GetLTCodesAndStatus(L.JOBID) status_code, 
 														l.PremAddressUSCity city ,
-														(select distinct a.AddressLine1 prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+														(select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '')  prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = lt.LicenseJobId) prem_addr,
-														(select distinct a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+														(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = lt.LicenseJobId) prem_csz
@@ -1182,11 +1192,11 @@ BEGIN
 														lpad(a.LicenseNumber,6) license_num, 
 														MART.GetLTCodesAndStatus(a.ObjectId) status_code, 
 														a.PremUSCity city  ,
-														(select distinct a.AddressLine1 prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+												  (select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = at.ApplicationObjectID) prem_addr,
-														(select distinct a.CACity||','||USASTATECODE||' '||zipcode 
+												(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')  prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = at.ApplicationObjectID) prem_csz
@@ -1309,6 +1319,8 @@ BEGIN
 						elsif v_rec_cnt > 1 then 	
 							-- re-route to LQSPREMLIST.asp for a list of similar choices
 							-- re-route to LQSPREMLIST.asp from LQSBrkdwn.asp for a list of similar choices
+							-- 09/25/2024 PK    WO 35218   REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr to LQS_BusAddr
+							-- 09/25/2024 PK    35218   REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '')prem_csz
 
 							OPEN cur_recs FOR 	Select distinct  C.companyname name, 
 														 REGEXP_REPLACE (lt.PRIMARYDBA, '[[:cntrl:]]', '') dba, --lt.primarydba dba,
@@ -1316,11 +1328,11 @@ BEGIN
 														lpad(l.ExternalFileNum,6) license_num, 
 														MART.GetLTCodesAndStatus(L.JOBID) status_code, 
 														l.PremAddressUSCity city,
-														(select distinct a.AddressLine1 prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+                                                 (select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = lt.LicenseJobId) prem_addr,
-														(select distinct a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+												(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = lt.LicenseJobId) prem_csz
@@ -1339,11 +1351,11 @@ BEGIN
 														lpad(a.LicenseNumber,6) license_num, 
 														MART.GetLTCodesAndStatus(a.ObjectId) status_code,
 														a.PremUSCity city ,
-														(select distinct a.AddressLine1 prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
+													(select distinct  REGEXP_REPLACE (a.FORMATTEDADDRESS1STOF2LINES, '[[:cntrl:]]', '') prem_addr --, a.CACity||','||USASTATECODE||' '||zipcode prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = at.ApplicationObjectID) prem_addr,
-														(select distinct a.CACity||','||USASTATECODE||' '||zipcode 
+													(select distinct REGEXP_REPLACE ( a.FORMATTEDADDRESS2NDOF2LINES, '[[:cntrl:]]', '') prem_csz
 														from mart.address a, mart.businesslocations bl
 														where bl.ADDRESSOBJECTID =  a.ObjectId	
 														and bl.JOBOBJECTID = at.ApplicationObjectID) prem_csz
