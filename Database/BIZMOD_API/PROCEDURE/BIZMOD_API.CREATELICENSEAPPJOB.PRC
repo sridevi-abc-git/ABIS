@@ -16,7 +16,7 @@ IS
     --                                      update.
     --   3.0.1  09/09/2024  TJL  BIZ-16077  Added country to add address process
     --   3.1    09/30/2024 BN    BIZ-16397  ERROR notification to LSP
-    --   3.2    10/09/2024  BN   BIZ-16428  Fixed the DBA missing and Duplicate address issue 
+    --   3.2.0  10/09/2024  BN   BIZ-16428  Fixed the DBA missing and Duplicate address issue 
     -- ****************************************************************************
 
     PROCEDURE add_legal_entities(a_objectid     IN api.pkg_definition.udt_id,
