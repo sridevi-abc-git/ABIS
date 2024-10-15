@@ -1143,8 +1143,8 @@ BEGIN
         api.pkg_columnupdate.setvalue(t_jobid,
                                       'LSPID',
                                       t_apprec.lspapplicationid);
-        IF (t_apprec.dba IS NOT NULL)
-        THEN
+        IF (t_apprec.dba IS NOT NULL AND t_apprec.dba != '')
+        THEN                        
             t_dbanamesobjectid :=
                     api.pkg_objectupdate.new(api.pkg_configquery.objectdefidforname('o_DBANames'));
                         
