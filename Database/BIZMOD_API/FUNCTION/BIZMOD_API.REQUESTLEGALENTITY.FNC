@@ -9,7 +9,8 @@ IS
     -- History
     -------------------------------------------------------------------------------
     --  Ver:       Date          Ticket       Comment
-    --  1.1.0  08/22/2024  TJL  BIZ-16242  Inital function created
+    --  1.3.0  08/22/2024  TJL  BIZ-16242  Inital function created
+    --  1.3.0  10/23/2024  TJL  BIZ-16519  Change JSON format and walking thru HIERARCHY
     -- ****************************************************************************
 
     TYPE legalentity_type IS TABLE OF NUMBER;
@@ -17,16 +18,13 @@ IS
     -- *********************************************************
     --  Get Person
     -- *********************************************************
-    FUNCTION get_person(a_personobjectid IN   NUMBER,
-                        a_list         IN OUT legalentity_type)
+    FUNCTION get_person(a_legalentityobjectid IN api.pkg_definition.udt_id,
+                        a_personobjectid IN api.pkg_definition.udt_id)
         RETURN json_object_t
     AS
         t_entity       json_object_t := json_object_t();
-        t_person       json_object_t := json_object_t();
     BEGIN
-        a_list.EXTEND(1);
-        a_list(a_list.COUNT) := a_personobjectid;
-
+        t_entity.put('REFERENCEID', a_legalentityobjectid);
         t_entity.put('OBJECTID', a_personobjectid);
         t_entity.put(
             'FIRSTNAME',
@@ -37,207 +35,193 @@ IS
         t_entity.put('LASTNAME',
                      api.pkg_columnquery.VALUE(a_personobjectid, 'LastName'));
 
-        t_person.put('PERSON', t_entity);
-        RETURN json_object_t(t_person);
-    END;
+        t_entity.put(
+            'OWNERTYPE',
+            api.pkg_columnquery.VALUE(a_legalentityobjectid, 'OwnerType'));
+        t_entity.put(
+            'TITLETYPE',
+            api.pkg_columnquery.VALUE(a_legalentityobjectid, 'TitleType'));
+
+        t_entity.put(
+            'PERCENTAGEOFOWNERSHIP',
+            api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                      'PrcentageOfOwnership'));
+        RETURN t_entity;
+    END get_person;
 
 
     -- *********************************************************
     --  Get Company
     -- *********************************************************
-    FUNCTION get_company(a_legalentityobjectid IN NUMBER,
-                         a_list         IN OUT legalentity_type)
+    FUNCTION get_company(a_legalentityobjectid IN api.pkg_definition.udt_id)
         RETURN json_object_t
     AS
         t_objectid     NUMBER;
-        t_entity       json_object_t := json_object_t();
-        t_company      json_object_t := json_object_t();
-        t_array        json_array_t := json_array_t();
+        t_company      json_object_t;
+        t_company_arry json_array_t := json_array_t();
+        t_person_arry  json_array_t := json_array_t();
     BEGIN
-        IF NOT legalentity_type(a_legalentityobjectid) SUBMULTISET a_list
-        THEN
-            a_list.EXTEND(1);
-            a_list(a_list.COUNT) := a_legalentityobjectid;
+        -- get company relationship
+        SELECT r.toobjectid
+          INTO t_objectid
+          FROM api.relationships r
+         WHERE r.endpointid =
+               api.pkg_configquery.endpointidforname('o_LegalEntity',
+                                                     'Company')
+           AND r.fromobjectid = a_legalentityobjectid;
 
-            -- get company relationship
-            SELECT r.toobjectid
-              INTO t_objectid
-              FROM api.relationships r
-             WHERE r.endpointid =
-                   api.pkg_configquery.endpointidforname('o_LegalEntity',
-                                                         'Company')
-               AND r.fromobjectid = a_legalentityobjectid;
+        t_company := json_object_t();
 
-            t_company.put('OBJECTID', a_legalentityobjectid);
-            t_company.put(
-                'COMPANYNAME',
-                api.pkg_columnquery.VALUE(t_objectid, 'CompanyName'));
-            t_company.put(
-                'COMPANYSTRUCTURE',
-                api.pkg_columnquery.VALUE(t_objectid, 'CompanyStructure'));
-            t_company.put(
-                'DATEOFINCORPORATION',
-                api.pkg_columnquery.VALUE(t_objectid, 'DateOfIncorporation'));
-            t_company.put(
-                'STATEOFINCORPORATION',
-                api.pkg_columnquery.VALUE(t_objectid, 'StateOfIncorporation'));
-            t_company.put(
-                'CASECRETARYOFSTATENUMBER',
-                api.pkg_columnquery.VALUE(t_objectid,
-                                          'CASecretaryOfStateNumber'));
-            t_company.put(
-                'FEDERALEMPLOYERIDENTIFICATIONN',
-                api.pkg_columnquery.VALUE(t_objectid,
-                                          'FederalEmployerIdentificationn'));
+        t_company.put(
+            'P12TYPE',
+            CASE
+                WHEN api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                               'P12Status') =
+                     'Y'
+                THEN
+                    'P12'
+                WHEN api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                               'P12AStatus') =
+                     'Y'
+                THEN
+                    'P12A'
+                ELSE
+                    NULL
+            END);
 
-            FOR rec
-                IN (  SELECT r.toobjectid
-                        FROM api.relationships r
-                       WHERE r.fromobjectid = a_legalentityobjectid
-                         AND r.endpointid IN (292101,
-                                              338110,
-                                              310133,
-                                              298362,
-                                              311516,
-                                              314059,
-                                              329508,
-                                              427253,
-                                              447075,
-                                              340283)
-                    ORDER BY api.pkg_columnquery.VALUE(r.toobjectid,
-                                                       'LegalEntityType'))
-            LOOP
-                CASE api.pkg_columnquery.VALUE(rec.toobjectid,
-                                               'LegalEntityType')
-                    WHEN 'Company'
-                    THEN
-                        IF NOT legalentity_type(rec.toobjectid)
-                                    SUBMULTISET a_list
-                        THEN
-                            t_array.append(
-                                get_company(
-                                    a_legalentityobjectid => rec.toobjectid,
-                                    a_list      => a_list));
-                        END IF;
-                    WHEN 'Person'
-                    THEN
-                        FOR p
-                            IN (SELECT r.toobjectid
-                                  FROM api.relationships r
-                                 WHERE r.fromobjectid = rec.toobjectid
-                                   AND r.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'o_LegalEntity',
-                                           'Person'))
-                        LOOP
-                            IF NOT legalentity_type(p.toobjectid)
-                                        SUBMULTISET a_list
-                            THEN
-                                t_array.append(
-                                    get_person(
-                                        a_personobjectid => p.toobjectid,
-                                        a_list      => a_list));
-                            END IF;
-                        END LOOP;
-                    ELSE
-                        NULL;
-                END CASE;
-            END LOOP;
+        t_company.put('REFERENCEID', a_legalentityobjectid);
 
-
-            t_company.put('LEGALENTITIES', t_array);
-            t_entity.put('COMPANY', t_company);
-        END IF;
-
-        RETURN t_entity;
-    END;
-
-
-    -- *********************************************************
-    --
-    -- *********************************************************
-    FUNCTION get_entities(a_legalentity  IN api.udt_objectlist,
-                          a_search       IN VARCHAR2)
-        RETURN json_array_t
-    AS
-        t_legalentity  legalentity_type := legalentity_type();
-        t_array        json_array_t := json_array_t();
-    BEGIN
-        FOR rec
-            IN (  SELECT DISTINCT info.*
-                    FROM (WITH
-                              lg
-                              AS
-                                  (SELECT api.pkg_columnquery.VALUE(
-                                              r.toobjectid,
-                                              'LegalEntityType')    TYPE,
-                                          r.toobjectid              lg,
-                                          CASE api.pkg_columnquery.VALUE(
-                                                   r.toobjectid,
-                                                   'LegalEntityType')
-                                              WHEN 'Company'
-                                              THEN
-                                                  r.toobjectid
-                                              ELSE
-                                                  (SELECT r2.toobjectid
-                                                     FROM api.relationships
-                                                          r2
-                                                    WHERE r2.fromobjectid =
-                                                          r.toobjectid
-                                                      AND r2.endpointid =
-                                                          api.pkg_configquery.endpointidforname(
-                                                              'o_LegalEntity',
-                                                              api.pkg_columnquery.VALUE(
-                                                                  r.toobjectid,
-                                                                  'LegalEntityType')))
-                                          END                       cp,
-                                          api.pkg_columnquery.VALUE(
-                                              r.toobjectid,
-                                              CASE api.pkg_columnquery.VALUE(
-                                                       r.toobjectid,
-                                                       'LegalEntityType')
-                                                  WHEN 'Company'
-                                                  THEN
-                                                      'CompanyName'
-                                                  ELSE
-                                                      'FormattedPersonNameSearch'
-                                              END)                  name
-                                     FROM api.relationships r
-                                    WHERE r.fromobjectid IN
-                                              (SELECT o.objectid
-                                                 FROM TABLE(a_legalentity) o)
-                                      AND r.endpointid IN (453414) -- (Node)
-                                                                  )
-                            SELECT lg.TYPE, lg.cp
-                              FROM lg
-                          GROUP BY lg.TYPE, lg.name, lg.cp
-                            HAVING lg.name LIKE '%' || a_search || '%') info
-                ORDER BY info.TYPE)
-        LOOP
-            DBMS_OUTPUT.put_line('LOOPING');
-
-            -- check if person already added to return information
-            IF NOT legalentity_type(rec.cp) SUBMULTISET t_legalentity
+        CASE
+            WHEN api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                           'P12Status') =
+                 'Y'
+              OR api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                           'P12AStatus') =
+                 'Y'
             THEN
-                CASE rec.TYPE
-                    WHEN 'Person'
-                    THEN
-                        t_array.append(
-                            get_person(a_personobjectid => rec.cp,
-                                       a_list      => t_legalentity));
-                    WHEN 'Company'
-                    THEN
-                        t_array.append(
-                            get_company(a_legalentityobjectid => rec.cp,
-                                        a_list      => t_legalentity));
-                    ELSE
-                        NULL;
-                END CASE;
-            END IF;
+                t_company.put('OBJECTID', a_legalentityobjectid);
+                t_company.put(
+                    'MASTERLICENSE',
+                    api.pkg_columnquery.VALUE(
+                        a_legalentityobjectid,
+                        CASE api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                                       'P12Status')
+                            WHEN 'Y'
+                            THEN
+                                'P12MasterLicenseNo'
+                            ELSE
+                                'P12AMasterLicenseNo'
+                        END));
+                t_company.put(
+                    'BASEFILEOFFICE',
+                    api.pkg_columnquery.VALUE(
+                        api.pkg_columnquery.numericvalue(
+                            a_legalentityobjectid,
+                            'LicenseJobId'),
+                        'BaseFileOfficeCodeDescription'));
+            ELSE
+                t_company.put('OBJECTID', t_objectid);
+        END CASE;
+
+        t_company.put('COMPANYNAME',
+                      api.pkg_columnquery.VALUE(t_objectid, 'CompanyName'));
+        t_company.put(
+            'COMPANYSTRUCTURE',
+            api.pkg_columnquery.VALUE(t_objectid, 'CompanyStructure'));
+        t_company.put(
+            'DATEOFINCORPORATION',
+            api.pkg_columnquery.datevalue(t_objectid, 'DateOfIncorporation'));
+        t_company.put(
+            'STATEOFINCORPORATION',
+            api.pkg_columnquery.VALUE(t_objectid, 'StateOfIncorporation'));
+        t_company.put(
+            'CASECRETARYOFSTATENUMBER',
+            api.pkg_columnquery.VALUE(t_objectid, 'CASecretaryOfStateNumber'));
+        t_company.put(
+            'FEDERALEMPLOYERIDENTIFICATIONN',
+            api.pkg_columnquery.VALUE(t_objectid,
+                                      'FederalEmployerIdentificationn'));
+
+        t_company.put(
+            'OWNERTYPE',
+            api.pkg_columnquery.VALUE(a_legalentityobjectid, 'OwnerType'));
+        t_company.put(
+            'TITLETYPE',
+            api.pkg_columnquery.VALUE(a_legalentityobjectid, 'TitleType'));
+
+        t_company.put(
+            'PERCENTAGEOFOWNERSHIP',
+            api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                      'PercentageOfOwnership'));
+
+        FOR rec
+            IN (  SELECT DISTINCT r.toobjectid, r.fromobjectid
+                    FROM api.relationships r
+                   WHERE r.fromobjectid = a_legalentityobjectid
+                     AND r.endpointid IN
+                             (api.pkg_configquery.endpointidforname(
+                                  'o_LegalEntity',
+                                  'Node'),
+                              api.pkg_configquery.endpointidforname(
+                                  'o_LegalEntity',
+                                  'Officer'),
+                              api.pkg_configquery.endpointidforname(
+                                  'o_LegalEntity',
+                                  'Stockholder'),
+                              api.pkg_configquery.endpointidforname(
+                                  'o_LegalEntity',
+                                  'OfficerStockholder'),
+                              api.pkg_configquery.endpointidforname(
+                                  'o_LegalEntity',
+                                  'P12AStockholder'),
+                              api.pkg_configquery.endpointidforname(
+                                  'o_LegalEntity',
+                                  'P12ADescendant'))
+                     AND r.toobjectid != r.fromobjectid
+                ORDER BY api.pkg_columnquery.VALUE(r.toobjectid,
+                                                   'LegalEntityType'))
+        LOOP
+            CASE api.pkg_columnquery.VALUE(rec.toobjectid, 'LegalEntityType')
+                WHEN 'Company'
+                THEN
+                    t_company_arry.append(
+                        get_company(a_legalentityobjectid => rec.toobjectid));
+                WHEN 'Person'
+                THEN
+                    FOR p
+                        IN (SELECT r.toobjectid, r.fromobjectid
+                              FROM api.relationships r
+                             WHERE r.fromobjectid = rec.toobjectid
+                               AND r.endpointid =
+                                   api.pkg_configquery.endpointidforname(
+                                       'o_LegalEntity',
+                                       'Person'))
+                    LOOP
+                        t_person_arry.append(
+                            get_person(
+                                a_legalentityobjectid => p.fromobjectid,
+                                a_personobjectid => p.toobjectid));
+                    END LOOP;
+                ELSE
+                    NULL;
+            END CASE;
         END LOOP;
 
-        RETURN t_array;
-    END;
+        IF (t_company_arry.get_size() > 0)
+        THEN
+            t_company.put('COMPANY', t_company_arry);
+        END IF;
+
+        IF (t_person_arry.get_size() > 0)
+        THEN
+            t_company.put('PERSON', t_person_arry);
+        END IF;
+
+        RETURN t_company;
+    END get_company;
+-- *********************************************************
+--
+-- *********************************************************
 -- *********************************************************
 --  Main Function Process
 -- *********************************************************
@@ -246,10 +230,13 @@ BEGIN
         t_licensenumber VARCHAR2(40);
         t_search       VARCHAR2(200);
         t_msg          VARCHAR2(4000);
-        t_msgno        NUMBER;
         t_array        json_array_t := json_array_t();
+        t_person_arry  json_array_t := json_array_t();
+        t_company_arry json_array_t := json_array_t();
+        t_person       json_object_t := json_object_t();
+        t_company      json_object_t := json_object_t();
+        t_value        json_object_t := json_object_t();
         t_json         json_object_t := json_object_t();
-        t_entities     json_object_t := json_object_t();
         t_jobid        api.pkg_definition.udt_id;
         t_feeobjidlst  api.udt_objectlist;
         t_sqlerrm      VARCHAR2(4000);
@@ -269,24 +256,121 @@ BEGIN
               BULK COLLECT INTO t_feeobjidlst
               FROM api.relationships r
              WHERE r.fromobjectid = t_jobid
-               AND r.endpointid IN (292101,
-                                    338110,
-                                    310133,
-                                    298362,
-                                    311516,
-                                    314059,
-                                    329508,
-                                    427253,
-                                    447075,
-                                    340283);
+               AND api.pkg_columnquery.VALUE(r.toobjectid, 'ObjectDefName') =
+                   'o_LegalEntity';
 
-            t_entities.put(
-                'LEGALENTITIES',
-                get_entities(a_legalentity => t_feeobjidlst,
-                             a_search    => t_search));
+            FOR rec
+                IN (WITH
+                        le
+                        AS
+                            (SELECT r.toobjectid
+                                        lg,
+                                    api.pkg_columnquery.VALUE(
+                                        r.toobjectid,
+                                        'LegalEntityType')
+                                        legalentitytype,
+                                    api.pkg_columnquery.numericvalue(
+                                        r.toobjectid,
+                                        'HIERARCHYhierarchylevelEL')
+                                        hierarchylevel
+                               FROM api.relationships r
+                              WHERE r.fromobjectid IN
+                                        (SELECT o.objectid
+                                           FROM TABLE(t_feeobjidlst) o)
+                                AND r.endpointid IN
+                                        (api.pkg_configquery.endpointidforname(
+                                             'o_LegalEntity',
+                                             'Node'),
+                                         api.pkg_configquery.endpointidforname(
+                                             'o_LegalEntity',
+                                             'Officer'),
+                                         api.pkg_configquery.endpointidforname(
+                                             'o_LegalEntity',
+                                             'Stockholder'),
+                                         api.pkg_configquery.endpointidforname(
+                                             'o_LegalEntity',
+                                             'OfficerStockholder'),
+                                         api.pkg_configquery.endpointidforname(
+                                             'o_LegalEntity',
+                                             'P12AStockholder'),
+                                         api.pkg_configquery.endpointidforname(
+                                             'o_LegalEntity',
+                                             'P12ADescendant'))
+                                AND 1 =
+                                    CASE
+                                        WHEN t_search IS NULL
+                                        THEN
+                                            1
+                                        WHEN r.toobjectid != r.fromobjectid
+                                        THEN
+                                            1
+                                        ELSE
+                                            0
+                                    END
+                                AND api.pkg_columnquery.VALUE(
+                                        r.toobjectid,
+                                        CASE api.pkg_columnquery.VALUE(
+                                                 r.toobjectid,
+                                                 'LegalEntityType')
+                                            WHEN 'Company'
+                                            THEN
+                                                'CompanyName'
+                                            ELSE
+                                                'FormattedPersonNameSearch'
+                                        END) LIKE
+                                        '%' || t_search || '%')
+                    SELECT *
+                      FROM le
+                     WHERE le.hierarchylevel =
+                           CASE WHEN t_search IS NULL THEN 1 
+                                ELSE le.hierarchylevel END)
+            LOOP
+                CASE rec.legalentitytype
+                    WHEN 'Person'
+                    THEN
+                        FOR p
+                            IN (SELECT r.toobjectid, r.fromobjectid
+                                  FROM api.relationships r
+                                 WHERE r.fromobjectid = rec.lg
+                                   AND r.endpointid =
+                                       api.pkg_configquery.endpointidforname(
+                                           'o_LegalEntity',
+                                           'Person'))
+                        LOOP
+                            t_person_arry.append(
+                                get_person(
+                                    a_legalentityobjectid => p.fromobjectid,
+                                    a_personobjectid => p.toobjectid));
+                        END LOOP;
+                    WHEN 'Company'
+                    THEN
+                        t_value :=
+                            get_company(a_legalentityobjectid => rec.lg);
+
+                        IF (t_value IS NOT NULL)
+                        THEN
+                            t_company_arry.append(t_value);
+                        END IF;
+                    ELSE
+                        NULL;
+                END CASE;
+            END LOOP;
+
+
+            IF (t_company_arry.get_size() > 0)
+            THEN
+                t_company.put('COMPANY', t_company_arry);
+                t_array.append(t_company);
+            END IF;
+
+            IF (t_person_arry.get_size() > 0)
+            THEN
+                t_person.put('PERSON', t_person_arry);
+                t_array.append(t_person);
+            END IF;
 
             t_json.put('PACKET_TYPE', 'LEGALENTITIES');
-            t_json.put('DATA', t_entities);
+            t_json.put('DATA', t_array);
         ELSE
             t_json :=
                 json_object_t(
@@ -295,8 +379,6 @@ BEGIN
                     || ' Not Found"}}');
         END IF;
 
-        --        DBMS_OUTPUT.put_line(
-        --            json_query(t_json.TO_CLOB, '$' RETURNING CLOB PRETTY));
         RETURN t_json.TO_CLOB;
     EXCEPTION
         WHEN OTHERS
@@ -311,115 +393,12 @@ BEGIN
 
             COMMIT;
 
-            DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || CHR(10) || t_trace);
             RETURN json_object(
                        'PACKET_TYPE' VALUE 'MESSAGE',
                        'DATA' VALUE
                            json_object('MSGNO' VALUE 5,
                                        'MSG' VALUE 'Oracle Exception',
-                                       'EXCEPTION' VALUE t_sqlerrm));
+                                       'EXCEPTION' VALUE t_msg));
     END;
--- ******************************************************
---  Main Process
--- ******************************************************
---BEGIN
---    DECLARE
---        t_licensenumber VARCHAR2(40);
---        t_msg          VARCHAR2(4000);
-----        t_msgno        NUMBER;
-----        t_array        json_array_t := json_array_t();
---        t_json         json_object_t := json_object_t();
---        t_entities     json_object_t := json_object_t();
---        t_jobid        api.pkg_definition.udt_id;
---        t_sqlerrm      VARCHAR2(4000);
---        t_trace        VARCHAR2(4000);
---    BEGIN
---        t_licensenumber := json_value(a_packet, '$.*.LICENSENUMBER');
---        t_jobid :=
---            api.pkg_simplesearch.objectbyindex(
---                a_objectdefname => 'j_License',
---                a_columnname => 'ExternalFileNum',
---                a_lowvalue  => t_licensenumber);
---
---        IF (t_jobid IS NOT NULL)
---        THEN
---            t_json.put('PACKET_TYPE', 'LEGALENTITIES');
---            t_entities.put(
---                'LEGALENTITIES',
---                bizmod_api.utl_licenseinfo.get_legalentity(a_objectid => t_jobid));
---
-----            t_entities.put('LEGALENTITIES', t_array);
-----
-----            FOR rec
-----                IN (    SELECT DISTINCT
-----                               SYS_CONNECT_BY_PATH(r.toobjectid, '/')     path2
-----                          FROM api.relationships r
-----                               JOIN api.objects f ON f.objectid = r.toobjectid
-----                    START WITH r.fromobjectid = t_jobid
-----                           AND (f.objectdefid =
-----                                api.pkg_configquery.objectdefidforname(
-----                                    'o_LegalEntity')
-----                             OR f.objectdefid =
-----                                api.pkg_configquery.objectdefidforname(
-----                                    'j_License'))
-----                           AND r.endpointid IN (292101,
-----                                                338110,
-----                                                310133,
-----                                                298362,
-----                                                311516,
-----                                                314059,
-----                                                329508,
-----                                                427253,
-----                                                447075,340283)
-----                    CONNECT BY r.fromobjectid = PRIOR r.toobjectid
-----                           AND r.relationshipid != PRIOR r.relationshipid
-----                           AND f.objectdefid =
-----                               api.pkg_configquery.objectdefidforname(
-----                                   'o_LegalEntity')
-----                           AND r.endpointid IN (292101,
-----                                                338110,
-----                                                310133,
-----                                                298362,
-----                                                311516,
-----                                                314059,
-----                                                329508,
-----                                                427253,
-----                                                447075,340283)
-----                      ORDER BY path2)
-----            LOOP
-----                bizmod_api.utl_licenseinfo.get_legalentity(a_json => t_entities, a_list => rec.path2);
-----            END LOOP;
---
---            t_json.put('DATA', t_entities);
---        ELSE
---            t_json := json_object_t(
---                '{"PACKET_TYPE":"MESSAGE","DATA":{"MSGNO":"1","MSG":"License Number '
---                || t_licensenumber
---                || ' Not Found"}}');
---        END IF;
---
---        RETURN t_json.to_clob;
---    EXCEPTION
---        WHEN OTHERS
---        THEN
---            t_sqlerrm := SQLERRM;
---            t_trace := DBMS_UTILITY.format_error_backtrace;
---            t_msg := SUBSTR(t_sqlerrm || CHR(13) || t_trace, 1, 3990);
---
---            UPDATE bizmod_api.eservices_log_t
---               SET err = t_msg
---             WHERE seq = a_seq;
---
---            COMMIT;
---
---            DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || CHR(10) || t_trace);
---            RETURN
---                json_object(
---                    'PACKET_TYPE' VALUE 'MESSAGE',
---                    'DATA' VALUE
---                        json_object('MSGNO' VALUE 5,
---                                    'MSG' VALUE 'Oracle Exception',
---                                    'EXCEPTION' VALUE t_sqlerrm));
---    END;
 END;
 /
