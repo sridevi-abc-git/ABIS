@@ -41,7 +41,8 @@ AS
     --   9.1    08/19/2024  TJL  BIZ-16036    Change how get_application finds the requested application
     --   9.1.1  08/26/2024  TJL  BIZ-16121    Trunc date test in checkpayment function
     --  10.0.0  10/08/2024  TJL  BIZ-16424    Added get_address, get_legalentity, get_company, get_person,
-    --                                          and get_titles functons 
+    --                                          and get_titles functons
+    --  10.1.0  10/23/2024  TJL               Added extra logging.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -56,17 +57,18 @@ AS
     TYPE t_recp IS TABLE OF VARCHAR(512);
 
     TYPE legalentity_type IS TABLE OF NUMBER;
+
     t_legalentity  legalentity_type := legalentity_type();
 
 
-    FUNCTION calllsp(a_urlinfo      IN     VARCHAR2,
-                     a_method       IN     VARCHAR2,
-                     a_content      IN     CLOB DEFAULT NULL,
-                     a_file         IN     BLOB DEFAULT NULL)
+    FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
+                     a_method       IN VARCHAR2,
+                     a_content      IN CLOB DEFAULT NULL,
+                     a_file         IN BLOB DEFAULT NULL)
         RETURN CLOB
     IS
-        t_url          varchar2(10000);
-        t_wallet       varchar2(10000);
+        t_url          VARCHAR2(10000);
+        t_wallet       VARCHAR2(10000);
         t_seq          NUMBER;
         t_boundary     VARCHAR2(100)
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
@@ -90,43 +92,44 @@ AS
                || UTL_TCP.crlf;
         t_body_end     VARCHAR2(100)
             := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
-        t_response_header_name VARCHAR2(256);
-        t_response_header_value VARCHAR2(1024);
-        t_response_body VARCHAR2(32767);
+--        t_response_header_name VARCHAR2(256);
+--        t_response_header_value VARCHAR2(1024);
+--        t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
         t_infotext     VARCHAR2(32767);
         t_length       NUMBER;
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
---        t_keys         json_key_list;
---        t_column       VARCHAR2(100);
---        t_columns      VARCHAR2(4000);
-        t_value        VARCHAR2(4000);
+        --        t_keys         json_key_list;
+        --        t_column       VARCHAR2(100);
+        --        t_columns      VARCHAR2(4000);
+--        t_value        VARCHAR2(4000);
         t_info         json_object_t := json_object_t();
-        t_header       json_object_t := json_object_t();
+--        t_header       json_object_t := json_object_t();
     BEGIN
         BEGIN
             BEGIN
-select  url || a_urlinfo, wallet
-  into t_url, t_wallet
-FROM (SELECT c.process, c.parametername, c.parametervalue
-                  FROM bizmod_api.eservices_config_t c
-                 WHERE c.process = 'CALLLSP'
-                   AND c.dbname = UPPER(ora_database_name))
-               PIVOT (MAX(parametervalue)
-                     FOR parametername
-                     IN ( 'URL' url
-	    		   , 'WALLET'WALLET));
-
-
-            EXCEPTION when no_data_found then
-                RAISE_APPLICATION_ERROR(-20001,'Parameter Not Found', TRUE);
+                SELECT url || a_urlinfo, wallet
+                  INTO t_url, t_wallet
+                  FROM (SELECT c.process, c.parametername, c.parametervalue
+                          FROM bizmod_api.eservices_config_t c
+                         WHERE c.process = 'CALLLSP'
+                           AND c.dbname = UPPER(ora_database_name))
+                           PIVOT (MAX(parametervalue)
+                                 FOR parametername
+                                 IN ('URL' url, 'WALLET' wallet));
+            EXCEPTION
+                WHEN NO_DATA_FOUND
+                THEN
+                    raise_application_error(-20001,
+                                            'Parameter Not Found',
+                                            TRUE);
             END;
 
-t_info.put('URL', t_url);
-t_info.put('METHOD', a_method);
-t_info.put('WALLET', t_wallet);
-t_infotext := t_info.TO_CLOB;
+            t_info.put('URL', t_url);
+            t_info.put('METHOD', a_method);
+            t_info.put('WALLET', t_wallet);
+            t_infotext := t_info.TO_CLOB;
 
             INSERT INTO eservices_log_t(request,
                                         packet,
@@ -147,9 +150,7 @@ t_infotext := t_info.TO_CLOB;
 
             -- Open the HTTP request
             t_request :=
-                UTL_HTTP.begin_request(
-                    url         => t_url,
-                    method      => a_method);
+                UTL_HTTP.begin_request(url => t_url, method => a_method);
 
             UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
             UTL_HTTP.set_body_charset(t_request, 'UTF-8');
@@ -229,6 +230,10 @@ t_infotext := t_info.TO_CLOB;
                 END;
 
                 t_info.put('LSPRESPONSE', t_response_text);
+                t_info.put('HTTPRESPONSE',t_response.status_code);
+            ELSE
+                t_info.put('LSPRESPONSE', t_response_text);
+                t_info.put('HTTPRESPONSE',t_response.status_code);
             END IF;
 
             -- Close the HTTP request/response
@@ -249,15 +254,24 @@ t_infotext := t_info.TO_CLOB;
 
         t_infotext := t_info.TO_CLOB;
 
-        UPDATE eservices_log_t e
-           SET response = t_infotext,
-               responsedate = SYSTIMESTAMP,
-               e.err = SUBSTR(t_sqlerrm || CHR(13) || t_trace, 1, 3990)
-         WHERE seq = t_seq
-           LOG ERRORS INTO bizmod_api.err$_eservices_log_t
-                   ('UPDATE')
-                   REJECT LIMIT UNLIMITED;
-
+        IF (t_sqlerrm IS NULL)
+        THEN
+            UPDATE eservices_log_t e
+               SET response = t_infotext,
+                   responsedate = SYSTIMESTAMP
+             WHERE seq = t_seq
+               LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
+                       REJECT LIMIT UNLIMITED;
+        ELSE
+            UPDATE eservices_log_t e
+               SET response = t_infotext,
+                   responsedate = SYSTIMESTAMP,
+                   e.err = SUBSTR(t_sqlerrm || CHR(13) || t_trace, 1, 3990)
+             WHERE seq = t_seq
+               LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
+                       REJECT LIMIT UNLIMITED;
+        END IF;
+        
         COMMIT;
 
         RETURN CASE
@@ -366,11 +380,13 @@ t_infotext := t_info.TO_CLOB;
           INTO t_applicationjobid
           FROM (  SELECT app.toobjectid
                              applicationobjectid,
-                         api.pkg_columnquery.dateVALUE(lic.fromobjectid,
-                                                   'issuedate') issuedate,
-                         trunc(api.pkg_columnquery.dateVALUE(p.processid,
-                                                   'datecompleted')) datecompleted
-
+                         api.pkg_columnquery.datevalue(lic.fromobjectid,
+                                                       'issuedate')
+                             issuedate,
+                         TRUNC(
+                             api.pkg_columnquery.datevalue(p.processid,
+                                                           'datecompleted'))
+                             datecompleted
                     -- point to license (lic.toobjectid) from license type object id
                     FROM api.relationships lic
                          -- point to application (app.toobjectid) from license object id
@@ -387,9 +403,11 @@ t_infotext := t_info.TO_CLOB;
                                  api.pkg_configquery.endpointidforname(
                                      'j_application',
                                      'PrimaryLicenseType'))
-                         join api.processes p
-                             on (p.processtypeid = api.pkg_configquery.objectdefidforname('p_IssueLicense')
-                               and p.jobid = app.toobjectid)
+                         JOIN api.processes p
+                             ON (p.processtypeid =
+                                 api.pkg_configquery.objectdefidforname(
+                                     'p_IssueLicense')
+                             AND p.jobid = app.toobjectid)
                    WHERE lic.endpointid =
                          api.pkg_configquery.endpointidforname('j_LicenseType',
                                                                'License')
@@ -399,7 +417,7 @@ t_infotext := t_info.TO_CLOB;
                                                        'LicenseTypeCode'),
                              a_licensetypecode)
                 ORDER BY createddate) app
-        where app.issuedate = app.datecompleted;
+         WHERE app.issuedate = app.datecompleted;
 
         RETURN t_applicationjobid;
     END;
@@ -410,7 +428,7 @@ t_infotext := t_info.TO_CLOB;
                           a_renewalfeedate IN DATE)
         RETURN VARCHAR2
     AS
-        t_awfflag       VARCHAR2(10);
+        t_awfflag      VARCHAR2(10);
     BEGIN
         SELECT CASE COUNT(1) WHEN 0 THEN 'Y' ELSE 'N' END     awfflag
           INTO t_awfflag
@@ -422,7 +440,7 @@ t_infotext := t_info.TO_CLOB;
                  WHERE p.description = 'AWF'
                    AND p.licensenumber = a_licensenumber
                    AND p.licensetypecode = a_licensetypecode
-                   AND trunc(p.datepaid) >= trunc(a_renewalfeedate)) lic -- 08/26/2024 TJL BIZ-16121
+                   AND TRUNC(p.datepaid) >= TRUNC(a_renewalfeedate)) lic -- 08/26/2024 TJL BIZ-16121
          WHERE lic.rnk = 1;
 
         RETURN t_awfflag;
@@ -480,14 +498,15 @@ t_infotext := t_info.TO_CLOB;
                   FROM bizmod_api.eservices_config_t c
                  WHERE c.process = a_process
                    AND c.dbname = UPPER(ora_database_name))
-               PIVOT (MAX(parametervalue)
-                     FOR parametername
-                     IN ('TO' pto,
-                        'FROM' pfrom,
-                        'CC' pcc,
-                        'BCC' pbcc,
-                        'SMTPSERVER' psmtp,
-                        'PRODUCTION' pprod));
+                   PIVOT (
+                         MAX(parametervalue)
+                         FOR parametername
+                         IN ('TO' pto,
+                            'FROM' pfrom,
+                            'CC' pcc,
+                            'BCC' pbcc,
+                            'SMTPSERVER' psmtp,
+                            'PRODUCTION' pprod));
 
         IF (t_from IS NULL)
         THEN
@@ -639,6 +658,7 @@ t_infotext := t_info.TO_CLOB;
                                                 'arg3',
                                                 a_argument3);
         END IF;
+
         IF (a_argument4 IS NOT NULL)
         THEN
             scheduler.pkg_scheduler.addargument(t_arguments,
@@ -668,7 +688,7 @@ t_infotext := t_info.TO_CLOB;
                 -20000,
                 'ScheduleProcedure Error raised: ' || SQLERRM);
     END;
-    
+
 
     FUNCTION get_address(a_objectid IN NUMBER, a_endpoint IN NUMBER)
         RETURN json_object_t
@@ -713,8 +733,9 @@ t_infotext := t_info.TO_CLOB;
         t_json.put(
             'INTERNATIONALPHONENUMBER',
             REGEXP_REPLACE(
-                api.pkg_columnquery.VALUE(t_objectid, 'INTERNATIONALPHONENUMBER'), 
-                '(\d{3})(\d{3})(\d{4})', 
+                api.pkg_columnquery.VALUE(t_objectid,
+                                          'INTERNATIONALPHONENUMBER'),
+                '(\d{3})(\d{3})(\d{4})',
                 '(+1-\1-\2-\3)'));
 
         IF (a_endpoint =
@@ -968,11 +989,13 @@ t_infotext := t_info.TO_CLOB;
                 api.pkg_columnquery.VALUE(t_value, 'LegalEntityType'));
             t_entity.put(
                 'P12TYPE',
-                CASE WHEN 
-                         api.pkg_columnquery.VALUE(t_value, 'P12Status') = 'Y'
+                CASE
+                    WHEN api.pkg_columnquery.VALUE(t_value, 'P12Status') =
+                         'Y'
                     THEN
                         'P12'
-                    WHEN api.pkg_columnquery.VALUE(t_value, 'P12AStatus') = 'Y'
+                    WHEN api.pkg_columnquery.VALUE(t_value, 'P12AStatus') =
+                         'Y'
                     THEN
                         'P12A'
                     ELSE
@@ -1014,145 +1037,145 @@ t_infotext := t_info.TO_CLOB;
         END IF;
     END;
 
---    PROCEDURE get_legalentity2(a_json IN json_object_t, a_list IN VARCHAR2)
---    AS
---        t_value        NUMBER;
---        t_next         VARCHAR2(1000);
---        t_pos          NUMBER;
---
---        t_array        json_array_t;
---        t_json         json_object_t;
---        t_tmp          json_object_t;
---        t_entity       json_object_t := json_object_t();
---
---        t_return       json_object_t := json_object_t();
---    BEGIN
---        t_value :=
---            TO_NUMBER(REGEXP_SUBSTR(a_list,
---                                    '[^/]+',
---                                    1,
---                                    1));
---        t_array := a_json.get_array('LEGALENTITIES');
---dbms_output.put_line('t_value: ' || t_value);
---
---        -- get next level down
---        t_pos :=
---            INSTR(a_list,
---                  '/',
---                  1,
---                  2);
---
---        IF (t_pos > 0)
---        THEN
---            t_next := SUBSTR(a_list, t_pos);
---        END IF;
---dbms_output.put_line('t_pos: ' || t_pos || '  next: ' || t_next || '  cnt: ' || t_legalentity.count);
---
---        IF legalentity_type(t_value) SUBMULTISET t_legalentity
---        THEN
---            -- find object
---dbms_output.put_line('find object');
---            FOR inx IN 0 .. t_array.get_size() - 1
---            LOOP
---                t_tmp := TREAT(t_array.get(inx) AS json_object_t);
---
---                IF t_tmp IS NOT NULL
---                THEN
---                    IF (t_tmp.get_number('OBJECTID') = t_value)
---                    THEN
---                        t_json := t_tmp;
---                        t_array := t_json.get_array('LEGALENTITIES');
---
---                        IF t_array IS NULL
---                        THEN
---                            t_json.put('LEGALENTITIES', json_array_t);
---                        END IF;
---
---                        EXIT;
---                    END IF;
---                END IF;
---            END LOOP;
---        END IF;
---
---
---        IF (t_json IS NULL --    AND SUBSTR(api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'), 1, 3) !=
---                           --        'P12'
---           )
---        THEN
---                    DBMS_OUTPUT.put_line(
---                        'HierarchyLevel: ' || api.pkg_columnquery.VALUE(t_value, 'HierarchyLevel'));
---            --        DBMS_OUTPUT.put_line(
---            --            t_value
---            --            || '  name: '
---            --            || api.pkg_columnquery.VALUE(t_value, 'objectdefname'));
---
---            t_legalentity.EXTEND(1);
---            t_legalentity(t_legalentity.COUNT) := t_value;
---
---            t_entity.put('OBJECTID', t_value);
---            t_entity.put(
---                'LESTRUCTUREREL',
---                api.pkg_columnquery.VALUE(t_value, 'LeStructureRel'));
---            t_entity.put(
---                'HIERARCHYLEVEL',
---                api.pkg_columnquery.VALUE(t_value, 'HierarchyLevel'));
---            t_entity.put(
---                'LEGALENTITYTYPE',
---                        api.pkg_columnquery.VALUE(t_value, 'LegalEntityType')
---                );
---
---            t_entity.put(
---                'P12TYPE',
---                CASE SUBSTR(
---                         api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'),
---                         1,
---                         3)
---                    WHEN 'P12'
---                    THEN
---                        api.pkg_columnquery.VALUE(t_value, 'LEStructureRel')
---                    ELSE
---                        NULL
---                END);
---
---            
---                    t_entity.put(
---                        'OWNERTYPE',
---                        api.pkg_columnquery.VALUE(t_value, 'OwnerType'));
---                    t_entity.put(
---                        'TITLE',
---                        get_titles(a_legalentityobjectid => t_value));
---                    t_entity.put(
---                        'PERCENTAGEOFOWNERSHIP',
---                        api.pkg_columnquery.VALUE(t_value,
---                                                  'PercentageOfOwnership'));
---
---                    CASE api.pkg_columnquery.VALUE(t_value,
---                                                   'LegalEntityType')
---                        WHEN 'Person'
---                        THEN
---                            t_entity.put(
---                                'PERSON',
---                                get_person(a_legalentityobjectid => t_value));
---                        WHEN 'Company'
---                        THEN
---                            t_entity.put(
---                                'COMPANY',
---                                get_company(a_legalentityobjectid => t_value));
---                        ELSE
---                            NULL;
---                    END CASE;
---
---            t_array.append(t_entity);
---
---            t_json := json_object_t();
---            t_json.put('LEGALENTITIES', t_array);
---        END IF;
---
---        IF (t_pos > 0)
---        THEN
---            get_legalentity2(a_json => t_json, a_list => t_next);
---        END IF;
---    END;
+    --    PROCEDURE get_legalentity2(a_json IN json_object_t, a_list IN VARCHAR2)
+    --    AS
+    --        t_value        NUMBER;
+    --        t_next         VARCHAR2(1000);
+    --        t_pos          NUMBER;
+    --
+    --        t_array        json_array_t;
+    --        t_json         json_object_t;
+    --        t_tmp          json_object_t;
+    --        t_entity       json_object_t := json_object_t();
+    --
+    --        t_return       json_object_t := json_object_t();
+    --    BEGIN
+    --        t_value :=
+    --            TO_NUMBER(REGEXP_SUBSTR(a_list,
+    --                                    '[^/]+',
+    --                                    1,
+    --                                    1));
+    --        t_array := a_json.get_array('LEGALENTITIES');
+    --dbms_output.put_line('t_value: ' || t_value);
+    --
+    --        -- get next level down
+    --        t_pos :=
+    --            INSTR(a_list,
+    --                  '/',
+    --                  1,
+    --                  2);
+    --
+    --        IF (t_pos > 0)
+    --        THEN
+    --            t_next := SUBSTR(a_list, t_pos);
+    --        END IF;
+    --dbms_output.put_line('t_pos: ' || t_pos || '  next: ' || t_next || '  cnt: ' || t_legalentity.count);
+    --
+    --        IF legalentity_type(t_value) SUBMULTISET t_legalentity
+    --        THEN
+    --            -- find object
+    --dbms_output.put_line('find object');
+    --            FOR inx IN 0 .. t_array.get_size() - 1
+    --            LOOP
+    --                t_tmp := TREAT(t_array.get(inx) AS json_object_t);
+    --
+    --                IF t_tmp IS NOT NULL
+    --                THEN
+    --                    IF (t_tmp.get_number('OBJECTID') = t_value)
+    --                    THEN
+    --                        t_json := t_tmp;
+    --                        t_array := t_json.get_array('LEGALENTITIES');
+    --
+    --                        IF t_array IS NULL
+    --                        THEN
+    --                            t_json.put('LEGALENTITIES', json_array_t);
+    --                        END IF;
+    --
+    --                        EXIT;
+    --                    END IF;
+    --                END IF;
+    --            END LOOP;
+    --        END IF;
+    --
+    --
+    --        IF (t_json IS NULL --    AND SUBSTR(api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'), 1, 3) !=
+    --                           --        'P12'
+    --           )
+    --        THEN
+    --                    DBMS_OUTPUT.put_line(
+    --                        'HierarchyLevel: ' || api.pkg_columnquery.VALUE(t_value, 'HierarchyLevel'));
+    --            --        DBMS_OUTPUT.put_line(
+    --            --            t_value
+    --            --            || '  name: '
+    --            --            || api.pkg_columnquery.VALUE(t_value, 'objectdefname'));
+    --
+    --            t_legalentity.EXTEND(1);
+    --            t_legalentity(t_legalentity.COUNT) := t_value;
+    --
+    --            t_entity.put('OBJECTID', t_value);
+    --            t_entity.put(
+    --                'LESTRUCTUREREL',
+    --                api.pkg_columnquery.VALUE(t_value, 'LeStructureRel'));
+    --            t_entity.put(
+    --                'HIERARCHYLEVEL',
+    --                api.pkg_columnquery.VALUE(t_value, 'HierarchyLevel'));
+    --            t_entity.put(
+    --                'LEGALENTITYTYPE',
+    --                        api.pkg_columnquery.VALUE(t_value, 'LegalEntityType')
+    --                );
+    --
+    --            t_entity.put(
+    --                'P12TYPE',
+    --                CASE SUBSTR(
+    --                         api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'),
+    --                         1,
+    --                         3)
+    --                    WHEN 'P12'
+    --                    THEN
+    --                        api.pkg_columnquery.VALUE(t_value, 'LEStructureRel')
+    --                    ELSE
+    --                        NULL
+    --                END);
+    --
+    --
+    --                    t_entity.put(
+    --                        'OWNERTYPE',
+    --                        api.pkg_columnquery.VALUE(t_value, 'OwnerType'));
+    --                    t_entity.put(
+    --                        'TITLE',
+    --                        get_titles(a_legalentityobjectid => t_value));
+    --                    t_entity.put(
+    --                        'PERCENTAGEOFOWNERSHIP',
+    --                        api.pkg_columnquery.VALUE(t_value,
+    --                                                  'PercentageOfOwnership'));
+    --
+    --                    CASE api.pkg_columnquery.VALUE(t_value,
+    --                                                   'LegalEntityType')
+    --                        WHEN 'Person'
+    --                        THEN
+    --                            t_entity.put(
+    --                                'PERSON',
+    --                                get_person(a_legalentityobjectid => t_value));
+    --                        WHEN 'Company'
+    --                        THEN
+    --                            t_entity.put(
+    --                                'COMPANY',
+    --                                get_company(a_legalentityobjectid => t_value));
+    --                        ELSE
+    --                            NULL;
+    --                    END CASE;
+    --
+    --            t_array.append(t_entity);
+    --
+    --            t_json := json_object_t();
+    --            t_json.put('LEGALENTITIES', t_array);
+    --        END IF;
+    --
+    --        IF (t_pos > 0)
+    --        THEN
+    --            get_legalentity2(a_json => t_json, a_list => t_next);
+    --        END IF;
+    --    END;
 
     -- ******************************************************
     -- ******************************************************
@@ -1208,7 +1231,5 @@ t_infotext := t_info.TO_CLOB;
 
         RETURN t_return.get_array('LEGALENTITIES');
     END;
-
-    
 END;
 /
