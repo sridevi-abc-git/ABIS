@@ -271,7 +271,7 @@ BEGIN
                                         legalentitytype,
                                     api.pkg_columnquery.numericvalue(
                                         r.toobjectid,
-                                        'HIERARCHYhierarchylevelEL')
+                                        'HierarchyLevel')
                                         hierarchylevel
                                FROM api.relationships r
                               WHERE r.fromobjectid IN
@@ -322,7 +322,7 @@ BEGIN
                     SELECT *
                       FROM le
                      WHERE le.hierarchylevel =
-                           CASE WHEN t_search IS NULL THEN 1 
+                           CASE WHEN t_search IS NULL THEN 1
                                 ELSE le.hierarchylevel END)
             LOOP
                 CASE rec.legalentitytype
