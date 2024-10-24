@@ -11,6 +11,7 @@ IS
     --  Ver:       Date          Ticket       Comment
     --  1.3.0  08/22/2024  TJL  BIZ-16242  Inital function created
     --  1.3.0  10/23/2024  TJL  BIZ-16519  Change JSON format and walking thru HIERARCHY
+    --  1.3.1  10/24/2024  TJL  BIZ-16519  Made second change to JSON format
     -- ****************************************************************************
 
     TYPE legalentity_type IS TABLE OF NUMBER;
@@ -230,7 +231,7 @@ BEGIN
         t_licensenumber VARCHAR2(40);
         t_search       VARCHAR2(200);
         t_msg          VARCHAR2(4000);
-        t_array        json_array_t := json_array_t();
+        t_data         json_object_t := json_object_t();
         t_person_arry  json_array_t := json_array_t();
         t_company_arry json_array_t := json_array_t();
         t_person       json_object_t := json_object_t();
@@ -359,18 +360,18 @@ BEGIN
 
             IF (t_company_arry.get_size() > 0)
             THEN
-                t_company.put('COMPANY', t_company_arry);
-                t_array.append(t_company);
+                t_data.put('COMPANY', t_company_arry);
+--                t_array.append(t_company);
             END IF;
 
             IF (t_person_arry.get_size() > 0)
             THEN
-                t_person.put('PERSON', t_person_arry);
-                t_array.append(t_person);
+                t_data.put('PERSON', t_person_arry);
+--                t_array.append(t_person);
             END IF;
 
             t_json.put('PACKET_TYPE', 'LEGALENTITIES');
-            t_json.put('DATA', t_array);
+            t_json.put('DATA', t_data);
         ELSE
             t_json :=
                 json_object_t(
