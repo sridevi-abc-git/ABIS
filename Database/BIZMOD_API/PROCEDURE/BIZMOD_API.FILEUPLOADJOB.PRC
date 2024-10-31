@@ -12,6 +12,8 @@ IS
     --              Date           Ticket         Comment
     --   1.0     09/19/2023  TJL  BIZ-12883    Initial process created
     --   1.0     12/15/2023  TJL  BIZ-13929    Added addional logging and error handling
+    --   2.0     10/01/2024  TJL  BIZ-16341    Added APPLICATION parameter to indicate
+    --                                           which type of application is being updated
     -- ****************************************************************************
     t_doc          api.pkg_definition.udt_id;
     t_rel          api.pkg_definition.udt_id;
@@ -19,6 +21,7 @@ IS
     t_packet       CLOB;
 
     t_lsp_applicationid VARCHAR2(100);
+    t_application  VARCHAR2(32);
     t_abisid       NUMBER;
     t_basefilename VARCHAR2(256);
     t_extension    VARCHAR2(32);
@@ -33,10 +36,12 @@ BEGIN
      WHERE e.seq = a_seq;
 
     SELECT lsp_applicationid,
+           application,
            basefilename,
            extension,
            description
       INTO t_lsp_applicationid,
+           t_application,
            t_basefilename,
            t_extension,
            t_description
@@ -47,18 +52,33 @@ BEGIN
                    packet_type VARCHAR2(1000) PATH '$.PACKET_TYPE',
                    NESTED PATH '$.DATA[*]'
                        COLUMNS(
-                           lsp_applicationid VARCHAR2(100)
+                           lsp_applicationid
+                               VARCHAR2(100)
                                PATH '$.LSPAPPLICATIONID',
+                           application VARCHAR(32) PATH '$.APPLICATION',
                            basefilename VARCHAR2(256) PATH '$.BASEFILENAME',
                            extension VARCHAR2(32) PATH '$.EXTENSION',
                            description VARCHAR2(256) PATH '$.DESCRIPTION')));
 
-    t_abisid :=
-        api.pkg_simplesearch.objectbyindex('p_IssueCatererEventAuth',
-                                           'LSPId',
-                                           t_lsp_applicationid);
+    CASE t_application
+        WHEN 'CATERINGAPP'
+        THEN
+            t_abisid :=
+                api.pkg_simplesearch.objectbyindex('p_IssueCatererEventAuth',
+                                                   'LSPId',
+                                                   t_lsp_applicationid);
 
-    t_outcome := api.pkg_columnquery.VALUE(t_abisid, 'Outcome');
+            t_outcome := api.pkg_columnquery.VALUE(t_abisid, 'Outcome');
+
+        WHEN 'LICENSEAPP'
+        THEN
+            t_abisid :=
+                api.pkg_simplesearch.objectbyindex('j_Application',
+                                                   'LSPId',
+                                                   t_lsp_applicationid);
+        ELSE
+            NULL;
+    END CASE;
 
     IF (t_outcome IS NULL
     AND t_abisid IS NOT NULL)
@@ -84,48 +104,63 @@ BEGIN
                         'Document'),
                 a_fromobject => t_abisid,
                 a_toobject  => t_doc);
+                
+        api.pkg_logicaltransactionupdate.endtransaction;                    
+        COMMIT;
 
         INSERT INTO bizmod_api.e_process_log_t(seq, processjob, info)
                  VALUES (
-                     a_seq,
-                     'FILEUPLOADJOB',
-                     'LSP Id: '
-                     || t_lsp_applicationid
-                     || CHR(13)
-                     || 'Catering Id: '
-                     || t_abisid
-                     || CHR(13)
-                     || 'File: '
-                     || t_basefilename
-                     || '.'
-                     || t_extension);
+                            a_seq,
+                            'FILEUPLOADJOB',
+                            'LSP Id: '
+                            || t_lsp_applicationid
+                            || CHR(13)
+                            || 'Application: '
+                            || t_application
+                            || CHR(13)
+                            || 'Object Id: '
+                            || t_abisid
+                            || CHR(13)
+                            || 'File: '
+                            || t_basefilename
+                            || '.'
+                            || t_extension);
+                            
+        COMMIT;
+                            
     ELSE
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
                                                info,
                                                errmsg)
                  VALUES (
-                     a_seq,
-                     'FILEUPLOADJOB',
-                     'LSP Id: '
-                     || t_lsp_applicationid
-                     || CHR(13)
-                     || 'Catering Id: '
-                     || t_abisid
-                     || CHR(13)
-                     || 'File: '
-                     || t_basefilename
-                     || '.'
-                     || t_extension,
-                     CASE
-                         WHEN t_outcome IS NOT NULL
-                         THEN
-                             'Catering Application can not be modified after application has been '
-                             || t_outcome
-                         ELSE
-                             'Catering Application not found in ABIS'
-                     END);
+                            a_seq,
+                            'FILEUPLOADJOB',
+                            'LSP Id: '
+                            || t_lsp_applicationid
+                            || CHR(13)
+                            || 'Application: '
+                            || t_application
+                            || CHR(13)
+                            || 'Object Id: '
+                            || t_abisid
+                            || CHR(13)
+                            || 'File: '
+                            || t_basefilename
+                            || '.'
+                            || t_extension,
+                            CASE
+                                WHEN t_outcome IS NOT NULL
+                                THEN
+                                    'Application can not be modified after application has been '
+                                    || t_outcome
+                                ELSE
+                                    'Application not found in ABIS'
+                            END);
+        COMMIT;
     END IF;
+    
+    
 EXCEPTION
     WHEN OTHERS
     THEN
@@ -135,27 +170,29 @@ EXCEPTION
         api.pkg_logicaltransactionupdate.resettransaction;
         ROLLBACK;
 
-
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
                                                info,
                                                errmsg,
                                                bktrace)
                  VALUES (
-                     a_seq,
-                     'FILEUPLOADJOB',
-                     'LSP Id: '
-                     || t_lsp_applicationid
-                     || CHR(13)
-                     || 'Catering Id: '
-                     || t_abisid
-                     || CHR(13)
-                     || 'File: '
-                     || t_basefilename
-                     || '.'
-                     || t_extension,
-                     t_sqlerrm,
-                     t_trace);
+                            a_seq,
+                            'FILEUPLOADJOB',
+                            'LSP Id: '
+                            || t_lsp_applicationid
+                            || CHR(13)
+                            || 'Application: '
+                            || t_application
+                            || CHR(13)
+                            || 'Object Id: '
+                            || t_abisid
+                            || CHR(13)
+                            || 'File: '
+                            || t_basefilename
+                            || '.'
+                            || t_extension,
+                            t_sqlerrm,
+                            t_trace);
 
         COMMIT;
 END;

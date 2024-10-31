@@ -12,6 +12,7 @@ AS
     --                                        new procedures and functions to support
     --                                        License Applications
     --     2.0   09/12/2024  TJL BIZ-16077  adjusted logging
+    --     3.0    09/30/2024 BN  BIZ-16397  ERROR notification to LSP
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)

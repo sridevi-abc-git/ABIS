@@ -11,6 +11,7 @@ AS
     --                          (BIZ-15812)   SITESPECIFIC.PKG_CATERING and added
     --                                        new procedures and functions to support
     --                                        License Applications
+    --     2.0    09/30/2024 BN   BIZ-16397  ERROR notification to LSP
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     IN api.pkg_definition.udt_id,
                                 a_asofdate     IN DATE);

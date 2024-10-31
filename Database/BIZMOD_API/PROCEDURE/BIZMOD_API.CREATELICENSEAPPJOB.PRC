@@ -15,6 +15,8 @@ IS
     --   2.1    07/19/2024  TJL  BIZ-16000  Added additional fields for application
     --                                      update.
     --   3.0.1  09/09/2024  TJL  BIZ-16077  Added country to add address process
+    --   3.1    09/30/2024 BN    BIZ-16397  ERROR notification to LSP
+    --   3.2.0  10/09/2024  BN   BIZ-16428  Fixed the DBA missing and Duplicate address issue 
     -- ****************************************************************************
 
     PROCEDURE add_legal_entities(a_objectid     IN api.pkg_definition.udt_id,
@@ -357,6 +359,8 @@ IS
                                        || t_addr.addressline3
                                        || '%'
                                        || t_addr.usacity
+                                       || '%'
+                                       || t_addr.country
                                        || '%') AS api.udt_objectlist)))
         LOOP
             IF (UPPER(t_addr.addressline1)) =
@@ -376,8 +380,11 @@ IS
                         'X'))
             AND UPPER(NVL(t_addr.usacity, 'X')) =
                 UPPER(NVL(api.pkg_columnquery.VALUE(rec.objectid, 'USACity'), 'X'))
-            AND UPPER(NVL(t_addr.country, 'X')) =
-                UPPER(NVL(api.pkg_columnquery.VALUE(rec.objectid, 'Country'), 'X'))
+            AND ((t_addr.addresslocation != 'Outside USA' AND UPPER('UNITED STATES OF AMERICA') =
+                UPPER(NVL(api.pkg_columnquery.VALUE(rec.objectid, 'Country'), 'X'))) 
+                OR 
+                (t_addr.addresslocation = 'Outside USA' AND UPPER(NVL(t_addr.country, 'X')) =
+                UPPER(NVL(api.pkg_columnquery.VALUE(rec.objectid, 'Country'), 'X'))))
             THEN
                 t_addressobjectid := rec.objectid;
                 EXIT WHEN t_addressobjectid IS NOT NULL;
@@ -1051,6 +1058,9 @@ BEGIN
         t_transfromlic      api.pkg_definition.udt_id;  
         t_endpointid        api.pkg_definition.udt_id;
         t_countyobjectid    api.pkg_definition.udt_id;
+        t_dbanamesobjectid  api.pkg_definition.udt_id;
+        t_dbaendpointid     api.pkg_definition.udt_id;
+        t_dba              api.pkg_definition.udt_id;
     BEGIN
         --*****************
         --Clear any error
@@ -1133,7 +1143,22 @@ BEGIN
         api.pkg_columnupdate.setvalue(t_jobid,
                                       'LSPID',
                                       t_apprec.lspapplicationid);
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'DBA', t_apprec.dba);
+        IF (t_apprec.dba IS NOT NULL AND t_apprec.dba != '')
+        THEN                        
+            t_dbanamesobjectid :=
+                    api.pkg_objectupdate.new(api.pkg_configquery.objectdefidforname('o_DBANames'));
+                        
+            api.pkg_columnupdate.setvalue(t_dbanamesobjectid,'DBA',t_apprec.dba);
+            api.pkg_columnupdate.setvalue(t_dbanamesobjectid,'PrimaryDBA','Y');
+            
+            t_dbaendpointid :=
+                    api.pkg_configquery.endpointidforname('j_application','DBANames');
+                    
+            t_dba :=
+                    api.pkg_relationshipupdate.new(t_dbaendpointid,t_jobid, t_dbanamesobjectid);
+        END IF;
+        
+       -- api.pkg_columnupdate.setvalue(t_jobid, 'PrimaryDBA', t_apprec.dba);
         api.pkg_columnupdate.setvalue(t_jobid,
                                       'UnderConstruction',
                                       t_apprec.underconstruction);

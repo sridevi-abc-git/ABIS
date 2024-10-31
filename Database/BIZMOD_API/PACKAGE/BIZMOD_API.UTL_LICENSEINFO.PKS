@@ -25,6 +25,7 @@ AS
     --  10.1.0  08/29/2024  TJL  BIZ-16000    Added columns to gc_apprec
     --  11.0.0  09/09/2024  TJL  BIZ-16077    Added columns country, addressline3 
     --                                          to gc_addr_t
+    --  12.0.0  10/08/2024  TJL  BIZ-16424    Added get_address and get_legalentity functions
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -147,14 +148,12 @@ AS
                         a_argument2    IN DATE DEFAULT SYSDATE,
                         a_argument3    IN VARCHAR2 DEFAULT NULL,
                         a_argument4    IN VARCHAR2 DEFAULT NULL);
+
+    FUNCTION get_legalentity(a_objectid IN NUMBER)
+        RETURN json_array_t;
+
+    FUNCTION get_address(a_objectid IN NUMBER, a_endpoint IN NUMBER)
+        RETURN json_object_t;
+
 END;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
-
-GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO LORDT;
-
-GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;
