@@ -43,6 +43,7 @@ AS
     --  10.0.0  10/08/2024  TJL  BIZ-16424    Added get_address, get_legalentity, get_company, get_person,
     --                                          and get_titles functons
     --  10.1.0  10/23/2024  TJL               Added extra logging.
+    --  10.2.0  11/07/2024  TJL  BIZ-16535    Added logging for status codes 200's
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -98,6 +99,7 @@ AS
         t_text         VARCHAR2(32767);
         t_infotext     VARCHAR2(32767);
         t_length       NUMBER;
+        t_statuscode    NUMBER;
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
         --        t_keys         json_key_list;
@@ -209,9 +211,8 @@ AS
 
             -- Get the response
             t_response := UTL_HTTP.get_response(t_request);
+            t_statuscode := t_response.status_code;
 
-            IF (t_response.status_code NOT IN (200, 201, 204))
-            THEN
                 DBMS_LOB.createtemporary(t_response_text,
                                          TRUE,
                                          DBMS_LOB.session);
@@ -229,12 +230,8 @@ AS
                         UTL_HTTP.end_response(t_response);
                 END;
 
-                t_info.put('LSPRESPONSE', t_response_text);
                 t_info.put('HTTPRESPONSE',t_response.status_code);
-            ELSE
                 t_info.put('LSPRESPONSE', t_response_text);
-                t_info.put('HTTPRESPONSE',t_response.status_code);
-            END IF;
 
             -- Close the HTTP request/response
             UTL_HTTP.end_response(t_response);
@@ -275,8 +272,10 @@ AS
         COMMIT;
 
         RETURN CASE
-                   WHEN t_response_text IS NOT NULL THEN t_info.TO_CLOB
-                   ELSE NULL
+                   WHEN t_statuscode IN (200, 201, 204) THEN 
+                       NULL
+                   ELSE 
+                        t_info.TO_CLOB
                END;
     END;
 
