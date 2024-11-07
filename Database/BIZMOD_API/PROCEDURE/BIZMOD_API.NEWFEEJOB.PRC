@@ -15,6 +15,8 @@ AS
     --   2.0.1  08/14/2014 TJL  BIZ-16069  Added URL info and status packet
     --                                      Reference BIZ-15319
     --   3.0.0  09/12/2014 TJL  BIZ-16077  Added logging email info
+    --   4.0.0  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
+    --                                       call to CALLLSP function.
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
     t_method      constant varchar2(10) := 'PATCH';
@@ -44,7 +46,11 @@ BEGIN
                 a_urlinfo   => t_urlinfo,
                 a_method    => t_method,
                 a_content   => t_body.to_clob);
-        t_response := json_object_t.parse(t_results);
+        IF (t_results IS NOT NULL)
+        THEN
+            t_response := json_object_t.parse(t_results);
+        END IF;
+        
     EXCEPTION
         WHEN OTHERS
         THEN
@@ -52,7 +58,7 @@ BEGIN
             t_trace := DBMS_UTILITY.format_error_backtrace;
     END;
 
-    IF (t_sqlerrm IS NULL)
+    IF (t_sqlerrm IS NULL AND t_results IS NOT NULL)
     THEN
         t_sqlerrm :=
             CASE
