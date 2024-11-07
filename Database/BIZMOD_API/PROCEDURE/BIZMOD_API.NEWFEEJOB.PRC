@@ -15,7 +15,7 @@ AS
     --   2.0.1  08/14/2014 TJL  BIZ-16069  Added URL info and status packet
     --                                      Reference BIZ-15319
     --   3.0.0  09/12/2014 TJL  BIZ-16077  Added logging email info
-    --   4.0.0  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
+    --   4.0.1  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
     --                                       call to CALLLSP function.
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
@@ -90,18 +90,16 @@ BEGIN
                  || a_objectid
                  || CHR(13)
                  || CASE
-                        WHEN t_results IS NOT NULL
-                          OR t_sqlerrm IS NOT NULL
-                        THEN
-                            'Info: '
-                            || t_info
-                            || CHR(13)
-                            || 'LSP Response: '
-                            || t_results
-                        ELSE
-                            NULL
-                    END,
-                 t_sqlerrm,
+                       WHEN t_results IS NOT NULL
+                       THEN
+                           CHR(13)
+                           || 'Call LSP Information: '
+                           || json_query(t_results, '$' RETURNING CLOB PRETTY)
+                           || CHR(13)
+                       ELSE
+                           NULL
+                   END,
+                 substr(t_sqlerrm,1,4000),
                  t_trace,
                  t_value);
 

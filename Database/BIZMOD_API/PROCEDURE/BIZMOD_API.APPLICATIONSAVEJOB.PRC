@@ -19,7 +19,7 @@ AS
     --   3.0.0  09/12/2024 TJL  BIZ-16077  Added logging email info
     --   4.0.0  10/09/2024 TJL  BIZ-16249  Correct ABIS 'NEW' status to return POSTED
     --   5.0    10/09/2024 BN   BIZ-16432  Modified License number to 6 digit
-    --   6.0.0  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
+    --   6.0.1  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
     --                                       call to CALLLSP function.
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
@@ -30,7 +30,7 @@ AS
     t_body         json_object_t := json_object_t();
     t_applicationid VARCHAR2(40);
     t_process      VARCHAR2(32) := 'APPLICATIONSAVEJOB';
-    t_sqlerrm      VARCHAR2(4000);
+    t_sqlerrm      VARCHAR2(32000);
     t_trace        VARCHAR2(4000);
     t_status       VARCHAR2(40);
     t_info         VARCHAR2(4000);
@@ -116,17 +116,15 @@ BEGIN
                         || CHR(13)
                         || CASE
                                WHEN t_results IS NOT NULL
-                                 OR t_sqlerrm IS NOT NULL
                                THEN
-                                   'Info: '
-                                   || t_info
+                                   CHR(13)
+                                   || 'Call LSP Information: '
+                                   || json_query(t_results, '$' RETURNING CLOB PRETTY)
                                    || CHR(13)
-                                   || 'LSP Response: '
-                                   || t_results
                                ELSE
                                    NULL
                            END,
-                        t_sqlerrm,
+                        substr(t_sqlerrm,1,4000),
                         t_trace,
                         t_value);
 
