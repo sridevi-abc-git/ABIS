@@ -15,7 +15,7 @@ AS
     --   2.0.1  08/14/2014 TJL  BIZ-16069  Added URL info and status packet
     --                                      Reference BIZ-15319
     --   3.0.0  09/12/2014 TJL  BIZ-16077  Added logging email info
-    --   4.0.1  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
+    --   4.0.2  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
     --                                       call to CALLLSP function.
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
@@ -28,7 +28,6 @@ AS
     t_applicationid NUMBER;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
-    t_info         VARCHAR2(4000);
     t_value        CLOB;
     t_results      CLOB;
 BEGIN
@@ -39,7 +38,7 @@ BEGIN
 
         t_body.put('status', t_status);
         t_body.put('objectId', a_objectid);
-        t_body.put('licenseNumber', api.pkg_columnquery.value(a_objectid, 'ExternalFileNum'));
+        t_body.put('licenseNumber', api.pkg_columnquery.value(a_objectid, 'LICENSENUMBER'));
         
         t_results :=
             bizmod_api.utl_licenseinfo.calllsp(
