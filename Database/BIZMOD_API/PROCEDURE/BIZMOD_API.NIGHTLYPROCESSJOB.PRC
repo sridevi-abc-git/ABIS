@@ -41,6 +41,7 @@ IS
     --  11.0.4  07/24/2024  TJL  BIZ-15915  change how fiscal end date is calculated
     --  12.0.3  08/12/2024  TJL  BIZ-16036  Changed when awf report is avaliable after renewal
     --                                        Incorprated BIZ-15991 fix
+    --  13.0.0  11/26/2024  TJL  BIZ-16612  Add checking for AWF fees manually being paid
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -170,17 +171,17 @@ IS
             -- get renewal fee information for licenses over a couple of years old
             WHEN TRUNC(t_issuedate) <= ADD_MONTHS(a_fiscalstart, 3)
             THEN
-                     -- get renewal fee
-                     SELECT f.feeid
-                       INTO t_feeid
-                       FROM api.fees f
-                      WHERE f.jobid = a_jobid
-                        AND (f.description LIKE '02 - REN%'
-                          OR f.description LIKE '22 - REN%')
-                        AND f.transactiondate BETWEEN a_fiscalstart
-                                                  AND a_fiscalend
-                   ORDER BY f.transactiondate ASC
-                FETCH FIRST 1 ROWS ONLY;
+                  -- get renewal fee
+                  SELECT f.feeid
+                    INTO t_feeid
+                    FROM api.fees f
+                   WHERE f.jobid = a_jobid
+                     AND (f.description LIKE '02 - REN%'
+                       OR f.description LIKE '22 - REN%')
+                     AND f.transactiondate BETWEEN a_fiscalstart
+                                               AND a_fiscalend
+                ORDER BY f.transactiondate ASC
+                   FETCH FIRST 1 ROWS ONLY;
             -- for licenses issued was a transfer this year get renewal fees
             --    from the transfer from license
             WHEN TRUNC(t_issuedate) BETWEEN ADD_MONTHS(a_fiscalstart, 3)
@@ -309,17 +310,17 @@ IS
                                     a_jobid     => t_transferfromobjectid),
                                 'FeeId');
                     ELSE
-                             -- get ren fees from job
-                             SELECT f.feeid
-                               INTO t_feeid
-                               FROM api.fees f
-                              WHERE f.jobid = a_jobid
-                                AND (f.description LIKE '02 - REN%'
-                                  OR f.description LIKE '22 - REN%')
-                                AND f.transactiondate BETWEEN a_fiscalstart
-                                                          AND a_fiscalend
-                           ORDER BY f.transactiondate ASC
-                        FETCH FIRST 1 ROWS ONLY;
+                          -- get ren fees from job
+                          SELECT f.feeid
+                            INTO t_feeid
+                            FROM api.fees f
+                           WHERE f.jobid = a_jobid
+                             AND (f.description LIKE '02 - REN%'
+                               OR f.description LIKE '22 - REN%')
+                             AND f.transactiondate BETWEEN a_fiscalstart
+                                                       AND a_fiscalend
+                        ORDER BY f.transactiondate ASC
+                           FETCH FIRST 1 ROWS ONLY;
                     END IF;
                 END IF;
         END CASE;
@@ -1162,6 +1163,75 @@ BEGIN
             END IF;
 
             -- ********************************************************************
+            -- 11/26/2024  TJL  BIZ-16612
+            -- Added below select and loop to find manual payments
+            --   (Not payments thru First Data)
+            -- ********************************************************************
+            FOR rec
+                IN (WITH
+                        p
+                        AS
+                            (SELECT b.id,
+                                    b.feeid                awffeeid,
+                                    api.pkg_simplesearch.objectbyindex(
+                                        'j_PaymentBatch',
+                                        'ExternalFileNum',
+                                        api.pkg_columnquery.VALUE(
+                                            b.paymentobjectid,
+                                            'BatchId'))    paymentbatch
+                               FROM (SELECT a.ROWID
+                                                id,
+                                            api.pkg_columnquery.VALUE(
+                                                reo.objectid,
+                                                'objectdefname')
+                                                n,
+                                            api.pkg_simplesearch.objectbyindex(
+                                                'o_Payment',
+                                                'Paymentid',
+                                                api.pkg_columnquery.VALUE(
+                                                    reo.objectid,
+                                                    'PaymentId'))
+                                                paymentobjectid,
+                                            f.feeid
+                                       FROM bizmod_api.awf_t  a
+                                            JOIN api.fees f
+                                                ON (f.jobid =
+                                                    a.licensetypejobid
+                                                AND f.transactiondate >
+                                                    TRUNC(a.submitteddate)
+                                                AND f.description LIKE
+                                                        '%AWF%')
+                                            JOIN
+                                            api.registeredexternalobjects reo
+                                                ON (reo.objectdefid =
+                                                    api.pkg_configquery.objectdefidforname(
+                                                        'o_PaymentTransactions')
+                                                AND reo.linkvalue =
+                                                    (SELECT TO_CHAR(
+                                                                transactionid)
+                                                       FROM api.feetransactions
+                                                            t
+                                                      WHERE feeid = f.feeid))
+                                      WHERE (a.submitteddate IS NOT NULL
+                                         AND a.awffeeid IS NULL
+                                         AND a.paymentbatch IS NULL)) b)
+                    SELECT p.id,
+                           p.awffeeid,
+                           p.paymentbatch,
+                           api.pkg_columnquery.datevalue(p.paymentbatch,
+                                                         'CompletedDate')    paymentbatchdate
+                      FROM p)
+            LOOP
+                -- update awf record with payment information
+                UPDATE bizmod_api.awf_t a
+                   SET a.awffeeid = rec.awffeeid,
+                       a.paymentbatch = rec.paymentbatch,
+                       a.paymentbatchdate = rec.paymentbatchdate,
+                       a.completed = 'Y'
+                 WHERE ROWID = rec.id;
+            END LOOP;
+
+            -- ********************************************************************
             --  check to see if AWF Refund has been completed
             -- ********************************************************************
             UPDATE bizmod_api.awf_t a
@@ -1225,18 +1295,18 @@ BEGIN
 
             UPDATE bizmod_api.e_payments_t p
                SET p.feeobjid =
-                       (     SELECT reo.objectid     feeobjid
-                               FROM bizmod_api.awf_t a
-                                    JOIN api.registeredexternalobjects reo
-                                        ON (reo.linkvalue = TO_CHAR(a.awffeeid)
-                                        AND reo.objectdefid =
-                                            api.pkg_configquery.objectdefidforname(
-                                                'o_Fee'))
-                              WHERE a.awffeeid IS NOT NULL
-                                AND p.licensenumber = a.licensenumber
-                                AND p.licensetypecode = a.licensetypecode
-                           ORDER BY submitteddate DESC
-                        FETCH FIRST 1 ROWS ONLY) -- BIZ-15991
+                       (  SELECT reo.objectid     feeobjid
+                            FROM bizmod_api.awf_t a
+                                 JOIN api.registeredexternalobjects reo
+                                     ON (reo.linkvalue = TO_CHAR(a.awffeeid)
+                                     AND reo.objectdefid =
+                                         api.pkg_configquery.objectdefidforname(
+                                             'o_Fee'))
+                           WHERE a.awffeeid IS NOT NULL
+                             AND p.licensenumber = a.licensenumber
+                             AND p.licensetypecode = a.licensetypecode
+                        ORDER BY submitteddate DESC
+                           FETCH FIRST 1 ROWS ONLY) -- BIZ-15991
              WHERE p.feeobjid IS NULL
                AND p.description LIKE 'AWF';
 
