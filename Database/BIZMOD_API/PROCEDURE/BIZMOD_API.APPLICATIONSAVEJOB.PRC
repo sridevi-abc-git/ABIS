@@ -21,6 +21,7 @@ AS
     --   5.0    10/09/2024 BN   BIZ-16432  Modified License number to 6 digit
     --   6.0.1  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
     --                                       call to CALLLSP function.
+    --   6.1.0  12/02/2024 TJL  BIZ-16697  Added updating Status Name field in bizmod_api.license_app_t
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
         := '/api/licensing/internal/license-applications/<<applicationId>>' ;
@@ -33,7 +34,6 @@ AS
     t_sqlerrm      VARCHAR2(32000);
     t_trace        VARCHAR2(4000);
     t_status       VARCHAR2(40);
-    t_info         VARCHAR2(4000);
     t_value        CLOB;
     t_results      CLOB;
 BEGIN
@@ -128,6 +128,11 @@ BEGIN
                         t_trace,
                         t_value);
 
+    -- 12/02/2024 TJL  BIZ-16697 
+    UPdate bizmod_api.license_app_t la
+       set la.statusname = t_status
+     where la.jobid = a_jobid;
+     
     COMMIT;
 END;
 /
