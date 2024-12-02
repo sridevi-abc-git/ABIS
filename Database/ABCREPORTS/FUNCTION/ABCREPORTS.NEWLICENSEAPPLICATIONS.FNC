@@ -51,7 +51,9 @@ BEGIN
                             api.pkg_columnquery.datevalue(la.jobid,
                                                           'CreatedDate'),
                             'MM/DD/YYYY')
-                     || '"'    info
+                     || '"'
+                     || CHR(13)
+                     || CHR(10)    info
                 FROM bizmod_api.license_app_t la
                WHERE la.statusname IN ('NEW', 'POSTED')
             ORDER BY api.pkg_columnquery.datevalue(la.jobid, 'CreatedDate'))
