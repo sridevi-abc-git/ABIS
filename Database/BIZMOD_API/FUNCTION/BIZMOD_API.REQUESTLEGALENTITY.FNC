@@ -18,6 +18,8 @@ IS
     --                                      time when multiple of same person is found.
     --  1.4.1  11/14/2024  TJL  BIZ-16706  Change code for OWNERTYPE and TITLETYPE
     --  1.4.2  11/19/2024  TJL  BIZ-16706  Adding remarks to code
+    --  1.4.3  12/02/2024  TJL  BIZ-16842  Removed Referenceid and objectid. Added 
+    --                                      LegalEntityObjectId
     -- ****************************************************************************
 
     TYPE lecompany_type IS TABLE OF VARCHAR2(100);
@@ -39,9 +41,8 @@ IS
     AS
         t_entity       json_object_t := json_object_t();
     BEGIN
-        -- In JSON, return Legal Entity and Person object ids
-        t_entity.put('REFERENCEID', a_legalentityobjectid);
-        t_entity.put('OBJECTID', a_personobjectid);
+        -- In JSON, return Legal Entity 
+        t_entity.put('LEGALENTITYOBJECTID', a_legalentityobjectid);
         
         -- Get Person information for JSON using ABIS API's
         t_entity.put(
@@ -175,7 +176,7 @@ IS
                     NULL
             END);
 
-        t_company.put('REFERENCEID', a_legalentityobjectid);
+        t_company.put('LEGALENTITYOBJECTID', a_legalentityobjectid);
 
         -- if P12(A) get master license number and base file office
         CASE
@@ -186,9 +187,6 @@ IS
                                            'P12AStatus') =
                  'Y'
             THEN
-                -- return object id for Legal Entity object and not company object
-                t_company.put('OBJECTID', a_legalentityobjectid);
-                
                 t_company.put(
                     'MASTERLICENSE',
                     api.pkg_columnquery.VALUE(
@@ -209,8 +207,7 @@ IS
                             'LicenseJobId'),
                         'BaseFileOfficeCodeDescription'));
             ELSE
-                -- return object id for company object
-                t_company.put('OBJECTID', t_objectid);
+                NULL;
         END CASE;
 
         -- Get company information for JSON using ABIS API's
