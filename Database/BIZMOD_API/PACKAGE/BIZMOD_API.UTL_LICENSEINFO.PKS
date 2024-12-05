@@ -27,6 +27,7 @@ AS
     --                                          to gc_addr_t
     --  12.0.0  10/08/2024  TJL  BIZ-16424    Added get_address and get_legalentity functions
     --  12.1.0  10/23/2024  TJL  BIZ-16424    Added istemporarymailingaddress to gc_apprec_t
+    --  12.2.0  12/03/2024  TJL  BIZ-16842    Added fields to gc_person_t
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -69,23 +70,28 @@ AS
                              noevent VARCHAR2(3),
                              eligiblefortransfer VARCHAR2(3));
 
-    TYPE gc_person_t IS RECORD(firstname VARCHAR2(4000),
-                               middlename VARCHAR2(4000),
-                               lastname VARCHAR2(4000),
-                               suffix VARCHAR2(20),
-                               aliasnames VARCHAR2(4000),
-                               socialsecuritynumber VARCHAR2(4),
-                               driverslicensenumber VARCHAR2(4000),
-                               driverslicensestate VARCHAR2(4000),
-                               passportnumber VARCHAR2(4000),
-                               gender VARCHAR2(4000),
-                               birthdate DATE,
-                               birthcity VARCHAR2(4000),
-                               birthstate VARCHAR2(4000),
-                               birthcountry VARCHAR2(4000),
-                               maritalstatus VARCHAR2(4000),
-                               address CLOB);
-
+--    TYPE gc_person_r IS RECORD(ownertype VARCHAR2(4000),
+--                               title CLOB,
+--                               lestructurerel VARCHAR2(4000),
+--                               percentageofownership NUMBER,
+--                               firstname VARCHAR2(4000),
+--                               middlename VARCHAR2(4000),
+--                               lastname VARCHAR2(4000),
+--                               suffix VARCHAR2(20),
+--                               aliasnames VARCHAR2(4000),
+--                               socialsecuritynumber VARCHAR2(4),
+--                               driverslicensenumber VARCHAR2(4000),
+--                               driverslicensestate VARCHAR2(4000),
+--                               passportnumber VARCHAR2(4000),
+--                               gender VARCHAR2(4000),
+--                               birthdate DATE,
+--                               birthcity VARCHAR2(4000),
+--                               birthstate VARCHAR2(4000),
+--                               birthcountry VARCHAR2(4000),
+--                               maritalstatus VARCHAR2(4000),
+--                               address CLOB);
+--    TYPE gc_person_t IS TABLE OF gc_person_r;
+--    
     TYPE gc_company_t IS RECORD(companyname VARCHAR2(4000),
                                 companystructure VARCHAR2(4000),
                                 dateofincorporation  DATE,
