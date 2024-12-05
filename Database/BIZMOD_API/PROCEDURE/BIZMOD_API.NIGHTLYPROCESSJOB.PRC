@@ -42,6 +42,7 @@ IS
     --  12.0.3  08/12/2024  TJL  BIZ-16036  Changed when awf report is avaliable after renewal
     --                                        Incorprated BIZ-15991 fix
     --  13.0.0  11/26/2024  TJL  BIZ-16612  Add checking for AWF fees manually being paid
+    --  13.0.1  12/05/2024  BN   BIZ-16805  Change how application object id is retrieved
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -58,7 +59,6 @@ IS
         t_issuedate    DATE;
         t_feeid        NUMBER;
         t_feeobjid     NUMBER;
-        t_old          NUMBER;
     BEGIN
         SELECT MAX(lt.applicationjobid)
           INTO t_application
@@ -69,45 +69,8 @@ IS
 
         IF (t_application IS NULL)
         THEN
-            FOR rec
-                IN (  SELECT app.toobjectid
-                                 applicationobjectid,
-                             api.pkg_columnquery.VALUE(plt.toobjectid,
-                                                       'LicenseTypeCode')
-                                 licensetypecode,
-                             api.pkg_columnquery.VALUE(app.toobjectid,
-                                                       'Completeddate')
-                                 completeddate
-                        -- point to license (lic.toobjectid) from license type object id
-                        FROM api.relationships lic
-                             -- point to application (app.toobjectid) from license object id
-                             JOIN api.relationships app
-                                 ON (app.endpointid =
-                                     api.pkg_configquery.endpointidforname(
-                                         'j_License',
-                                         'ApplicationLicense')
-                                 AND app.fromobjectid = lic.toobjectid)
-                             -- point to primary license type (plt.toobjectid) from application object id
-                             JOIN api.relationships plt
-                                 ON (plt.fromobjectid = app.toobjectid
-                                 AND plt.endpointid =
-                                     api.pkg_configquery.endpointidforname(
-                                         'j_application',
-                                         'PrimaryLicenseType'))
-                       WHERE lic.endpointid =
-                             api.pkg_configquery.endpointidforname(
-                                 'j_LicenseType',
-                                 'License')
-                         AND lic.fromobjectid = a_jobid
-                         AND REGEXP_LIKE(
-                                 api.pkg_columnquery.VALUE(plt.toobjectid,
-                                                           'LicenseTypeCode'),
-                                 '02|22')
-                    ORDER BY completeddate)
-            LOOP
-                t_application := rec.applicationobjectid;
-            END LOOP;
 
+            t_application := bizmod_api.utl_licenseinfo.get_application(a_jobid, '02|22');
             UPDATE bizmod_api.licensetype_t lt
                SET lt.applicationjobid = t_application
              WHERE lt.licensetypejobid = a_jobid;
