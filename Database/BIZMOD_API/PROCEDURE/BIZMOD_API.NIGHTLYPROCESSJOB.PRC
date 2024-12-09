@@ -43,6 +43,7 @@ IS
     --                                        Incorprated BIZ-15991 fix
     --  13.0.0  11/26/2024  TJL  BIZ-16612  Add checking for AWF fees manually being paid
     --  13.0.1  12/05/2024  BN   BIZ-16805  Change how application object id is retrieved
+    --  13.1.0  12/09/2024  TJL  BIZ-16612  Added reseting AWF required flag when fee manually paid
     -- ****************************************************************************
 
     -- ****************************************************************************
@@ -1141,7 +1142,8 @@ BEGIN
                                         'ExternalFileNum',
                                         api.pkg_columnquery.VALUE(
                                             b.paymentobjectid,
-                                            'BatchId'))    paymentbatch
+                                            'BatchId'))    paymentbatch,
+                                        b.licensetypejobid
                                FROM (SELECT a.ROWID
                                                 id,
                                             api.pkg_columnquery.VALUE(
@@ -1155,7 +1157,8 @@ BEGIN
                                                     reo.objectid,
                                                     'PaymentId'))
                                                 paymentobjectid,
-                                            f.feeid
+                                            f.feeid,
+                                            a.licensetypejobid
                                        FROM bizmod_api.awf_t  a
                                             JOIN api.fees f
                                                 ON (f.jobid =
@@ -1182,7 +1185,8 @@ BEGIN
                            p.awffeeid,
                            p.paymentbatch,
                            api.pkg_columnquery.datevalue(p.paymentbatch,
-                                                         'CompletedDate')    paymentbatchdate
+                                                         'CompletedDate')    paymentbatchdate,
+                           p.licensetypejobid                              
                       FROM p)
             LOOP
                 -- update awf record with payment information
@@ -1192,6 +1196,11 @@ BEGIN
                        a.paymentbatchdate = rec.paymentbatchdate,
                        a.completed = 'Y'
                  WHERE ROWID = rec.id;
+                 
+                UPDATE bizmod_api.licensetype_t lic
+                   SET lic.awfflag = 'N'
+                 WHERE lic.licensetypejobid = rec.licensetypejobid;
+                 
             END LOOP;
 
             -- ********************************************************************
