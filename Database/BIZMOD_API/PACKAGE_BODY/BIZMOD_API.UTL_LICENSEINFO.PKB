@@ -44,6 +44,8 @@ AS
     --                                          and get_titles functons
     --  10.1.0  10/23/2024  TJL               Added extra logging.
     --  10.2.0  11/07/2024  TJL  BIZ-16535    Added logging for status codes 200's
+    --  10.3.0  12/10/2024  TJL  BIZ-16906    Remove COMMIT from createjob process. ABIS throws error because
+    --                                          the current ABIS transaction cannot be ended at this time.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -674,18 +676,6 @@ AS
                 t_arguments,
                 'E-Services ' || a_description,
                 1); --serverkey
-
-        api.pkg_logicaltransactionupdate.endtransaction;
-        COMMIT;
-    EXCEPTION
-        WHEN OTHERS
-        THEN
-            api.pkg_errors.clear();
-            api.pkg_errors.setargvalue('Custom Procedure',
-                                       'bizmod_api.' || a_procedure);
-            api.pkg_errors.raiseerror(
-                -20000,
-                'ScheduleProcedure Error raised: ' || SQLERRM);
     END;
 
 
