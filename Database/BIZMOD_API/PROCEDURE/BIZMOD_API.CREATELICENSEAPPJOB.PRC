@@ -20,10 +20,9 @@ IS
     --   3.3.0  11/21/2024  TJL  BIZ-16842  Changing code to use ABIS copy entities routines
     --                                       when reference ids are passed
     --                                      Changed how Legal Entity packet is processed
+    --   3.4.0  12/11/2024  TJL  BIZ-16842  Added support for Spouses being entered in LSP 
+    --                                       application.
     -- ****************************************************************************
-
---    PROCEDURE add_legal_entities(a_objectid     IN api.pkg_definition.udt_id,
---                                 a_legal_entity IN CLOB);
 
     PROCEDURE add_secondary_license_types(
         a_primary_objectid IN api.pkg_definition.udt_id,
@@ -651,7 +650,9 @@ IS
                                maritalstatus
                                    VARCHAR2(4000)
                                    PATH '$.MARITALSTATUS',
-                               address CLOB FORMAT JSON PATH '$.ADDRESS')))
+                               address CLOB FORMAT JSON PATH '$.ADDRESS',
+                               person CLOB FORMAT JSON PATH '$.PERSON'
+                               )))
         LOOP
             IF (api.pkg_columnquery.value(a_entityobjectid, 'ObjectDefName') = 'j_Application')
             then
@@ -660,6 +661,14 @@ IS
                             'j_Application',
                             'Applicant');
             else
+                if (api.pkg_columnquery.value(a_entityobjectid, 'IsAPerson') = 'Y')
+                then
+                    t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                'Spouse1');
+                else
+                    
                 if (rec.percentageofownership is not null)
                 then
                     t_endpointid :=
@@ -672,26 +681,8 @@ IS
                                 'o_LegalEntity',
                                 'Officer');
                 end if;
+                end if;
             end if;
---            CASE rec.lestructurerel
---                WHEN 'Stockholder'
---                THEN
---                    t_endpointid :=
---                        api.pkg_configquery.endpointidforname(
---                            'o_LegalEntity',
---                            'Stockholder');
---                WHEN 'Officer'
---                THEN
---                    t_endpointid :=
---                        api.pkg_configquery.endpointidforname(
---                            'o_LegalEntity',
---                            'Officer');
---                ELSE
---                    t_endpointid :=
---                        api.pkg_configquery.endpointidforname(
---                            'o_LegalEntity',
---                            'Node');
---            END CASE;
 
             -- create legal entity
             t_entityobjectid :=
@@ -857,13 +848,12 @@ IS
                                               'dup_FormattedName',
                                               api.pkg_columnquery.value(t_objectid, 'FormattedName'));
             
-        -- add address to this legal entity
-        --        IF (rec.address IS NOT NULL)
-        --        THEN
-        --            add_address(a_jobid     => t_objectid,
-        --                        a_address_type => 'Address',
-        --                        a_address   => rec.address);
-        --        END IF;
+            IF (rec.person IS NOT NULL)
+            THEN
+                add_person(a_entityobjectid => t_entityobjectid,
+                           a_person => rec.person,
+                           a_HierarchyLevel_Stored => a_HierarchyLevel_Stored + 1);
+            END IF;
         END LOOP;
     END add_person;
 
