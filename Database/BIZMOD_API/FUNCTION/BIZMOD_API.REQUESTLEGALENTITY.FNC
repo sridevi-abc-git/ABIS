@@ -1,5 +1,6 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.requestlegalentity(a_packet       IN CLOB,
-                                              a_seq          IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestlegalentity(
+    a_packet       IN CLOB,
+    a_seq          IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -18,18 +19,48 @@ IS
     --                                      time when multiple of same person is found.
     --  1.4.1  11/14/2024  TJL  BIZ-16706  Change code for OWNERTYPE and TITLETYPE
     --  1.4.2  11/19/2024  TJL  BIZ-16706  Adding remarks to code
-    --  1.4.3  12/02/2024  TJL  BIZ-16842  Removed Referenceid and objectid. Added 
+    --  1.4.3  12/02/2024  TJL  BIZ-16842  Removed Referenceid and objectid. Added
     --                                      LegalEntityObjectId
+    --  1.5.0  12/18/2024  TJL  BIZ-16968  Change TITLETYPE from string to JSON array
     -- ****************************************************************************
 
     TYPE lecompany_type IS TABLE OF VARCHAR2(100);
+
+    -- *********************************************************
+    --  Get Title
+    --
+    --  This function creats a json array with Legal Entity title(s) information.
+    --      a_legalentityobjectid - Legal Entity Object id that the person object is
+    --                               pointed to.
+    -- *********************************************************
+    FUNCTION get_title(a_legalentityobjectid IN api.pkg_definition.udt_id)
+        RETURN json_array_t
+    AS
+        t_array        json_array_t := json_array_t();
+    BEGIN
+        FOR rec
+            IN (SELECT r.toobjectid objectid, r.relationshipid
+                  FROM api.relationships r
+                 WHERE r.endpointid =
+                       api.pkg_configquery.endpointidforname(
+                           api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                                     'ObjectDefName'),
+                           'Title')
+                   AND r.fromobjectid = a_legalentityobjectid)
+        LOOP
+            t_array.append(
+                api.pkg_columnquery.VALUE(rec.objectid, 'Description'));
+        END LOOP;
+
+        RETURN t_array;
+    END;
 
     -- *********************************************************
     --  Get Person
     --
     --  This function creats a json object with person object information.
     --      a_legalentityobjectid - Legal Entity Object id that the person object is
-    --                               pointed to. 
+    --                               pointed to.
     --      a_personobjectid      - Person Object id to retrieve data from.
     --      a_officer_stockholder - Indicator whether or not to return ownertype,
     --                               Percentage Of Ownership, title for this person.
@@ -41,9 +72,9 @@ IS
     AS
         t_entity       json_object_t := json_object_t();
     BEGIN
-        -- In JSON, return Legal Entity 
+        -- In JSON, return Legal Entity
         t_entity.put('LEGALENTITYOBJECTID', a_legalentityobjectid);
-        
+
         -- Get Person information for JSON using ABIS API's
         t_entity.put(
             'FIRSTNAME',
@@ -54,7 +85,7 @@ IS
         t_entity.put('LASTNAME',
                      api.pkg_columnquery.VALUE(a_personobjectid, 'LastName'));
 
-        -- Get Owner Type, 
+        -- Get Owner Type,
         CASE
             WHEN a_officer_stockholder IS NOT NULL
             THEN
@@ -70,19 +101,13 @@ IS
                 -- Get title type only if Percentage Of Ownerhip is null
                 --  Title is only returned if Officer, Percentage Of Ownership
                 --  indicates Stock Holder
-                t_entity.put(
-                    'TITLETYPE',
-                    CASE
-                        WHEN api.pkg_columnquery.VALUE(
-                                 a_legalentityobjectid,
-                                 'PercentageOfOwnership')
-                                 IS NULL
-                        THEN
-                            api.pkg_columnquery.VALUE(a_legalentityobjectid,
-                                                      'TitleType')
-                        ELSE
-                            NULL
-                    END);
+                IF (api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                              'PercentageOfOwnership')
+                        IS NULL)
+                THEN
+                    t_entity.put('TITLETYPE',
+                                 get_title(a_legalentityobjectid));
+                END IF;
             ELSE
                 NULL;
         END CASE;
@@ -100,7 +125,7 @@ IS
     --                                returned in the JSON
     -- *********************************************************
     FUNCTION get_company(a_legalentityobjectid IN api.pkg_definition.udt_id,
-                         a_level        IN     NUMBER)
+                         a_level        IN NUMBER)
         RETURN json_object_t
     AS
         t_objectid     NUMBER;
@@ -230,7 +255,7 @@ IS
             api.pkg_columnquery.VALUE(t_objectid,
                                       'FederalEmployerIdentificationn'));
 
-        -- get information for selected fields if stock holder or officer. 
+        -- get information for selected fields if stock holder or officer.
         --   All JSON tags are created even if data is not selected for tag.
         CASE t_officer_stockholder
             WHEN 'Stockholder'
@@ -243,21 +268,11 @@ IS
                     'PERCENTAGEOFOWNERSHIP',
                     api.pkg_columnquery.VALUE(a_legalentityobjectid,
                                               'PercentageOfOwnership'));
-                t_company.put('TITLETYPE', CAST(NULL AS VARCHAR2));
             WHEN 'Officer'
             THEN
-                t_company.put('OWNERTYPE', CAST(NULL AS VARCHAR2));
-                t_company.put('PERCENTAGEOFOWNERSHIP',
-                              CAST(NULL AS VARCHAR2));
-                t_company.put(
-                    'TITLETYPE',
-                    api.pkg_columnquery.VALUE(a_legalentityobjectid,
-                                              'TitleType'));
+                t_company.put('TITLETYPE', get_title(a_legalentityobjectid));
             ELSE
-                t_company.put('OWNERTYPE', CAST(NULL AS VARCHAR2));
-                t_company.put('PERCENTAGEOFOWNERSHIP',
-                              CAST(NULL AS VARCHAR2));
-                t_company.put('TITLETYPE', CAST(NULL AS VARCHAR2));
+                NULL;
         END CASE;
 
         -- if this company is level one in hierarchy get second level of
@@ -288,7 +303,7 @@ IS
                                                 AS api.udt_objectlist)))
                       SELECT le.*
                         FROM le
-                      -- only process first level of the childern legal entities 
+                       -- only process first level of the childern legal entities
                        WHERE le.hierarchylevel =
                              (  api.pkg_columnquery.numericvalue(
                                     a_legalentityobjectid,
@@ -299,12 +314,11 @@ IS
                 CASE rec.legalentitytype
                     WHEN 'Company'
                     THEN
-                        -- Do recursive call but indicate second level 
+                        -- Do recursive call but indicate second level
                         t_company_arry.append(
                             get_company(
                                 a_legalentityobjectid => rec.objectid,
                                 a_level     => 2));
-                                
                     WHEN 'Person'
                     THEN
                         -- get the person object ids
@@ -317,7 +331,7 @@ IS
                                            'o_LegalEntity',
                                            'Person'))
                         LOOP
-                            -- call the person function to get person data and 
+                            -- call the person function to get person data and
                             --   officer or stock holder information
                             t_person_arry.append(
                                 get_person(
@@ -331,7 +345,7 @@ IS
                 END CASE;
             END LOOP;
 
-            -- add any childern companies to parent JSON 
+            -- add any childern companies to parent JSON
             IF (t_company_arry.get_size() > 0)
             THEN
                 t_company.put('COMPANY', t_company_arry);
@@ -360,7 +374,6 @@ BEGIN
         t_data         json_object_t := json_object_t();
         t_person_arry  json_array_t := json_array_t();
         t_company_arry json_array_t := json_array_t();
-        t_value        json_object_t := json_object_t();
         t_json         json_object_t := json_object_t();
         t_jobid        api.pkg_definition.udt_id;
         t_feeobjidlst  api.udt_objectlist;
@@ -371,7 +384,7 @@ BEGIN
         -- get license number and search values from request packet
         t_licensenumber := json_value(a_packet, '$.*.LICENSENUMBER');
         t_search := UPPER(json_value(a_packet, '$.*.SEARCH'));
-        
+
         -- find job id for license number
         t_jobid :=
             api.pkg_simplesearch.objectbyindex(
@@ -398,7 +411,7 @@ BEGIN
                                     api.pkg_columnquery.numericvalue(
                                         objectid,
                                         'HierarchyLevel')     hierarchylevel,
-                                    -- get value to search on when search is being used    
+                                    -- get value to search on when search is being used
                                     api.pkg_columnquery.VALUE(
                                         objectid,
                                         CASE api.pkg_columnquery.VALUE(
@@ -419,8 +432,8 @@ BEGIN
                                                 AS api.udt_objectlist)))
                     SELECT le.*
                       FROM le
-                    -- if search is not used only select top level hierarchy else
-                    --  select all entities matching the search value
+                     -- if search is not used only select top level hierarchy else
+                     --  select all entities matching the search value
                      WHERE le.hierarchylevel =
                            CASE
                                WHEN t_search IS NULL THEN 1
@@ -493,6 +506,8 @@ BEGIN
                     || t_licensenumber
                     || ' Not Found"}}');
         END IF;
+
+        utl_licenseinfo.clean(a_json => t_json);
 
         -- return json as a clob
         RETURN t_json.TO_CLOB;
