@@ -69,23 +69,23 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 02/24/2020 PK WO 20565     The licensees that paid timely prior to their expiration date
 --                             to receive their renewal license prior to the expiration date.
 --                             Changed ready to issue date logic to get paymentdateplus10 date
--- 05/29/2020 TJL WO 8924   Modified createrenewalfees procedure to charge penalties on fees that
+-- 05/29/2020 TJL WO 8924    Modified createrenewalfees procedure to charge penalties on fees that
 --                           have been paid when all fees for a license renewal were NOT paid
--- 12/28/2020 TJL WO 23630  Added the transmittal relationship to payment object add for payment
+-- 12/28/2020 TJL WO 23630   Added the transmittal relationship to payment object add for payment
 --                            transfer.
--- 04/15/2021 TJL WO 24949  Added validation to paymentsvoid process to see if payment is in
+-- 04/15/2021 TJL WO 24949   Added validation to paymentsvoid process to see if payment is in
 --                            a payment batch
--- 06/01/2021 TJL WO 25342  paymentsvoid process, Back out to allow accounting to void payment
+-- 06/01/2021 TJL WO 25342   paymentsvoid process, Back out to allow accounting to void payment
 --                            after transmittal or Payment batch have been completed, added test
 --                            if already deposited.
--- 08/05/2021 TJL WO 25899  Removed 10 day wait time for credit card transactions (processreceivepayment)
--- 01/21/2022 PK  WO 27037  LSP ABIS license renewal payment error with previous due fee line
---                          Added t_transactiondate and additional logic of date to bring total owing to PROCEDURE initialize
--- 12/28/2022 PK WO 30274   Added code to make type 68 work when added as secondary on new LT 90
--- 6/92023 NZA              Updated TransferPayment, FingerPrintFee and SetPaymentTransactionFlag for max object id issue.
--- 08/14/2024 PK WO 35273  Added code for Craft Distillers not to include in produce license batch if they did not report recently produced gallonage
+-- 08/05/2021 TJL WO 25899   Removed 10 day wait time for credit card transactions (processreceivepayment)
+-- 01/21/2022 PK  WO 27037   LSP ABIS license renewal payment error with previous due fee line
+--                           Added t_transactiondate and additional logic of date to bring total owing to PROCEDURE initialize
+-- 12/28/2022 PK WO 30274    Added code to make type 68 work when added as secondary on new LT 90
+-- 6/92023 NZA               Updated TransferPayment, FingerPrintFee and SetPaymentTransactionFlag for max object id issue.
+-- 08/14/2024 PK WO 35273    Added code for Craft Distillers not to include in produce license batch if they did not report recently produced gallonage
 -- 08/20/2024 TJL BIZ-15444  Added a call to bizmod_api.pkg_abis.newfee in newfee procedure
--- 09/11/2024 PK            made change to application fee calc api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
+-- 12/04/2024 PK             Commented Type 74 code and fixed secondaries not printing in renewal batch issue
 -------------------------------------------------------------------------------
 
 IS
@@ -4060,8 +4060,7 @@ IS
         ELSE
             -- Set t_EstimatedIssueDate to j_Application.EstimatedIssueDate
             t_issuedate   :=  --  08/01/2019 TJL  18697   changed to 'CopiesMailed' from 'EstimatedIssueDate'
-                             --api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
-                             api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
+                             api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
         -- End If
         END IF;
 
@@ -9021,13 +9020,15 @@ IS
                                         api.pkg_columnupdate.setvalue(z.jobid, 'RENFeeCreated', 'N');
                                         --Update the dup column because post verify did not run on the job
                                         api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'Y');
+                                            -- 12/04/2024 PK             Commented Type 74 code
+                                       --  IF c.licensetypecode = '74' and (t_Reporteddate < ADD_MONTHS(t_ltexpirationdate, -3) or t_Reporteddate is null)  THEN -- WO 35273 Added by Pawan Craft Distillers
 
-                                         IF c.licensetypecode = '74' and (t_Reporteddate < ADD_MONTHS(t_ltexpirationdate, -3) or t_Reporteddate is null)  THEN -- WO 35273 Added by Pawan Craft Distillers
-
-                                            api.pkg_columnupdate.setvalue(z.jobid, 'IncludeInProduceLicenseBatch', 'N');
+                                        --    api.pkg_columnupdate.setvalue(z.jobid, 'IncludeInProduceLicenseBatch', 'N');
                                                --Update the dup column because post verify did not run on the job
-                                            api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'N'); -- WO 35273 Added by Pawan Craft Distillers
-
+                                        --    api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'N'); -- WO 35273 Added by Pawan Craft Distillers
+                                            
+                                      --   END IF;
+                                        
                                         IF api.pkg_columnquery.VALUE(z.jobid, 'SeasonStartMonthNumber') IS NULL THEN
                                             api.pkg_columnupdate.setvalue(z.jobid,
                                                                           'ReadyToIssueDate',
@@ -9246,7 +9247,6 @@ IS
                                         END IF;
                                     END LOOP;
                                 END IF;
-                              END IF;
                             END LOOP;
                         END;
                     END IF;
@@ -10140,3 +10140,16 @@ IS
     END createinterimpermitrenewalfee;
 END pkg_fees;
 /
+
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO ABC;
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO ABCREPORTS;
+
+GRANT EXECUTE, DEBUG ON SITESPECIFIC.PKG_FEES TO BIZMOD_API;
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO CONV;
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO LASSO;
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_FEES TO POSSEEXTENSIONS;
