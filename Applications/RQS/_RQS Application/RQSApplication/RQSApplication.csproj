@@ -219,6 +219,9 @@
       <SubType>Designer</SubType>
     </Content>
     <Content Include="Formats\AWFPENDING.DAT" />
+    <Content Include="Formats\NEWLICENSEAPPLICATIONS.DAT">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <None Include="Properties\PublishProfiles\File Publish.pubxml" />
     <None Include="Properties\PublishProfiles\RQS - Development %28ABCFDCITDEV100%29.pubxml" />
     <None Include="Properties\PublishProfiles\RQS - Production %28ABCFDCNET%29.pubxml" />

@@ -133,6 +133,9 @@
     <None Include="Formats\LATEPREVIEW.dat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="Formats\NEWLICENSEAPPLICATIONS.DAT">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="Formats\OVERCONCENTRATION.DAT">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
