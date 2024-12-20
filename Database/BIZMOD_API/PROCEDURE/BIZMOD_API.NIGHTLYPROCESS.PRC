@@ -18,7 +18,6 @@ IS
     --                                        record with payment batch job id when missing
     -- ****************************************************************************
     t_refunded     VARCHAR2(1);
-    t_paymenttransfer NUMBER;
     t_awfbatch     NUMBER;
 
     t_body         VARCHAR2(32000);
