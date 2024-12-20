@@ -18,7 +18,6 @@ IS
     --                                        record with payment batch job id when missing
     -- ****************************************************************************
     t_refunded     VARCHAR2(1);
-    t_feetransfer  NUMBER;
     t_paymenttransfer NUMBER;
     t_awfbatch     NUMBER;
 
@@ -524,8 +523,3 @@ BEGIN
     COMMIT;
 END nightlyprocess;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESS TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESS TO POSSEEXTENSIONS;
