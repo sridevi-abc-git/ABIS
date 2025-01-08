@@ -21,6 +21,7 @@ IS
     --                                      Changed how Legal Entity packet is processed
     --   3.4.1  12/11/2024  TJL  BIZ-16842  Added support for Spouses being entered in LSP
     --                                       application.
+    --   3.5.0  01/08/2025  TJL  BIZ-17077  Made a changed to person lookup logic.
     -- ****************************************************************************
 
     PROCEDURE add_secondary_license_types(
@@ -760,20 +761,15 @@ IS
                 WHEN 0
                 THEN
                     t_objectid := NULL;
-                WHEN 1
-                THEN
-                    t_objectid := t_list(1).objectid;
-                ELSE
-                    t_objectid := t_list(1).objectid;
-
+                ELSE  -- 3.5.0  01/08/2025  TJL  BIZ-17077
                     FOR inx IN 1 .. t_list.COUNT
                     LOOP
-                        IF (NVL(rec.socialsecuritynumber, 0) =
+                        IF (NVL(rec.socialsecuritynumber, '0') =
                             NVL(
                                 api.pkg_columnquery.VALUE(
                                     t_list(1).objectid,
                                     'SocialSecurityNumber'),
-                                000))
+                                '0'))
                         THEN
                             t_objectid := t_list(1).objectid;
                             EXIT;
@@ -1805,5 +1801,7 @@ BEGIN
 END;
 /
 
+
+GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO POSSEEXTENSIONS;
