@@ -22,6 +22,7 @@ IS
     --   3.4.1  12/11/2024  TJL  BIZ-16842  Added support for Spouses being entered in LSP
     --                                       application.
     --   3.5.0  01/08/2025  TJL  BIZ-17077  Made a changed to person lookup logic.
+    --   3.5.1  01/09/2025  TJL  BIZ-17077  Added clearing a variable between person lookup loop.
     -- ****************************************************************************
 
     PROCEDURE add_secondary_license_types(
@@ -761,7 +762,11 @@ IS
                 WHEN 0
                 THEN
                     t_objectid := NULL;
-                ELSE  -- 3.5.0  01/08/2025  TJL  BIZ-17077
+                ELSE  
+                    -- 3.5.1  01/09/2025  TJL  BIZ-17077
+                    t_objectid := NULL;
+
+                    -- 3.5.0  01/08/2025  TJL  BIZ-17077
                     FOR inx IN 1 .. t_list.COUNT
                     LOOP
                         IF (NVL(rec.socialsecuritynumber, '0') =
