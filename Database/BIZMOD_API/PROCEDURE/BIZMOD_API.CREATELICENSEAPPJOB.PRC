@@ -89,8 +89,6 @@ IS
         t_licensetypedefid api.pkg_definition.udt_id;
         t_licensetypecodeobjectid api.pkg_definition.udt_id;
         t_licensetypeobjectid api.pkg_definition.udt_id;
-        t_licensetypeobjectid86 api.pkg_definition.udt_id;
-        t_licensetypecategoryid api.pkg_definition.udt_id;
         t_endpointidto NUMBER;
         t_gallonagerange VARCHAR2(15);
         t_additionalmilliongallons NUMBER;
@@ -238,41 +236,6 @@ IS
                     api.pkg_columnupdate.setvalue(t_licensetypeobjectid,
                                                   'SeasonStartMonth',
                                                   rec.seasonstartmonth);
---                WHEN rec.licensetypecode IN ('86')
---                THEN
---                    -- create primary licene type
---                    t_licensetypedefid :=
---                        api.pkg_configquery.objectdefidforname(
---                            'o_PrimaryLicenseType');
---                    t_licensetypeobjectid86 :=
---                        api.pkg_objectupdate.new(t_licensetypedefid);
---
---                    -- create relationship from primary license type to license type catagory
---                    SELECT ltc.objectid
---                      INTO t_licensetypecategoryid
---                      FROM query.o_licensetypecategory ltc
---                     WHERE ltc.licensetypecode = '20';
---
---                    t_endpointidto :=
---                        api.pkg_configquery.endpointidforname(
---                            'o_PrimaryLicenseType',
---                            'LicTypeCatPrimary');
---                    t_relid :=
---                        api.pkg_relationshipupdate.new(
---                            t_endpointidto,
---                            t_licensetypeobjectid86,
---                            t_licensetypecategoryid);
---
---                    --     add primary license type to application
---                    t_endpointidto :=
---                        api.pkg_configquery.endpointidforname(
---                            'j_application',
---                            'PrimaryLicenseType');
---                    t_relid :=
---                        api.pkg_relationshipupdate.new(
---                            t_endpointidto,
---                            a_jobid,
---                            t_licensetypeobjectid86);
                 ELSE
                     NULL;
             END CASE;
@@ -560,8 +523,6 @@ IS
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
     BEGIN
-        --        DBMS_OUTPUT.put_line('add_title: ' || a_legal_entity);
-
         FOR rec
             IN (SELECT *
                   FROM JSON_TABLE(
@@ -579,9 +540,6 @@ IS
                     a_objectdefname => 'o_Title',
                     a_columnname => 'Description',
                     a_lowvalue  => rec.description);
-
-
-            --            DBMS_OUTPUT.put_line(CHR(9) || t_objectid);
 
             -- create relationship from title object to legal entity object
             t_endpointid :=
@@ -1444,6 +1402,7 @@ BEGIN
         t_dbanamesobjectid api.pkg_definition.udt_id;
         t_dbaendpointid api.pkg_definition.udt_id;
         t_dba          api.pkg_definition.udt_id;
+        t_count        NUMBER;
         t_entity       CLOB;
         t_company      CLOB;
         t_person       CLOB;
@@ -1531,6 +1490,18 @@ BEGIN
                        escrow VARCHAR2(4000) FORMAT JSON PATH '$.ESCROW',
                        legal_entities CLOB FORMAT JSON PATH '$.LEGALENTITIES'));
 
+        -- Check for duplicate key
+        SELECT COUNT(*) INTO t_Count
+        FROM bizmod_api.license_app_t la
+        WHERE la.lspid = t_apprec.lspapplicationid;
+
+        IF (t_count > 0)
+        THEN
+            api.pkg_errors.raiseerror(
+                -20000,
+                'Duplicate LSP Appication Id: ' || t_apprec.lspapplicationid);
+        END IF;
+        
         -- ************************************************************************
         -- Create new application job
         -- ************************************************************************
