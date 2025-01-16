@@ -46,6 +46,7 @@ AS
     --  10.2.0  11/07/2024  TJL  BIZ-16535    Added logging for status codes 200's
     --  10.3.0  12/10/2024  TJL  BIZ-16906    Remove COMMIT from createjob process. ABIS throws error because
     --                                          the current ABIS transaction cannot be ended at this time.
+    --  10.4.0  01/10/2025  TJL               Added the ability to turn off sending emails thru the configuration table.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -95,21 +96,13 @@ AS
                || UTL_TCP.crlf;
         t_body_end     VARCHAR2(100)
             := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
---        t_response_header_name VARCHAR2(256);
---        t_response_header_value VARCHAR2(1024);
---        t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
         t_infotext     VARCHAR2(32767);
         t_length       NUMBER;
         t_statuscode    NUMBER;
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
-        --        t_keys         json_key_list;
-        --        t_column       VARCHAR2(100);
-        --        t_columns      VARCHAR2(4000);
---        t_value        VARCHAR2(4000);
         t_info         json_object_t := json_object_t();
---        t_header       json_object_t := json_object_t();
     BEGIN
         BEGIN
             BEGIN
@@ -270,13 +263,13 @@ AS
                LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
                        REJECT LIMIT UNLIMITED;
         END IF;
-        
+
         COMMIT;
 
         RETURN CASE
-                   WHEN t_statuscode IN (200, 201, 204) THEN 
+                   WHEN t_statuscode IN (200, 201, 204) THEN
                        NULL
-                   ELSE 
+                   ELSE
                         t_info.TO_CLOB
                END;
     END;
@@ -474,8 +467,9 @@ AS
         t_bcc          VARCHAR2(512);
         t_conn         UTL_SMTP.connection;
         t_production   VARCHAR2(1);
+        t_disable      VARCHAR2(1);     -- 01/10/2025 TJL
         t_subject      VARCHAR2(512) := a_subject;
-        t_host         VARCHAR2(512); -- := '134.186.202.119';
+        t_host         VARCHAR2(512);
         t_len          INTEGER;
         t_index        INTEGER;
         t_file_type    VARCHAR2(50);
@@ -488,13 +482,15 @@ AS
                pcc,
                pbcc,
                psmtp,
-               pprod
+               pprod,
+               pdisable --  10.4.0  01/10/2025  TJL
           INTO t_to,
                t_from,
                t_cc,
                t_bcc,
                t_host,
-               t_production
+               t_production,
+               t_disable --  10.4.0  01/10/2025  TJL
           FROM (SELECT c.parametername, c.parametervalue
                   FROM bizmod_api.eservices_config_t c
                  WHERE c.process = a_process
@@ -507,9 +503,11 @@ AS
                             'CC' pcc,
                             'BCC' pbcc,
                             'SMTPSERVER' psmtp,
-                            'PRODUCTION' pprod));
+                            'PRODUCTION' pprod,
+                            'DISABLE' pdisable));
 
-        IF (t_from IS NULL)
+        IF (t_from IS NULL
+             or UPPER(NVL(t_disable, 'N')) != 'Y') --  10.4.0  01/10/2025  TJL
         THEN
             RETURN;
         END IF;
