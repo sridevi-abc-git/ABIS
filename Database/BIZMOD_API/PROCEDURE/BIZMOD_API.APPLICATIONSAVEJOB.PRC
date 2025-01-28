@@ -22,6 +22,7 @@ AS
     --   6.0.1  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
     --                                       call to CALLLSP function.
     --   6.1.0  12/02/2024 TJL  BIZ-16697  Added updating Status Name field in bizmod_api.license_app_t
+    --   6.2.0  01/28/2025 TJL             Added license number to the email notification.
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
         := '/api/licensing/internal/license-applications/<<applicationId>>' ;
@@ -110,6 +111,9 @@ BEGIN
                         || CHR(13)
                         || 'Status: '
                         || t_status
+                        || CHR(13)
+                        || 'License Number: '
+                        || api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER')
                         || CHR(13)
                         || 'j_Application: '
                         || a_jobid
