@@ -46,7 +46,8 @@ AS
     --  10.2.0  11/07/2024  TJL  BIZ-16535    Added logging for status codes 200's
     --  10.3.0  12/10/2024  TJL  BIZ-16906    Remove COMMIT from createjob process. ABIS throws error because
     --                                          the current ABIS transaction cannot be ended at this time.
-    --  10.4.0  01/10/2025  TJL               Added the ability to turn off sending emails thru the configuration table.
+    --  10.4.0  01/21/2025  TJL               Added the ability to turn off sending emails thru the configuration table.
+    --  10.4.1  01/27/2025  TJL  BIZ-17289    Added creating a JWT token in calllsp function
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -71,6 +72,14 @@ AS
                      a_file         IN BLOB DEFAULT NULL)
         RETURN CLOB
     IS
+        --  10.4.1  01/27/2025  TJL  BIZ-17289
+        t_header       VARCHAR2(32767) := '{"alg":"HS256","typ":"JWT"}';
+        t_payload      VARCHAR2(32767)
+            := '{"sub":"internal","auth": "internal","payers": "", "userId": "internal", "jti": "5aad2ff3-4dbc-4678-826a-baa274eae6b2", "exp": 17377562500 }';
+        t_encoded_header RAW(32767);
+        t_token        RAW(32767);
+        ----------------------------------------------
+
         t_url          VARCHAR2(10000);
         t_wallet       VARCHAR2(10000);
         t_seq          NUMBER;
@@ -99,7 +108,7 @@ AS
         t_text         VARCHAR2(32767);
         t_infotext     VARCHAR2(32767);
         t_length       NUMBER;
-        t_statuscode    NUMBER;
+        t_statuscode   NUMBER;
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
         t_info         json_object_t := json_object_t();
@@ -122,6 +131,17 @@ AS
                                             'Parameter Not Found',
                                             TRUE);
             END;
+
+            --  10.4.1  01/27/2025  TJL  BIZ-17289
+            t_encoded_header :=
+                UTL_ENCODE.base64_encode(
+                    UTL_RAW.cast_to_raw(t_header || '.' || t_payload));
+            t_token := --'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJpbnRlcm5hbCIsImF1dGgiOiJpbnRlcm5hbCIsInBheWVycyI6IiIsInVzZXJJZCI6ImludGVybmFsIiwianRpIjoiNWFhZDJmZjMtNGRiYy00Njc4LTgyNmEtYmFhMjc0ZWFlNmIyIiwiZXhwIjoxNzM3NzU2MjUwMH0.5v2_U9r4jAs0FBHYEnEa4ZXCUV52CM9Jz_Dy8hueafXtR7wsAQecOqnoLUVvtfAFz3BstEJFmGB4y270jYOfKQ';
+                DBMS_CRYPTO.mac(UTL_RAW.cast_to_raw('eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJpbnRlcm5hbCIsImF1dGgiOiJpbnRlcm5hbCIsInBheWVycyI6IiIsInVzZXJJZCI6ImludGVybmFsIiwianRpIjoiNWFhZDJmZjMtNGRiYy00Njc4LTgyNmEtYmFhMjc0ZWFlNmIyIiwiZXhwIjoxNzM3NzU2MjUwMH0') --.5v2_U9r4jAs0FBHYEnEa4ZXCUV52CM9Jz_Dy8hueafXtR7wsAQecOqnoLUVvtfAFz3BstEJFmGB4y270jYOfKQ')
+----                t_encoded_header,
+                                ,DBMS_CRYPTO.hmac_sh512,
+                                UTL_RAW.cast_to_raw('base64 encoded'));
+            -----------------------------------------------------
 
             t_info.put('URL', t_url);
             t_info.put('METHOD', a_method);
@@ -149,7 +169,9 @@ AS
             t_request :=
                 UTL_HTTP.begin_request(url => t_url, method => a_method);
 
+--            UTL_HTTP.set_header(t_request, 'Authorization Bearer', t_token); --  10.4.1  01/27/2025  TJL  BIZ-17289
             UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
+
             UTL_HTTP.set_body_charset(t_request, 'UTF-8');
 
             IF (a_file IS NULL)
@@ -208,25 +230,23 @@ AS
             t_response := UTL_HTTP.get_response(t_request);
             t_statuscode := t_response.status_code;
 
-                DBMS_LOB.createtemporary(t_response_text,
-                                         TRUE,
-                                         DBMS_LOB.session);
+            DBMS_LOB.createtemporary(t_response_text, TRUE, DBMS_LOB.session);
 
-                BEGIN
-                    LOOP
-                        UTL_HTTP.read_text(t_response, t_text, 32766);
-                        DBMS_LOB.writeappend(t_response_text,
-                                             LENGTH(t_text),
-                                             t_text);
-                    END LOOP;
-                EXCEPTION
-                    WHEN UTL_HTTP.end_of_body
-                    THEN
-                        UTL_HTTP.end_response(t_response);
-                END;
+            BEGIN
+                LOOP
+                    UTL_HTTP.read_text(t_response, t_text, 32766);
+                    DBMS_LOB.writeappend(t_response_text,
+                                         LENGTH(t_text),
+                                         t_text);
+                END LOOP;
+            EXCEPTION
+                WHEN UTL_HTTP.end_of_body
+                THEN
+                    UTL_HTTP.end_response(t_response);
+            END;
 
-                t_info.put('HTTPRESPONSE',t_response.status_code);
-                t_info.put('LSPRESPONSE', t_response_text);
+            t_info.put('HTTPRESPONSE', t_response.status_code);
+            t_info.put('LSPRESPONSE', t_response_text);
 
             -- Close the HTTP request/response
             UTL_HTTP.end_response(t_response);
@@ -249,8 +269,7 @@ AS
         IF (t_sqlerrm IS NULL)
         THEN
             UPDATE eservices_log_t e
-               SET response = t_infotext,
-                   responsedate = SYSTIMESTAMP
+               SET response = t_infotext, responsedate = SYSTIMESTAMP
              WHERE seq = t_seq
                LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
                        REJECT LIMIT UNLIMITED;
@@ -267,10 +286,8 @@ AS
         COMMIT;
 
         RETURN CASE
-                   WHEN t_statuscode IN (200, 201, 204) THEN
-                       NULL
-                   ELSE
-                        t_info.TO_CLOB
+                   WHEN t_statuscode IN (200, 201, 204) THEN NULL
+                   ELSE t_info.TO_CLOB
                END;
     END;
 
@@ -467,7 +484,7 @@ AS
         t_bcc          VARCHAR2(512);
         t_conn         UTL_SMTP.connection;
         t_production   VARCHAR2(1);
-        t_disable      VARCHAR2(1);     -- 01/10/2025 TJL
+        t_disable      VARCHAR2(1); -- 01/21/2025 TJL
         t_subject      VARCHAR2(512) := a_subject;
         t_host         VARCHAR2(512);
         t_len          INTEGER;
@@ -483,14 +500,14 @@ AS
                pbcc,
                psmtp,
                pprod,
-               pdisable --  10.4.0  01/10/2025  TJL
+               pdisable --  10.4.0  01/21/2025  TJL
           INTO t_to,
                t_from,
                t_cc,
                t_bcc,
                t_host,
                t_production,
-               t_disable --  10.4.0  01/10/2025  TJL
+               t_disable --  10.4.0  01/21/2025  TJL
           FROM (SELECT c.parametername, c.parametervalue
                   FROM bizmod_api.eservices_config_t c
                  WHERE c.process = a_process
@@ -507,7 +524,7 @@ AS
                             'DISABLE' pdisable));
 
         IF (t_from IS NULL
-             or UPPER(NVL(t_disable, 'N')) != 'Y') --  10.4.0  01/10/2025  TJL
+         OR UPPER(NVL(t_disable, 'N')) = 'Y') --  10.4.0  01/21/2025  TJL
         THEN
             RETURN;
         END IF;
