@@ -23,6 +23,7 @@ IS
     --                                       application.
     --   3.5.0  01/08/2025  TJL  BIZ-17077  Made a changed to person lookup logic.
     --   3.5.1  01/09/2025  TJL  BIZ-17077  Added clearing a variable between person lookup loop.
+    --   3.6.0  01/10/2025  TJL             Change handling priority draw license application.
     -- ****************************************************************************
 
     PROCEDURE add_secondary_license_types(
@@ -92,6 +93,7 @@ IS
         t_endpointidto NUMBER;
         t_gallonagerange VARCHAR2(15);
         t_additionalmilliongallons NUMBER;
+        t_countyobjectid api.pkg_definition.udt_id;
     BEGIN
         FOR rec
             IN (SELECT *
@@ -102,6 +104,9 @@ IS
                                licensetypecode
                                    VARCHAR2(3)
                                    PATH '$.LICENSETYPECODE',
+                       prioritydrawcounty
+                           VARCHAR2(100)
+                           PATH '$.PRIORITYDRAWCOUNTY',
                                gallonage NUMBER PATH '$.GALLONAGE',
                                numberofmonthslicensed
                                    NUMBER
@@ -119,6 +124,11 @@ IS
                                    FORMAT JSON
                                    PATH '$.SECONDARYLICENSETYPES')))
         LOOP
+            if (rec.licensetypecode = '48')
+            then
+                rec.licensetypecode := '47';
+            end if;
+            
             --dbms_output.put_line('ltc: ' || rec.licensetypecode);
             SELECT ltc.objectid
               INTO t_licensetypecodeobjectid
@@ -181,9 +191,45 @@ IS
                 END LOOP;
             END IF;
 
-            -- The following is for cases that involved gallonage, and seasonal to set
+            -- The following is for cases that involved primary draw, gallonage, and seasonal to set
             --   the special values for each type
             CASE
+                WHEN rec.licensetypecode IN ('21', '47')
+                THEN
+            api.pkg_columnupdate.setvalue(a_jobid,
+                                          'PriorityApplicationType',
+                                          api.pkg_columnquery.value(a_jobid,
+                                          'ApplicationType'));
+
+            api.pkg_columnupdate.setvalue(a_jobid,
+                                          'CopyLicDetailsToAppProcHasRun',
+                                          'Y');
+            api.pkg_columnupdate.setvalue(a_jobid, 'PriorityUpgrade', 'No');
+            api.pkg_columnupdate.setvalue(a_jobid,
+                                          'IsPriorityApplication',
+                                          'Y');
+
+            -- *****************************************************************
+            -- Add priority Draw County and license type
+            -- *****************************************************************
+            -- set priority draw county
+            t_countyobjectid :=
+                api.pkg_simplesearch.objectbyindex(
+                    'o_CaCounty',
+                    'CountyName',
+                    rec.prioritydrawcounty);
+
+            if (t_countyobjectid is not null)
+            then
+            t_endpointid :=
+                api.pkg_configquery.endpointidforname('j_application',
+                                                      'PriorityCounty');
+            t_relid :=
+                api.pkg_relationshipupdate.new(t_endpointid,
+                                               a_jobid,
+                                               t_countyobjectid);
+                end if;
+                
                 WHEN rec.licensetypecode IN ('02', '22')
                 THEN
                     -- from gallonage entered figure out codes
@@ -575,7 +621,7 @@ IS
                            '$[*]'
                            COLUMNS(
                                ownertype VARCHAR2(4000) PATH '$.OWNERTYPE',
-                               title CLOB FORMAT JSON PATH '$.TITLETYPE',
+                               title CLOB FORMAT JSON PATH '$.TITLE',
                                onsalemanager
                                    VARCHAR2(4000)
                                    PATH '$.ONSALEMANAGER',
@@ -1397,8 +1443,6 @@ BEGIN
         t_endpointidfrom NUMBER;
         t_relid        api.pkg_definition.udt_id;
         t_transfromlic api.pkg_definition.udt_id;
-        t_endpointid   api.pkg_definition.udt_id;
-        t_countyobjectid api.pkg_definition.udt_id;
         t_dbanamesobjectid api.pkg_definition.udt_id;
         t_dbaendpointid api.pkg_definition.udt_id;
         t_dba          api.pkg_definition.udt_id;
@@ -1427,8 +1471,6 @@ BEGIN
                multiplestockmembershiptrans,
                lspid,
                underconstruction,
-               prioritydrawapplication,
-               prioritydrawcounty,
                dba,
                felony,
                violation,
@@ -1459,12 +1501,6 @@ BEGIN
                        underconstruction
                            VARCHAR2(3)
                            PATH '$.UNDERCONSTRUCTION',
-                       prioritydrawapplication
-                           VARCHAR2(1)
-                           PATH '$.PRIORITYDRAWAPPLICATION',
-                       prioritydrawcounty
-                           VARCHAR2(100)
-                           PATH '$.PRIORITYDRAWCOUNTY',
                        dba VARCHAR2(4000) PATH '$.DBA',
                        felony VARCHAR2(3) PATH '$.FELONY',
                        violation VARCHAR2(3) PATH '$.VIOLATION',
@@ -1558,47 +1594,11 @@ BEGIN
                                       'LicensePurchasePrice',
                                       t_apprec.licensepurchaseprice);
 
-        INSERT INTO bizmod_api.license_app_t(lspid, jobid, createddate)
-             VALUES (t_apprec.lspapplicationid, t_jobid, SYSDATE);
+        INSERT INTO bizmod_api.license_app_t(lspid, jobid, createddate, licensenumber)
+             VALUES (t_apprec.lspapplicationid, t_jobid, SYSDATE, api.pkg_columnquery.value(t_jobid, 'LicenseNumber'));
 
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
-
-        IF (t_apprec.prioritydrawapplication = 'Y')
-        THEN
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'PriorityApplicationType',
-                                          t_apprec.applicationtype);
-
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'CopyLicDetailsToAppProcHasRun',
-                                          'Y');
-            api.pkg_columnupdate.setvalue(t_jobid, 'PriorityUpgrade', 'No');
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'IsPriorityApplication',
-                                          'Y');
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'ApplicationType',
-                                          t_apprec.applicationtype);
-
-            -- *****************************************************************
-            -- Add priority Draw County and license type
-            -- *****************************************************************
-            -- set priority draw county
-            t_countyobjectid :=
-                api.pkg_simplesearch.objectbyindex(
-                    'o_CaCounty',
-                    'CountyName',
-                    t_apprec.prioritydrawcounty);
-
-            t_endpointid :=
-                api.pkg_configquery.endpointidforname('j_application',
-                                                      'PriorityCounty');
-            t_relid :=
-                api.pkg_relationshipupdate.new(t_endpointid,
-                                               t_jobid,
-                                               t_countyobjectid);
-        END IF;
 
         IF (t_apprec.applicationtype IN ('Transfer', 'Intercounty Transfer'))
         THEN
@@ -1656,8 +1656,6 @@ BEGIN
                        COLUMNS(entity CLOB FORMAT JSON PATH '$.ENTITY',
                                company CLOB FORMAT JSON PATH '$.COMPANY',
                                person CLOB FORMAT JSON PATH '$.PERSON'));
-
-
 
             IF (t_entity IS NOT NULL)
             THEN
@@ -1777,7 +1775,5 @@ BEGIN
 END;
 /
 
-
-GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO POSSEEXTENSIONS;
