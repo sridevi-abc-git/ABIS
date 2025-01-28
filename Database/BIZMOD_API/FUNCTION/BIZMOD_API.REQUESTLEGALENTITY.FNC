@@ -22,6 +22,8 @@ IS
     --  1.4.3  12/02/2024  TJL  BIZ-16842  Removed Referenceid and objectid. Added
     --                                      LegalEntityObjectId
     --  1.5.0  12/18/2024  TJL  BIZ-16968  Change TITLETYPE from string to JSON array
+    --  1.5.1  01/28/2025  TJL  BIZ-       Change how to determine if stockholder or
+    --                                      officer for companies
     -- ****************************************************************************
 
     TYPE lecompany_type IS TABLE OF VARCHAR2(100);
@@ -130,10 +132,10 @@ IS
     AS
         t_objectid     NUMBER;
         t_company      json_object_t;
-        t_info         json_object_t;
+--        t_info         json_object_t;
         t_company_arry json_array_t := json_array_t();
         t_person_arry  json_array_t := json_array_t();
-        t_officer_stockholder VARCHAR2(20);
+--        t_officer_stockholder VARCHAR2(20);
         t_titles       VARCHAR2(32000);
         t_feeobjidlst  api.udt_objectlist := api.udt_objectlist();
     BEGIN
@@ -157,28 +159,6 @@ IS
           INTO t_titles
           FROM query.r_legalentitytitle let
          WHERE let.legalentityobjectid = a_legalentityobjectid;
-
-        -- figure out if this legal entity is a stock holder or officer
-        t_officer_stockholder :=
-            CASE
-                WHEN api.pkg_columnquery.numericvalue(
-                         a_legalentityobjectid,
-                         'ParentOfficerObjectId')
-                         IS NOT NULL
-                THEN
-                    'Officer'
-                WHEN api.pkg_columnquery.numericvalue(
-                         a_legalentityobjectid,
-                         'ParentStockholderObjectId')
-                         IS NOT NULL
-                THEN
-                    'Stockholder'
-                WHEN t_titles IS NOT NULL
-                THEN
-                    'Officer'
-                ELSE
-                    NULL
-            END;
 
         -- initialize JSON object
         t_company := json_object_t();
@@ -257,9 +237,12 @@ IS
 
         -- get information for selected fields if stock holder or officer.
         --   All JSON tags are created even if data is not selected for tag.
-        CASE t_officer_stockholder
-            WHEN 'Stockholder'
-            THEN
+        IF (api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                      'PercentageOfOwnership')
+                IS NULL)
+        THEN
+                t_company.put('TITLETYPE', get_title(a_legalentityobjectid));
+        else
                 t_company.put(
                     'OWNERTYPE',
                     api.pkg_columnquery.VALUE(a_legalentityobjectid,
@@ -268,12 +251,7 @@ IS
                     'PERCENTAGEOFOWNERSHIP',
                     api.pkg_columnquery.VALUE(a_legalentityobjectid,
                                               'PercentageOfOwnership'));
-            WHEN 'Officer'
-            THEN
-                t_company.put('TITLETYPE', get_title(a_legalentityobjectid));
-            ELSE
-                NULL;
-        END CASE;
+        END if;
 
         -- if this company is level one in hierarchy get second level of
         --  hierarchy data.
