@@ -47,7 +47,7 @@ AS
     --  10.3.0  12/10/2024  TJL  BIZ-16906    Remove COMMIT from createjob process. ABIS throws error because
     --                                          the current ABIS transaction cannot be ended at this time.
     --  10.4.0  01/21/2025  TJL               Added the ability to turn off sending emails thru the configuration table.
-    --  10.4.1  01/27/2025  TJL  BIZ-17289    Added creating a JWT token in calllsp function
+    --  10.4.3  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -69,15 +69,14 @@ AS
     FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
                      a_method       IN VARCHAR2,
                      a_content      IN CLOB DEFAULT NULL,
-                     a_file         IN BLOB DEFAULT NULL)
+                     a_file         IN BLOB DEFAULT NULL,
+                     a_process      IN VARCHAR2 DEFAULT 'CALLLSP')
         RETURN CLOB
     IS
-        --  10.4.1  01/27/2025  TJL  BIZ-17289
-        t_header       VARCHAR2(32767) := '{"alg":"HS256","typ":"JWT"}';
-        t_payload      VARCHAR2(32767)
-            := '{"sub":"internal","auth": "internal","payers": "", "userId": "internal", "jti": "5aad2ff3-4dbc-4678-826a-baa274eae6b2", "exp": 17377562500 }';
-        t_encoded_header RAW(32767);
-        t_token        RAW(32767);
+        --  10.4.3  01/28/2025  TJL  BIZ-17289
+        t_token        json_object_t := json_object_t();
+        t_loginid      VARCHAR2(32767);
+        t_ret          CLOB;
         ----------------------------------------------
 
         t_url          VARCHAR2(10000);
@@ -115,15 +114,46 @@ AS
     BEGIN
         BEGIN
             BEGIN
-                SELECT url || a_urlinfo, wallet
-                  INTO t_url, t_wallet
+                SELECT url || a_urlinfo, wallet, loginid
+                  INTO t_url, t_wallet, t_loginid
                   FROM (SELECT c.process, c.parametername, c.parametervalue
                           FROM bizmod_api.eservices_config_t c
                          WHERE c.process = 'CALLLSP'
                            AND c.dbname = UPPER(ora_database_name))
-                           PIVOT (MAX(parametervalue)
+                           PIVOT (
+                                 MAX(parametervalue)
                                  FOR parametername
-                                 IN ('URL' url, 'WALLET' wallet));
+                                 IN ('URL' url,
+                                    'WALLET' wallet,
+                                    'LOGINID' loginid)); --  10.4.3  01/28/2025  TJL  BIZ-17289
+
+                --  10.4.3  01/28/2025  TJL  BIZ-17289
+                ------------------------------------------------------
+                IF (a_process = 'CALLLSP')
+                THEN
+                    -- call get token
+                    t_ret :=
+                        calllsp(
+                            a_urlinfo   =>
+                                '/api/providermgmt/authenticate/login',
+                            a_method    => 'POST',
+                            a_content   => t_loginid,
+                            a_process   => 'GETTOKEN');
+
+                    IF (t_ret IS NOT NULL)
+                    THEN
+                        t_token := json_object_t.parse(t_ret);
+                    END IF;
+
+                    IF (NOT t_token.has('token'))
+                    THEN
+                        raise_application_error(
+                            -20001,
+                            'No LSP Token Returned' || CHR(13) || t_ret,
+                            TRUE);
+                    END IF;
+                END IF;
+            ----------------------------------------------------------
             EXCEPTION
                 WHEN NO_DATA_FOUND
                 THEN
@@ -132,20 +162,9 @@ AS
                                             TRUE);
             END;
 
-            --  10.4.1  01/27/2025  TJL  BIZ-17289
-            t_encoded_header :=
-                UTL_ENCODE.base64_encode(
-                    UTL_RAW.cast_to_raw(t_header || '.' || t_payload));
-            t_token := --'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJpbnRlcm5hbCIsImF1dGgiOiJpbnRlcm5hbCIsInBheWVycyI6IiIsInVzZXJJZCI6ImludGVybmFsIiwianRpIjoiNWFhZDJmZjMtNGRiYy00Njc4LTgyNmEtYmFhMjc0ZWFlNmIyIiwiZXhwIjoxNzM3NzU2MjUwMH0.5v2_U9r4jAs0FBHYEnEa4ZXCUV52CM9Jz_Dy8hueafXtR7wsAQecOqnoLUVvtfAFz3BstEJFmGB4y270jYOfKQ';
-                DBMS_CRYPTO.mac(UTL_RAW.cast_to_raw('eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJpbnRlcm5hbCIsImF1dGgiOiJpbnRlcm5hbCIsInBheWVycyI6IiIsInVzZXJJZCI6ImludGVybmFsIiwianRpIjoiNWFhZDJmZjMtNGRiYy00Njc4LTgyNmEtYmFhMjc0ZWFlNmIyIiwiZXhwIjoxNzM3NzU2MjUwMH0') --.5v2_U9r4jAs0FBHYEnEa4ZXCUV52CM9Jz_Dy8hueafXtR7wsAQecOqnoLUVvtfAFz3BstEJFmGB4y270jYOfKQ')
-----                t_encoded_header,
-                                ,DBMS_CRYPTO.hmac_sh512,
-                                UTL_RAW.cast_to_raw('base64 encoded'));
-            -----------------------------------------------------
-
             t_info.put('URL', t_url);
             t_info.put('METHOD', a_method);
-            t_info.put('WALLET', t_wallet);
+            --            t_info.put('WALLET', t_wallet);
             t_infotext := t_info.TO_CLOB;
 
             INSERT INTO eservices_log_t(request,
@@ -153,11 +172,16 @@ AS
                                         info,
                                         filedata,
                                         requestdate)
-                 VALUES ('CALLLSP',
-                         a_content,
-                         t_infotext,
-                         a_file,
-                         SYSTIMESTAMP)
+                 VALUES (
+                            a_process,
+                            -- do not log userid and password contain in content for gettoken call
+                            CASE a_process
+                                WHEN 'CALLLSP' THEN a_content --  10.4.3  01/28/2025  TJL  BIZ-17289
+                                ELSE NULL
+                            END,
+                            t_infotext,
+                            a_file,
+                            SYSTIMESTAMP)
               RETURNING seq
                    INTO t_seq;
 
@@ -169,9 +193,18 @@ AS
             t_request :=
                 UTL_HTTP.begin_request(url => t_url, method => a_method);
 
---            UTL_HTTP.set_header(t_request, 'Authorization Bearer', t_token); --  10.4.1  01/27/2025  TJL  BIZ-17289
-            UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
+            --  10.4.3  01/28/2025  TJL  BIZ-17289
+            ------------------------------------------------------
+            IF (a_process = 'CALLLSP')
+            THEN
+                UTL_HTTP.set_header(t_request,
+                                    'Authorization',
+                                    'Bearer ' || t_token.get_string('token')); --  10.4.2  01/28/2025  TJL  BIZ-17289
+            END IF;
 
+            ------------------------------------------------------
+
+            UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
             UTL_HTTP.set_body_charset(t_request, 'UTF-8');
 
             IF (a_file IS NULL)
@@ -245,17 +278,34 @@ AS
                     UTL_HTTP.end_response(t_response);
             END;
 
+            --  10.4.3  01/28/2025  TJL  BIZ-17289
+            --------------------------------------------------------
+            IF (t_statuscode = 200
+            AND a_process = 'GETTOKEN'
+            AND t_response_text IS JSON)
+            THEN
+                t_token := json_object_t.parse(t_response_text);
+            END IF;
+            --------------------------------------------------------
+
             t_info.put('HTTPRESPONSE', t_response.status_code);
-            t_info.put('LSPRESPONSE', t_response_text);
+
+            IF (t_response_text IS JSON) --  10.4.3  01/28/2025  TJL  BIZ-17289
+            THEN
+                t_info.put('LSPRESPONSE',
+                           json_element_t.parse(t_response_text));
+            ELSE
+                t_info.put('LSPRESPONSE', t_response_text);
+            END IF;
 
             -- Close the HTTP request/response
             UTL_HTTP.end_response(t_response);
             UTL_HTTP.end_request(t_request);
         EXCEPTION
-            WHEN UTL_HTTP.request_failed
+            WHEN OTHERS     --  10.4.3  01/28/2025  TJL  BIZ-17289
             THEN
                 t_sqlerrm :=
-                    'HTTP: '
+                    'HTTPS: '
                     || UTL_HTTP.get_detailed_sqlerrm
                     || CHR(13)
                     || SQLERRM;
@@ -286,8 +336,14 @@ AS
         COMMIT;
 
         RETURN CASE
-                   WHEN t_statuscode IN (200, 201, 204) THEN NULL
-                   ELSE t_info.TO_CLOB
+                   WHEN t_statuscode IN (200, 201, 204)
+                   THEN
+                       CASE a_process  --  10.4.3  01/28/2025  TJL  BIZ-17289
+                           WHEN 'GETTOKEN' THEN t_token.TO_CLOB
+                           ELSE NULL
+                       END
+                   ELSE
+                       t_info.TO_CLOB
                END;
     END;
 

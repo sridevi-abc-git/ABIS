@@ -29,6 +29,7 @@ AS
     --  12.1.0  10/23/2024  TJL  BIZ-16424    Added istemporarymailingaddress to gc_apprec_t
     --  12.2.0  12/03/2024  TJL  BIZ-16842    Added fields to gc_person_t
     --  12.3.0  01/10/2025  TJL               Removed priority info from gc_apprec_t
+    --  12.4.0  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -77,10 +78,11 @@ AS
                                 federalemployeridentificationn  VARCHAR2(4000),
                                 address CLOB);
 
-    FUNCTION calllsp(a_urlinfo     IN     VARCHAR2,
+    FUNCTION calllsp(a_urlinfo      IN     VARCHAR2,
                      a_method       IN     VARCHAR2,
                      a_content      IN     CLOB DEFAULT NULL,
-                     a_file         IN     BLOB DEFAULT NULL)
+                     a_file         IN     BLOB DEFAULT NULL,
+                     a_process      IN     VARCHAR2 DEFAULT 'CALLLSP')
         RETURN CLOB;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
