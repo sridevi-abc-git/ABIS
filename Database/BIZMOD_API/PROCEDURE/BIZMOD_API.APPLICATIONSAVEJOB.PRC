@@ -23,6 +23,7 @@ AS
     --                                       call to CALLLSP function.
     --   6.1.0  12/02/2024 TJL  BIZ-16697  Added updating Status Name field in bizmod_api.license_app_t
     --   6.2.0  01/28/2025 TJL             Added license number to the email notification.
+    --   6.2.1  01/29/2025
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
         := '/api/licensing/internal/license-applications/<<applicationId>>' ;
@@ -86,7 +87,7 @@ BEGIN
             CASE
                 WHEN t_response.has('LSPRESPONSE')
                 THEN
-                    t_response.get_string('LSPRESPONSE')
+                    t_response.get_object('LSPRESPONSE').to_string
                 WHEN t_response.has('ORA-ERROR')
                 THEN
                     t_response.get_string('ORA-ERROR')
