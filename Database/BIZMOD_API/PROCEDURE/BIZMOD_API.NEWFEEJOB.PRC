@@ -17,7 +17,7 @@ AS
     --   3.0.0  09/12/2014 TJL  BIZ-16077  Added logging email info
     --   4.0.2  11/07/2024 TJL  BIZ-16535  Bug in handling NULLs in return value from
     --                                       call to CALLLSP function.
-    --   4.1.0  01/29/2025 TJL  BIZ-17289  Corrected parsing bug of CALLLSP return value
+    --   4.1.1  01/29/2025 TJL  BIZ-17289  Corrected parsing bug of CALLLSP return value
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/<<applicationId>>';
     t_method      constant varchar2(10) := 'PATCH';
@@ -85,6 +85,9 @@ BEGIN
                  t_process,
                  'Application Id: '
                  || t_applicationid
+                 || CHR(13)
+                 || 'License Number: '
+                 || api.pkg_columnquery.VALUE(a_objectid, 'LICENSENUMBER')
                  || CHR(13)
                  || 'j_Application: '
                  || a_objectid
