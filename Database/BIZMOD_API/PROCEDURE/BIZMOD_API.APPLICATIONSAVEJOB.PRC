@@ -24,29 +24,28 @@ AS
     --   6.1.0  12/02/2024 TJL  BIZ-16697  Added updating Status Name field in bizmod_api.license_app_t
     --   6.2.0  01/28/2025 TJL             Added license number to the email notification.
     --   6.2.1  01/29/2025
+    --   6.3.0  02/03/2025 TJL  BIZ-17356  Added handling of the return value from CALLLSP and call
+    --                                       to lsplogin
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
-        := '/api/licensing/internal/license-applications/<<applicationId>>' ;
+        := '/api/licensing/internal/license-applications/' ;
     t_method CONSTANT VARCHAR2(10) := 'PATCH';
-    t_urlinfo      VARCHAR2(10000);
-    t_response     json_object_t;
     t_body         json_object_t := json_object_t();
     t_applicationid VARCHAR2(40);
     t_process      VARCHAR2(32) := 'APPLICATIONSAVEJOB';
     t_sqlerrm      VARCHAR2(32000);
     t_trace        VARCHAR2(4000);
-    t_status       VARCHAR2(40);
-    t_value        CLOB;
-    t_results      CLOB;
+    t_status       VARCHAR2(40) := a_status;
+    t_body_value   CLOB;
+    t_results      json_object_t;
+    t_token        VARCHAR2(1000);
+    t_results_text VARCHAR2(32767);
 BEGIN
     BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
 
-
-        IF (a_status IS NOT NULL)
+        IF (t_status IS NULL)
         THEN
-            t_status := a_status;
-        ELSE
             t_status :=
                 CASE UPPER(api.pkg_columnquery.VALUE(a_jobid, 'StatusName'))
                     WHEN 'NEW' THEN 'POSTED'
@@ -54,49 +53,43 @@ BEGIN
                 END;
         END IF;
 
-        IF (t_status IS NOT NULL)
-        THEN
-            t_urlinfo := REPLACE(t_url, '<<applicationId>>', t_applicationid);
+        t_body.put('status', t_status);
+        t_body.put('objectId', a_jobid);
+        t_body.put(
+            'licenseNumber',
+            TO_NUMBER(api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER')));
 
-            t_body.put('status', t_status);
-            t_body.put('objectId', a_jobid);
-            t_body.put('licenseNumber', to_number(api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER')));
+        t_results := bizmod_api.utl_licenseinfo.lsplogin;
+
+        IF (t_results.get_number('status') = 200)
+        THEN
+            t_token :=
+                t_results.get_object('lspresponse').get_string('token');
 
             t_results :=
-                bizmod_api.utl_licenseinfo.calllsp(
-                    a_urlinfo   => t_urlinfo,
-                    a_method    => t_method,
-                    a_content   => t_body.TO_CLOB);
-
-            IF (t_results IS NOT NULL)
-            THEN
-                t_response := json_object_t.parse(t_results);
-            END IF;
-            
+                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_url || t_applicationid,
+                                                   a_method    => t_method,
+                                                   a_content   => t_body,
+                                                   a_token     => t_token);
         END IF;
     EXCEPTION
         WHEN OTHERS
         THEN
             t_sqlerrm := SQLERRM;
-            t_trace := DBMS_UTILITY.format_error_backtrace;
+            t_results.put('status', SQLCODE);
+            t_results.put(
+                'ora-error',
+                SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
     END;
 
-    IF (t_sqlerrm IS NULL AND t_results IS NOT NULL)
-    THEN
-        t_sqlerrm :=
-            CASE
-                WHEN t_response.has('LSPRESPONSE')
-                THEN
-                    t_response.get_object('LSPRESPONSE').to_string
-                WHEN t_response.has('ORA-ERROR')
-                THEN
-                    t_response.get_string('ORA-ERROR')
-                ELSE
-                    NULL
-            END;
-    END IF;
+    t_results_text := t_results.TO_CLOB;
+    t_body_value := t_body.TO_CLOB;
 
-    t_value := t_body.TO_CLOB;
+    IF (t_results.get_number('status') != 200
+    AND t_sqlerrm IS NULL)
+    THEN
+        t_sqlerrm := t_results.get_object('lspresponse').to_string;
+    END IF;
 
     INSERT INTO bizmod_api.e_process_log_t(seq,
                                            processjob,
@@ -114,30 +107,21 @@ BEGIN
                         || t_status
                         || CHR(13)
                         || 'License Number: '
-                        || api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER')
+                        || api.pkg_columnquery.VALUE(a_jobid,
+                                                     'LICENSENUMBER')
                         || CHR(13)
                         || 'j_Application: '
                         || a_jobid
                         || CHR(13)
-                        || CASE
-                               WHEN t_results IS NOT NULL
-                               THEN
-                                   CHR(13)
-                                   || 'Call LSP Information: '
-                                   || json_query(t_results, '$' RETURNING CLOB PRETTY)
-                                   || CHR(13)
-                               ELSE
-                                   NULL
-                           END,
-                        substr(t_sqlerrm,1,4000),
+                        || t_results_text,
+                        SUBSTR(t_sqlerrm, 1, 4000),
                         t_trace,
-                        t_value);
+                        t_body_value);
 
-    -- 12/02/2024 TJL  BIZ-16697 
-    UPdate bizmod_api.license_app_t la
-       set la.statusname = t_status
-     where la.jobid = a_jobid;
-     
+    UPDATE bizmod_api.license_app_t la
+       SET la.statusname = t_status
+     WHERE la.jobid = a_jobid;
+
     COMMIT;
 END;
 /
