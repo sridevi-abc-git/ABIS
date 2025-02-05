@@ -30,6 +30,7 @@ AS
     --  12.2.0  12/03/2024  TJL  BIZ-16842    Added fields to gc_person_t
     --  12.3.0  01/10/2025  TJL               Removed priority info from gc_apprec_t
     --  12.4.0  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
+    --  12.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -78,12 +79,15 @@ AS
                                 federalemployeridentificationn  VARCHAR2(4000),
                                 address CLOB);
 
-    FUNCTION calllsp(a_urlinfo      IN     VARCHAR2,
-                     a_method       IN     VARCHAR2,
-                     a_content      IN     CLOB DEFAULT NULL,
-                     a_file         IN     BLOB DEFAULT NULL,
-                     a_process      IN     VARCHAR2 DEFAULT 'CALLLSP')
-        RETURN CLOB;
+    FUNCTION lsplogin
+        RETURN json_object_t;
+        
+    FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
+                     a_method       IN VARCHAR2,
+                     a_content      IN json_object_t DEFAULT json_object_t(),
+                     a_file         IN BLOB DEFAULT NULL,
+                     a_token        IN VARCHAR2 DEFAULT NULL)
+        RETURN json_object_t;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
         RETURN VARCHAR2;

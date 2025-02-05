@@ -48,6 +48,8 @@ AS
     --                                          the current ABIS transaction cannot be ended at this time.
     --  10.4.0  01/21/2025  TJL               Added the ability to turn off sending emails thru the configuration table.
     --  10.4.3  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
+    --  10.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function and change how CALLSSP handle's 
+    --                                          data being returned from LSP call.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -65,28 +67,45 @@ AS
 
     t_legalentity  legalentity_type := legalentity_type();
 
+    FUNCTION lsplogin
+        RETURN json_object_t
+    IS
+        t_return       json_object_t;
+        t_loginid      VARCHAR2(1000);
+    BEGIN
+        SELECT c.parametervalue
+          INTO t_loginid
+          FROM bizmod_api.eservices_config_t c
+         WHERE c.process = 'CALLLSP'
+           AND c.dbname = UPPER(ora_database_name)
+           AND c.parametername = 'LOGINID';
+
+        -- call get token
+        t_return :=
+            bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => '/api/providermgmt/authenticate/login',
+                    a_method    => 'POST',
+                    a_content   => json_object_t.parse(t_loginid));
+        RETURN t_return;
+    END;
 
     FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
                      a_method       IN VARCHAR2,
-                     a_content      IN CLOB DEFAULT NULL,
+                     a_content      IN json_object_t DEFAULT json_object_t(),
                      a_file         IN BLOB DEFAULT NULL,
-                     a_process      IN VARCHAR2 DEFAULT 'CALLLSP')
-        RETURN CLOB
-    IS
-        --  10.4.3  01/28/2025  TJL  BIZ-17289
-        t_token        json_object_t := json_object_t();
-        t_loginid      VARCHAR2(32767);
-        t_ret          CLOB;
+                     a_token        IN VARCHAR2 DEFAULT NULL)
+        RETURN json_object_t
+            IS
+        t_return       json_object_t := json_object_t();
+        t_content      CLOB := a_content.TO_CLOB;
         ----------------------------------------------
 
         t_url          VARCHAR2(10000);
         t_wallet       VARCHAR2(10000);
-        t_seq          NUMBER;
         t_boundary     VARCHAR2(100)
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
-        t_request      UTL_HTTP.req;
-        t_response     UTL_HTTP.resp;
-        t_response_text CLOB;
+        t_http_request UTL_HTTP.req;
+        t_http_response UTL_HTTP.resp;
+        t_http_response_text CLOB;
         t_blob_len     NUMBER;
         t_chunk_size   NUMBER := 32767;
         t_offset       NUMBER := 1;
@@ -105,133 +124,61 @@ AS
         t_body_end     VARCHAR2(100)
             := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
         t_text         VARCHAR2(32767);
-        t_infotext     VARCHAR2(32767);
+        t_responsetext VARCHAR2(32767);
         t_length       NUMBER;
-        t_statuscode   NUMBER;
         t_sqlerrm      VARCHAR2(4000);
-        t_trace        VARCHAR2(4000);
-        t_info         json_object_t := json_object_t();
     BEGIN
         BEGIN
-            BEGIN
-                SELECT url || a_urlinfo, wallet, loginid
-                  INTO t_url, t_wallet, t_loginid
-                  FROM (SELECT c.process, c.parametername, c.parametervalue
-                          FROM bizmod_api.eservices_config_t c
-                         WHERE c.process = 'CALLLSP'
-                           AND c.dbname = UPPER(ora_database_name))
-                           PIVOT (
-                                 MAX(parametervalue)
-                                 FOR parametername
-                                 IN ('URL' url,
-                                    'WALLET' wallet,
-                                    'LOGINID' loginid)); --  10.4.3  01/28/2025  TJL  BIZ-17289
-
-                --  10.4.3  01/28/2025  TJL  BIZ-17289
-                ------------------------------------------------------
-                IF (a_process = 'CALLLSP')
-                THEN
-                    -- call get token
-                    t_ret :=
-                        calllsp(
-                            a_urlinfo   =>
-                                '/api/providermgmt/authenticate/login',
-                            a_method    => 'POST',
-                            a_content   => t_loginid,
-                            a_process   => 'GETTOKEN');
-
-                    IF (t_ret IS NOT NULL)
-                    THEN
-                        t_token := json_object_t.parse(t_ret);
-                    END IF;
-
-                    IF (NOT t_token.has('token'))
-                    THEN
-                        raise_application_error(
-                            -20001,
-                            'No LSP Token Returned' || CHR(13) || t_ret,
-                            TRUE);
-                    END IF;
-                END IF;
-            ----------------------------------------------------------
-            EXCEPTION
-                WHEN NO_DATA_FOUND
-                THEN
-                    raise_application_error(-20001,
-                                            'Parameter Not Found',
-                                            TRUE);
-            END;
-
-            t_info.put('URL', t_url);
-            t_info.put('METHOD', a_method);
-            --            t_info.put('WALLET', t_wallet);
-            t_infotext := t_info.TO_CLOB;
-
-            INSERT INTO eservices_log_t(request,
-                                        packet,
-                                        info,
-                                        filedata,
-                                        requestdate)
-                 VALUES (
-                            a_process,
-                            -- do not log userid and password contain in content for gettoken call
-                            CASE a_process
-                                WHEN 'CALLLSP' THEN a_content --  10.4.3  01/28/2025  TJL  BIZ-17289
-                                ELSE NULL
-                            END,
-                            t_infotext,
-                            a_file,
-                            SYSTIMESTAMP)
-              RETURNING seq
-                   INTO t_seq;
-
-            COMMIT;
+            SELECT url || a_urlinfo, wallet
+              INTO t_url, t_wallet
+              FROM (SELECT c.process, c.parametername, c.parametervalue
+                      FROM bizmod_api.eservices_config_t c
+                     WHERE c.process = 'CALLLSP'
+                       AND c.dbname = UPPER(ora_database_name))
+                       PIVOT (
+                             MAX(parametervalue)
+                             FOR parametername
+                             IN ('URL' url,
+                                'WALLET' wallet));
 
             UTL_HTTP.set_wallet(t_wallet, NULL);
 
             -- Open the HTTP request
-            t_request :=
+            t_http_request :=
                 UTL_HTTP.begin_request(url => t_url, method => a_method);
 
-            --  10.4.3  01/28/2025  TJL  BIZ-17289
-            ------------------------------------------------------
-            IF (a_process = 'CALLLSP')
-            THEN
-                UTL_HTTP.set_header(t_request,
-                                    'Authorization',
-                                    'Bearer ' || t_token.get_string('token')); --  10.4.2  01/28/2025  TJL  BIZ-17289
-            END IF;
+            UTL_HTTP.set_header(t_http_request,
+                                'Authorization',
+                                'Bearer ' || a_token); --  10.4.2  01/28/2025  TJL  BIZ-17289
 
-            ------------------------------------------------------
-
-            UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
-            UTL_HTTP.set_body_charset(t_request, 'UTF-8');
+            UTL_HTTP.set_header(t_http_request, 'X-Internal-Request', 'True');
+            UTL_HTTP.set_body_charset(t_http_request, 'UTF-8');
 
             IF (a_file IS NULL)
             THEN
-                IF (a_content IS NOT NULL)
+                IF (t_content IS NOT NULL)
                 THEN
                     t_length :=
                         UTL_RAW.LENGTH(
-                            UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(a_content),
+                            UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(t_content),
                                             'american_america.al32utf8',
                                             'AMERICAN_america.WE8MSWIN1252'));
-                    UTL_HTTP.set_header(t_request,
+                    UTL_HTTP.set_header(t_http_request,
                                         'content-type',
                                         'application/json');
-                    UTL_HTTP.set_header(t_request,
+                    UTL_HTTP.set_header(t_http_request,
                                         'Content-Length',
                                         t_length);
 
-                    UTL_HTTP.write_text(t_request, a_content);
+                    UTL_HTTP.write_text(t_http_request, t_content);
                 END IF;
             ELSE
                 -- Set the request headers
-                UTL_HTTP.set_header(t_request,
+                UTL_HTTP.set_header(t_http_request,
                                     'Content-Type',
                                     t_content_type);
                 UTL_HTTP.set_header(
-                    t_request,
+                    t_http_request,
                     'Content-Length',
                     TO_CHAR(
                           DBMS_LOB.getlength(t_body_start)
@@ -239,7 +186,7 @@ AS
                         + DBMS_LOB.getlength(t_body_end)));
 
                 -- Write the start of the body to the request
-                UTL_HTTP.write_text(t_request, t_body_start);
+                UTL_HTTP.write_text(t_http_request, t_body_start);
 
                 -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
                 t_blob_len := DBMS_LOB.getlength(a_file);
@@ -251,100 +198,107 @@ AS
                                   t_chunk_size,
                                   t_offset,
                                   t_chunk);
-                    UTL_HTTP.write_raw(t_request, t_chunk);
+                    UTL_HTTP.write_raw(t_http_request, t_chunk);
                     t_offset := t_offset + t_chunk_size;
                 END LOOP;
 
                 -- Write the end of the body to the request
-                UTL_HTTP.write_text(t_request, t_body_end);
+                UTL_HTTP.write_text(t_http_request, t_body_end);
             END IF;
 
             -- Get the response
-            t_response := UTL_HTTP.get_response(t_request);
-            t_statuscode := t_response.status_code;
+            t_http_response := UTL_HTTP.get_response(t_http_request);
 
-            DBMS_LOB.createtemporary(t_response_text, TRUE, DBMS_LOB.session);
+            DBMS_LOB.createtemporary(t_http_response_text,
+                                     TRUE,
+                                     DBMS_LOB.session);
 
             BEGIN
                 LOOP
-                    UTL_HTTP.read_text(t_response, t_text, 32766);
-                    DBMS_LOB.writeappend(t_response_text,
+                    UTL_HTTP.read_text(t_http_response, t_text, 32766);
+                    DBMS_LOB.writeappend(t_http_response_text,
                                          LENGTH(t_text),
                                          t_text);
                 END LOOP;
             EXCEPTION
                 WHEN UTL_HTTP.end_of_body
                 THEN
-                    UTL_HTTP.end_response(t_response);
+                    UTL_HTTP.end_response(t_http_response);
             END;
 
-            --  10.4.3  01/28/2025  TJL  BIZ-17289
-            --------------------------------------------------------
-            IF (t_statuscode = 200
-            AND a_process = 'GETTOKEN'
-            AND t_response_text IS JSON)
-            THEN
-                t_token := json_object_t.parse(t_response_text);
-            END IF;
-            --------------------------------------------------------
+            t_return.put('status', t_http_response.status_code);
 
-            t_info.put('HTTPRESPONSE', t_response.status_code);
-
-            IF (t_response_text IS JSON) --  10.4.3  01/28/2025  TJL  BIZ-17289
+            IF (t_http_response_text IS JSON)
             THEN
-                t_info.put('LSPRESPONSE',
-                           json_element_t.parse(t_response_text));
+                t_return.put('lspresponse',
+                             json_element_t.parse(t_http_response_text));
             ELSE
-                t_info.put('LSPRESPONSE', t_response_text);
+                t_return.put('lspresponse', t_http_response_text);
             END IF;
-
-            -- Close the HTTP request/response
-            UTL_HTTP.end_response(t_response);
-            UTL_HTTP.end_request(t_request);
         EXCEPTION
-            WHEN OTHERS     --  10.4.3  01/28/2025  TJL  BIZ-17289
+            WHEN UTL_HTTP.request_failed
             THEN
-                t_sqlerrm :=
-                    'HTTPS: '
-                    || UTL_HTTP.get_detailed_sqlerrm
-                    || CHR(13)
-                    || SQLERRM;
-                t_trace := DBMS_UTILITY.format_error_backtrace;
-                t_info.put('ORA-ERROR', t_sqlerrm);
-                t_response_text := t_response_text || CHR(13) || t_sqlerrm;
+                t_return.put('status', SQLCODE);
+                t_return.put(
+                    'ora-error',
+                    UTL_HTTP.get_detailed_sqlerrm
+                    || CHR(10)
+                    || DBMS_UTILITY.format_error_backtrace);
+            WHEN OTHERS
+            THEN
+                t_return.put('status', SQLCODE);
+                t_return.put(
+                    'ora-error',
+                    SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
         END;
 
-        t_infotext := t_info.TO_CLOB;
+        -- Close the HTTP request/response
+        UTL_HTTP.end_response(t_http_response);
+        UTL_HTTP.end_request(t_http_request);
 
-        IF (t_sqlerrm IS NULL)
+        IF (a_content.has('password'))
         THEN
-            UPDATE eservices_log_t e
-               SET response = t_infotext, responsedate = SYSTIMESTAMP
-             WHERE seq = t_seq
-               LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
-                       REJECT LIMIT UNLIMITED;
+            t_content := '{"email":"*****","password":"******"}';
+
+            IF (t_return.get_number('status') = 200)
+            THEN
+                t_responsetext :=
+                    json_object('status' VALUE t_return.get_number('status'));
+            ELSE
+                t_responsetext := t_return.TO_CLOB;
+            END IF;
         ELSE
-            UPDATE eservices_log_t e
-               SET response = t_infotext,
-                   responsedate = SYSTIMESTAMP,
-                   e.err = SUBSTR(t_sqlerrm || CHR(13) || t_trace, 1, 3990)
-             WHERE seq = t_seq
-               LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
-                       REJECT LIMIT UNLIMITED;
+            t_responsetext := t_return.TO_CLOB;
+        END IF;
+
+        INSERT INTO eservices_log_t(request,
+                                    packet,
+                                    response,
+                                    info,
+                                    filedata,
+                                    requestdate,
+                                    responsedate,
+                                    err)
+                 VALUES ('CALLLSP',
+                         t_content,
+                         t_responsetext,
+                         t_url || '; ' || a_method,
+                         a_file,
+                         SYSTIMESTAMP,
+                         SYSTIMESTAMP,
+                         t_sqlerrm)
+                LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('INSERT')
+                        REJECT LIMIT UNLIMITED;
+
+        IF (SQL%ROWCOUNT = 0)
+        THEN
+            INSERT INTO err$_eservices_clob_t(seq, jsondata, filedata)
+                 VALUES (TO_CHAR(SYSTIMESTAMP), t_responsetext, a_file);
         END IF;
 
         COMMIT;
 
-        RETURN CASE
-                   WHEN t_statuscode IN (200, 201, 204)
-                   THEN
-                       CASE a_process  --  10.4.3  01/28/2025  TJL  BIZ-17289
-                           WHEN 'GETTOKEN' THEN t_token.TO_CLOB
-                           ELSE NULL
-                       END
-                   ELSE
-                       t_info.TO_CLOB
-               END;
+        RETURN t_return;
     END;
 
 
