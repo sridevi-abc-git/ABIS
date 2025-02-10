@@ -31,6 +31,7 @@ AS
     --  12.3.0  01/10/2025  TJL               Removed priority info from gc_apprec_t
     --  12.4.0  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
     --  12.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function
+    --  12.5.2  02/07/2025  TJL  BIZ-17356    Code cleanup
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -117,12 +118,6 @@ AS
                         a_argument2    IN DATE DEFAULT SYSDATE,
                         a_argument3    IN VARCHAR2 DEFAULT NULL,
                         a_argument4    IN VARCHAR2 DEFAULT NULL);
-
-    FUNCTION get_legalentity(a_objectid IN NUMBER)
-        RETURN json_array_t;
-
-    FUNCTION get_address(a_objectid IN NUMBER, a_endpoint IN NUMBER)
-        RETURN json_object_t;
 
 END;
 /
