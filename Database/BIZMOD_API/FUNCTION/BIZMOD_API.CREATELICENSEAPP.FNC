@@ -1,19 +1,7 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
+CREATE OR REPLACE FUNCTION CREATELICENSEAPP(a_packet       IN CLOB,
                                                        a_seq          IN NUMBER)
         RETURN CLOB
     IS
-    -- ****************************************************************************
-    -- File:        BIZMOD_API.CREATELICENSEAPP.PRC
-    -- Author:      Timothy J. Lord
-    --
-    -- Purpose :
-    --
-    -- History:
-    -------------------------------------------------------------------------------
-    --             Date                         Comment
-    --   1.1    05/02/2024  TJL  BIZ-15804  Initial Package Created
-    --   2.0    07/18/2024  BN   BIZ-15804  Validation code added
-    -- ****************************************************************************
     t_json_obj     json_object_t := json_object_t();
     t_json_data    json_object_t := json_object_t();
     t_process      VARCHAR2(40) := 'CREATELICENSEAPP';
@@ -26,9 +14,13 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
 
     PROCEDURE validateInitialData(a_packet IN CLOB, t_response IN OUT json_array_t)
     IS
-
+    t_dupReqCount   NUMBER;
     BEGIN
-        
+
+
+
+         -- DBMS_OUTPUT.put_line('a_packet : '|| a_packet);
+        -- DBMS_OUTPUT.put_line('applicableSecLicense : '|| applicableSecLicense);
     for rec IN (
         SELECT * FROM JSON_TABLE(
                                a_packet,
@@ -36,6 +28,8 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                                COLUMNS(
                                    appType VARCHAR2(30)
                                        PATH '$.DATA.APPLICATIONTYPE',
+                                   lspapplicationid VARCHAR2(30)
+                                       PATH '$.DATA.LSPAPPLICATIONID',
                                    transferChangeType VARCHAR2(30)
                                        PATH '$.DATA.TRANSFERCHANGETYPE',
                                    multipleStockMember VARCHAR2(30)
@@ -53,6 +47,18 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                                    underConstruction VARCHAR2(30)
                                         PATH '$.DATA.UNDERCONSTRUCTION')))
         LOOP
+
+        SELECT COUNT(*) INTO t_dupReqCount
+        FROM bizmod_api.eservices_log_t eg
+        WHERE JSON_VALUE(eg.packet, '$.DATA.LSPAPPLICATIONID') = rec.lspapplicationid  and eg.request = 'CREATELICENSEAPP';
+
+
+        DBMS_OUTPUT.PUT_LINE('t_dupReqCount: '|| t_dupReqCount);
+        if(t_dupReqCount >1)
+        THEN
+          t_response.append('Duplicate Application Request');
+        END IF;
+
         IF (rec.appType != 'Original' AND rec.appType != 'Transfer'  AND rec.appType != 'Change' )
         THEN
             t_response.append('Invalid application type (Original, Transfer, Change)');
@@ -98,7 +104,9 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
 
 
     BEGIN
-      
+
+       --  DBMS_OUTPUT.put_line('sec details : '|| secLiceDet);
+        -- DBMS_OUTPUT.put_line('applicableSecLicense : '|| applicableSecLicense);
     for rec IN (
         SELECT * FROM JSON_TABLE(
                                secLiceDet,
@@ -110,7 +118,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
         LOOP
       --  DBMS_OUTPUT.put_line('secLicenseTypeCode : '|| rec.secLicenseTypeCode);
         secondaryLicenseFound := FALSE;
-
+        --licNum := TO_NUMBER(rec.secLicenseTypeCode);
         IF (LENGTH(rec.secLicenseTypeCode) = 2)
         THEN
 
@@ -118,10 +126,10 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
             FOR i IN 1..REGEXP_COUNT(applicableSecLicense, delimiter) + 1
             LOOP
                 item := REGEXP_SUBSTR(applicableSecLicense, '[^'|| delimiter ||']+', 1, i);
-               
+               --  DBMS_OUTPUT.put_line('item : '|| item);
                 IF(TRIM(rec.secLicenseTypeCode) = TRIM(item))THEN
                     secondaryLicenseFound := TRUE;
-
+                  --   DBMS_OUTPUT.put_line('inside if stamt : ');
                 END IF;
             END LOOP;
             IF NOT secondaryLicenseFound
@@ -131,7 +139,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
         ELSE
             t_response.append('Invalid secondary License Code.');
         END IF;
-        
+
         IF (LENGTH(rec.primaryCount) > 3)
         THEN
             t_response.append('Invalid Secondary License -- primary count value(3).');
@@ -158,17 +166,17 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                                COLUMNS(
                                    licenseTypeCode VARCHAR2(10) PATH '$.LICENSETYPECODE',
                                    primaryCount VARCHAR2(6) PATH '$.PRIMARYCOUNT',
-                                   gallonageRange VARCHAR2(30)  PATH '$.GALLONAGERANGE',
+                                   gallonageRange VARCHAR2(30)  PATH '$.GALLONAGE',
                                    seasonStartMonth VARCHAR2(30)  PATH '$.SEASONSTARTMONTH',
                                    isBranch VARCHAR2(3) PATH '$.ISBRANCH',
                                    masterLicense VARCHAR2(30) PATH '$.MASTERLICENSE',
                                    secondaryLicenseTypes CLOB
                                    FORMAT JSON
                                    PATH '$.SECONDARYLICENSETYPES',
-                                   numOfMonths NUMBER PATH '$.NUMBEROFMONTHSLICENSED' )))
+                                   numOfMonths VARCHAR2(30) PATH '$.NUMBEROFMONTHSLICENSED' )))
         LOOP
             licNum := TO_NUMBER(rec.licenseTypeCode);
-           
+            -- DBMS_OUTPUT.put_line('licNum : '|| licNum);
             IF (LENGTH(rec.licenseTypeCode) = 2)
             THEN
                 -- fetching license information
@@ -241,19 +249,22 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
 
                     */
 
+                   -- DBMS_OUTPUT.put_line('sec license value '|| rec.secondaryLicenseTypes);
+                    -- DBMS_OUTPUT.put_line('sec type  '|| licRec.SECONDARYLTSAPPLICABLE);
                     IF(licRec.SECONDARYLTSAPPLICABLE = 'Y' AND rec.secondaryLicenseTypes IS NOT NULL)
                     THEN
-                    
+                       --  DBMS_OUTPUT.put_line('sec license count 3333'|| arrSize);
                         validateSecondaryLicense(rec.secondaryLicenseTypes,licRec.SECONDARYLICENSETYPECODES, t_response);
                     END IF;
 
+                    -- DBMS_OUTPUT.put_line('sec license count '|| arrSize);
 
                 END LOOP;
 
                 IF NOT licenseFound
                 THEN
                     t_response.append(' Invalid Primary License Code');
-                END IF;                
+                END IF;
             ELSE
                 t_response.append(' Invalid Primary License Code.');
             END IF ;
@@ -293,6 +304,8 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
 
             -- code zip length should be 5
 
+            DBMS_OUTPUT.put_line('addr type : '|| rec.addressLocation );
+            DBMS_OUTPUT.put_line('counrty : '|| rec.country);
             IF ((rec.addressLocation != 'Outside USA'))
             THEN
 
@@ -314,7 +327,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
              THEN
                 t_response.append(addrType || ' : Invalid fax number.Required format - (xxx)xxx-xxx.');
              END IF ;
-             
+
              IF (LENGTH(rec.internationalPhone) > 30)
             THEN
                      t_response.append(addrType || ' : International Phone number exceeds the character limit.');
@@ -332,13 +345,14 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
             THEN
                 t_response.append(addrType || ' : Address line 3 exceeds character limit (50).');
             END IF;
-            
+
             IF(LENGTH(rec.city) > 40)
             THEN
                 t_response.append(addrType || ' : City exceeds character limit.');
             END IF;
 
-           
+             -- DBMS_OUTPUT.put_line('t_response after : '|| t_response );
+
             -- if the state is California validate if the proper city is entered
 
             IF ((rec.addressLocation = 'In California'))
@@ -373,7 +387,9 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                                        WHERE domainid = 301955
                                     ORDER BY 1)
                     LOOP
- 
+
+                       -- DBMS_OUTPUT.put_line('countryRec.attributevalue : '|| countryRec.attributevalue );
+                        -- DBMS_OUTPUT.put_line('rec.country : '|| rec.country );
                         IF (countryRec.attributevalue = UPPER(rec.country))
                         THEN
                             valueFound := TRUE;
@@ -413,7 +429,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                        eligibleForTransfer VARCHAR2(100) PATH '$.ELIGIBLEFORTRANSFER',
                        censusTract VARCHAR2(100) PATH '$.CENSUSTRACT',
                        censusSource VARCHAR2(100) PATH '$.CENSUSTRACTSOURCE',
-                       geoCodeAddr VARCHAR2(100) PATH '$.GEOCODEADDRESSLINE1'                       
+                       geoCodeAddr VARCHAR2(100) PATH '$.GEOCODEADDRESSLINE1'
                        )))
             LOOP
 
@@ -461,7 +477,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
 
     BEGIN
 
-
+         DBMS_OUTPUT.put_line('personDet : '|| personDet  );
           for rec IN (
           SELECT *
             FROM JSON_TABLE(
@@ -481,14 +497,21 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                        )))
             LOOP
 
-               --  DBMS_OUTPUT.put_line('lastname : '|| rec.lastname );
-                IF (rec.lastname = '' OR rec.lastname IS NULL)
+                 DBMS_OUTPUT.put_line('lastname : '|| rec.lastname );
+                 DBMS_OUTPUT.put_line('lastname : '|| rec.firstname );
+                 /*
+               IF (rec.firstname IS NULL)
                 THEN
-                    t_response.append('aaaInvalid person last name in legal entities.');
+                    t_response.append('Invalid person first name in legal entities.');
                 END IF;
+                IF (rec.lastname IS NULL)
+                THEN
+                    t_response.append('Invalid person last name in legal entities.');
+                END IF;
+                */
                 IF(LENGTH(rec.firstname) > 40)
                 THEN
-                    t_response.append('Person first name  exceeds character limit (40).');
+                    t_response.append('Person first name exceeds character limit (40).');
                 END IF;
                 IF(LENGTH(rec.middlename) > 30)
                 THEN
@@ -507,15 +530,18 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                     t_response.append('Person Aliasname  exceeds character limit (4000).');
                 END IF;
 
-                IF (rec.gender != 'M' AND rec.gender != 'F')
+/*
+                IF (rec.gender IS NOT NULL AND (rec.gender != 'M' AND rec.gender != 'F'))
                 THEN
                     t_response.append('Invalid gender information (M/F)');
                 END IF;
-                IF (rec.maritalStatus != 'DIVORCED' AND  rec.maritalStatus != 'MARRIED'  AND rec.maritalStatus != 'SEPARATED'
+
+                IF ( rec.maritalStatus IS NOT NULL AND rec.maritalStatus != 'DIVORCED' AND  rec.maritalStatus != 'MARRIED'  AND rec.maritalStatus != 'SEPARATED'
                  AND rec.maritalStatus != 'REGISTERD DOMESTIC PARTNER'  AND rec.maritalStatus != 'SINGLE'  AND rec.maritalStatus != 'WIDOWED')
                 THEN
                     t_response.append('Invalid marital status in legal entities.');
                 END IF;
+                */
 
                 validateAddress(rec.address,' Person', t_response);
 
@@ -538,16 +564,19 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                        companyStructure VARCHAR2(1000) PATH '$.COMPANYSTRUCTURE',
                        caSecStateNum VARCHAR2(1000) PATH '$.CASECRETARYOFSTATENUMBER',
                        federalIdNum VARCHAR2(1000) PATH '$.FEDERALEMPLOYERIDENTIFICATIONN',
+                       ownertype VARCHAR2(4000) PATH '$.OWNERTYPE',
+                       title  VARCHAR2(4000) PATH '$.TITLE',
                        address  CLOB
                            FORMAT JSON
                            PATH '$.ADDRESS'
                        )))
             LOOP
-
+/*
             IF(rec.companyname = '' OR rec.companyname IS NULL)
             THEN
                 t_response.append('Invalid company name in legal entities.');
-            END IF;
+            END IF;*/
+
 
             IF(LENGTH(rec.companyname) > 250)
             THEN
@@ -557,16 +586,30 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
             THEN
                 t_response.append('Legal Entity CA Secretary State number exceeds character limit (20).');
             END IF;
-            IF(LENGTH(rec.federalIdNum) > 6)
+
+            IF (NOT (LENGTH(rec.federalIdNum) = 9  AND REGEXP_LIKE(rec.federalIdNum, '^\d{9}')))
+             THEN
+                t_response.append('Invalid Legal Entity Federal employer identification number provided.');
+             END IF;
+             /*
+            IF(LENGTH(rec.federalIdNum) > 10)
             THEN
                 t_response.append('Legal Entity Federal employer identification number exceeds character limit (6).');
             END IF;
-            
+            */
+
              IF(rec.companyStructure != 'CONSERVATORSHIP' AND  rec.companyStructure != 'CORPORATION'  AND rec.companyStructure != 'ESTATE'
              AND rec.companyStructure != 'LIMITED LIABILITY COMPANY'  AND rec.companyStructure != 'LIMITED PARTNERSHIP'
              AND rec.companyStructure != 'RECEIVORSHIP' AND rec.companyStructure != 'TRUST')
             THEN
                 t_response.append('Invalid marital status in legal entities.');
+            END IF;
+
+            IF (rec.ownertype != 'GENERAL PARTNER' AND  rec.ownertype != 'LIMITED PARTNER'  AND rec.ownertype != 'MEMBER'
+              AND rec.ownertype != 'PUBLICLY TRADED'  AND rec.ownertype != 'STOCKHOLDER'  AND rec.ownertype != 'FORMER CORPORATE NAME'
+             AND rec.ownertype != 'FORMER MEMBER'  AND rec.ownertype != 'FORMER STOCKHOLDER')
+            THEN
+                t_response.append('Invalid owner type in legal entities.');
             END IF;
             validateAddress(rec.address,' Company', t_response);
 
@@ -586,7 +629,6 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                    COLUMNS(
                        legalEntityType VARCHAR2(4000) PATH '$.LEGALENTITYTYPE',
                        p12Type VARCHAR2(4000) PATH '$.P12TYPE',
-                       ownertype VARCHAR2(4000) PATH '$.OWNERTYPE',
                        percentage NUMBER PATH '$.PERCENTAGEOFOWNERSHIP',
                        company  CLOB
                            FORMAT JSON
@@ -617,22 +659,17 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
                 t_response.append('Invalid P12 value of legal entity.');
             END IF;
 
-             IF (rec.ownertype != 'GENERAL PARTNER' AND  rec.ownertype != 'LIMITED PARTNER'  AND rec.ownertype != 'MEMBER'
-             AND rec.ownertype != 'PUBLICLY TRADED'  AND rec.ownertype != 'STOCK HOLDER'  AND rec.ownertype != 'FORMER CORPORATE NAME'
-             AND rec.ownertype != 'FORMER MEMBER'  AND rec.ownertype != 'FORMER STOCKHOLDER')
-            THEN
-                t_response.append('Invalid owner type in legal entities.');
-            END IF;
-
+            -- DBMS_OUTPUT.put_line('company : '|| rec.company);
             IF (rec.company IS NOT NULL)
             THEN
-     
+            -- DBMS_OUTPUT.put_line('inside comp : ');
                 validateCompanyDetails(rec.company, t_response);
             END IF;
 
+             DBMS_OUTPUT.put_line('person : '|| rec.person);
             IF (rec.person IS NOT NULL)
             THEN
-
+             DBMS_OUTPUT.put_line('inside per : ');
                 validatePersonDetails(rec.person, t_response);
             END IF;
 
@@ -720,7 +757,7 @@ CREATE OR REPLACE FUNCTION BIZMOD_API.CREATELICENSEAPP(a_packet       IN CLOB,
             THEN
                 t_response.append('Invalid escrow company name');
             END IF;
-            
+
             IF(LENGTH(rec.companyName) > 250)
             THEN
                 t_response.append('Escrow company name exceeds character limit (250).');
@@ -804,7 +841,7 @@ BEGIN
 
         IF (t_response.get_size() = 0)
         THEN
-           
+            DBMS_OUTPUT.put_line('t_response : '|| t_response.get_size());
             bizmod_api.utl_licenseinfo.createjob(a_procedure => 'CREATELICENSEAPPJOB',
                                  a_description => 'Create License Application',
                                  a_argument1 => a_seq);
@@ -821,11 +858,20 @@ BEGIN
             t_json_data.put('MSGNO', '17');
             t_json_data.put('MSG', t_msg);
 
+
+
+            DBMS_OUTPUT.put_line('error : '|| t_msg);
+
+            DBMS_OUTPUT.put_line('seq : '|| a_seq);
+
             UPDATE bizmod_api.eservices_log_t
             SET err = t_msg
             WHERE seq = a_seq;
             num := SQL%rowcount;
             COMMIT;
+
+            DBMS_OUTPUT.put_line('rows updated : '|| num);
+
 
         END IF;
 
@@ -862,3 +908,4 @@ EXCEPTION
         RETURN t_packet;
 END;
 /
+
