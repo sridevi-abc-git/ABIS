@@ -26,6 +26,7 @@ AS
     --   6.2.1  01/29/2025
     --   6.3.0  02/03/2025 TJL  BIZ-17356  Added handling of the return value from CALLLSP and call
     --                                       to lsplogin
+    --   6.3.1  02/13/2026 TJL  BIZ-17356  Limit string length for info value
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
         := '/api/licensing/internal/license-applications/' ;
@@ -100,7 +101,7 @@ BEGIN
              VALUES (
                         0,
                         t_process,
-                        'Application Id: '
+                        substr('Application Id: '
                         || t_applicationid
                         || CHR(13)
                         || 'Status: '
@@ -113,7 +114,7 @@ BEGIN
                         || 'j_Application: '
                         || a_jobid
                         || CHR(13)
-                        || t_results_text,
+                        || t_results_text, 1, 3999),
                         SUBSTR(t_sqlerrm, 1, 4000),
                         t_trace,
                         t_body_value);
