@@ -20,6 +20,7 @@ AS
     --   4.1.1  01/29/2025 TJL  BIZ-17289  Corrected parsing bug of CALLLSP return value
     --   4.2.0  02/04/2025 TJL  BIZ-17356  Added handling of the return value from CALLLSP and call
     --                                       to lsplogin
+    --   4.2.1  02/13/2026 TJL  BIZ-17356  Limit string length for info value
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/';
     t_method      constant varchar2(10) := 'PATCH';
@@ -87,7 +88,7 @@ BEGIN
              VALUES (
                  0,
                  t_process,
-                 'Application Id: '
+                 substr('Application Id: '
                  || t_applicationid
                  || CHR(13)
                  || 'License Number: '
@@ -96,7 +97,7 @@ BEGIN
                  || 'j_Application: '
                  || a_objectid
                  || CHR(13)
-                 || t_results_text,
+                 || t_results_text, 1, 3999),
                  substr(t_sqlerrm,1,4000),
                  t_trace,
                  t_value);
