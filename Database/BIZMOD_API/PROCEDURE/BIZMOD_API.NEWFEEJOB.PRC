@@ -21,6 +21,7 @@ AS
     --   4.2.0  02/04/2025 TJL  BIZ-17356  Added handling of the return value from CALLLSP and call
     --                                       to lsplogin
     --   4.2.1  02/13/2026 TJL  BIZ-17356  Limit string length for info value
+    --   4.2.2  02/14/2025 TJL  BIZ-17356  Change how lsp response for error is handled.
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/';
     t_method      constant varchar2(10) := 'PATCH';
@@ -76,7 +77,7 @@ BEGIN
     IF (t_results.get_number('status') != 200
     AND t_sqlerrm IS NULL)
     THEN
-        t_sqlerrm := t_results.get_object('lspresponse').to_string;
+        t_sqlerrm := t_results.get_string('lspresponse');
     END IF;
 
     INSERT INTO bizmod_api.e_process_log_t(seq,
