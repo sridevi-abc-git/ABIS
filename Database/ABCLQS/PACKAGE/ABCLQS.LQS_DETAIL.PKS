@@ -16,6 +16,7 @@ CREATE OR REPLACE PACKAGE ABCLQS.LQS_DETAIL AS
 -- 09/01/2017 TJL   11670   Header for version tracking 
 -- 09/15/2017 NW	          Holds - Changed parameter
 -- 09/29/2017 NW            GET_LICENSE_INFO to GET_LICENSEE_INFO 
+-- 02/25/2025 PK            Added Notification for LA fires
 -- ****************************************************************************
     PROCEDURE LQS_LICENSE
     ( p_parameters  IN XMLTYPE 
@@ -60,6 +61,10 @@ CREATE OR REPLACE PACKAGE ABCLQS.LQS_DETAIL AS
 
     FUNCTION GET_ESCROW
     ( p_JobId INTEGER)
+    RETURN XMLTYPE;
+    
+     FUNCTION GET_NOTIFICATIONS
+       ( p_JobId INTEGER)
     RETURN XMLTYPE;
 
 END LQS_DETAIL;
