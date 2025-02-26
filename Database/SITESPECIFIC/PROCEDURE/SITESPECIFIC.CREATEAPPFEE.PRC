@@ -27,6 +27,8 @@ CREATE OR REPLACE PROCEDURE SITESPECIFIC.createappfee(
 --                            caused by changes.
 --  11/15/2021 PK   26001   PK WO 26001 added for 2022 fee increase to create APP fee for brance 02  
 --  12/28/2022 PK   30274   PK WO 30274 - New License Type 90 
+--  02/26/2025 PK            api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate') 
+--                           changed 'CreatedDate' to 'ApplicationCreatedDate' for online application changes
 -------------------------------------------------------------------------------
 IS
     SUBTYPE udt_id IS api.pkg_definition.udt_id;
@@ -169,7 +171,7 @@ BEGIN
                 t_issuedate   :=
                     --  08/01/2019 TJL  18697   changed to 'CopiesMailed' from 'EstimatedIssueDate'
                     NVL(api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed'),
-                        api.pkg_columnquery.datevalue(a_jobid, 'CreatedDate'));
+                         api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate')); -- Changed by Pawan to for online application changes
             END IF;
 
               SELECT DISTINCT SUBSTR(ltc.applicationfeetype, 1, 3)
