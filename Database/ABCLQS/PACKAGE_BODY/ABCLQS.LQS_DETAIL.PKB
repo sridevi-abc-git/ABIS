@@ -39,7 +39,7 @@ CREATE OR REPLACE PACKAGE BODY ABCLQS.LQS_DETAIL AS
 -- 07/10/2019 NW    18416   LQS: 603828 not found - inline sub-query returns more than one record for master-license
 -- 12/10/2019 TJL   20023   Added returning Section Code with condition information  
 -- 06/15/2020 NW            Formatting
--- 02/24/2025 PK            Added Notification for LA fires
+-- 02/25/2025 PK            Added Notification for LA fires
 -- ****************************************************************************
 
 ---------------------------------------------------
@@ -195,7 +195,7 @@ MEMBERS AS (
 SELECT 
   XMLAGG(
     XMLELEMENT(
-      "LICENSEEEE",
+      "LICENSEE",
       XMLFOREST (
         LICENSEE_NAME,
         ( SELECT XMLAGG( XMLELEMENT("MEMBER",M.MEMBER)) 
