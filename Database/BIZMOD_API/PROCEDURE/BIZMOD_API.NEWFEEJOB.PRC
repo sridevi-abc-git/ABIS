@@ -22,6 +22,7 @@ AS
     --                                       to lsplogin
     --   4.2.1  02/13/2026 TJL  BIZ-17356  Limit string length for info value
     --   4.2.2  02/14/2025 TJL  BIZ-17356  Change how lsp response for error is handled.
+    --   5.0.0  03/05/2025 TJL  BIZ-17503  Corrected bug in logging errors from CALLLSP
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/';
     t_method      constant varchar2(10) := 'PATCH';
@@ -39,14 +40,14 @@ AS
     t_results_text VARCHAR2(32767);
 BEGIN
     BEGIN
-        
+
         t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
         t_urlinfo := REPLACE(t_url, '<<applicationId>>', t_applicationid);
 
         t_body.put('status', t_status);
         t_body.put('objectId', a_objectid);
         t_body.put('licenseNumber', api.pkg_columnquery.value(a_objectid, 'LICENSENUMBER'));
-        
+
         t_results := bizmod_api.utl_licenseinfo.lsplogin;
 
         IF (t_results.get_number('status') = 200)
@@ -59,7 +60,7 @@ BEGIN
                                                    a_method    => t_method,
                                                    a_content   => t_body,
                                                    a_token     => t_token);
-                
+
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -77,7 +78,14 @@ BEGIN
     IF (t_results.get_number('status') != 200
     AND t_sqlerrm IS NULL)
     THEN
-        t_sqlerrm := t_results.get_string('lspresponse');
+        t_sqlerrm :=
+            CASE t_results.get_type('lspresponse')
+                WHEN 'OBJECT'
+                THEN
+                    t_results.get_object('lspresponse').TO_CLOB || CHR(13)
+                ELSE
+                    t_results.TO_CLOB
+            END;
     END IF;
 
     INSERT INTO bizmod_api.e_process_log_t(seq,
