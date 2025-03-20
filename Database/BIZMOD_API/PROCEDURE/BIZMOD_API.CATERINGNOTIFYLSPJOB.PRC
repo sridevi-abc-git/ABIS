@@ -28,6 +28,8 @@ AS
     --                                          configuration table for HTTP Calls
     --   3.1.1   05/24/2024 TJL  BIZ-15021  Added support for new field Outside Event
     --   4.0     08/13/2024 TJL  BIZ-15808  Change call to new calllsp function
+    --   5.0.0   02/04/2025 TJL  BIZ-17356    Added handling of the return value from CALLLSP and call
+    --                                          to lsplogin
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
@@ -153,7 +155,7 @@ AS
     END;
 
     FUNCTION create_packet(a_objectid IN api.pkg_definition.udt_id)
-        RETURN CLOB
+        RETURN json_object_t
     IS
         t_json_app     json_object_t := NEW json_object_t();
         t_addressid    NUMBER;
@@ -366,7 +368,7 @@ AS
         t_json_app.put('outsideEvent',
                        api.pkg_columnquery.VALUE(a_objectid, 'OutsideEvent'));
 
-        RETURN t_json_app.TO_CLOB;
+        RETURN t_json_app;
     END;
 -- ****************************************************************************
 -- ****************************************************************************
@@ -385,9 +387,9 @@ BEGIN
         t_urlinfo      VARCHAR2(10000);
         t_data         BLOB;
         t_outcome      VARCHAR2(20);
-        t_packet       CLOB;
+        t_packet       json_object_t;
         t_response     CLOB;
-        t_results      CLOB;
+        --        t_results      CLOB;
         t_json_app     json_object_t;
         t_applicationid VARCHAR2(1000);
         t_licensenumber VARCHAR2(100);
@@ -399,6 +401,13 @@ BEGIN
         t_hashvalue    NUMBER;
         t_currhash     NUMBER;
         t_header       VARCHAR2(4000);
+        --        t_body         json_object_t := json_object_t();
+        t_packet_value CLOB;
+        t_results      json_object_t;
+        t_token        VARCHAR2(1000);
+        t_results_text VARCHAR2(32767);
+        t_app_status   VARCHAR2(20) := 'Posted';
+        t_text         VARCHAR2(32767);
     BEGIN
         BEGIN
             SELECT CASE WHEN c.outcome IS NULL THEN 'N' ELSE 'Y' END,
@@ -414,8 +423,9 @@ BEGIN
                 THEN
                     -- get packet hash value
                     t_packet := create_packet(a_objectid => a_objectid);
+                    t_text := t_packet.to_string;
 
-                    SELECT ORA_HASH(t_packet) INTO t_hashvalue FROM DUAL;
+                    SELECT ORA_HASH(t_text) INTO t_hashvalue FROM DUAL;
 
                     INSERT INTO bizmod_api.catering_app_t c(c.lspid,
                                                             c.processid,
@@ -424,21 +434,24 @@ BEGIN
                                                             c.datecompleted,
                                                             c.hashvalue)
                              VALUES (
-                                 api.pkg_columnquery.numericvalue(a_objectid,
-                                                                  'LSPId'),
-                                 a_objectid,
-                                 api.pkg_columnquery.VALUE(a_objectid,
-                                                           'Outcome'),
-                                 api.pkg_columnquery.datevalue(a_objectid,
-                                                               'CreatedDate'),
-                                 api.pkg_columnquery.datevalue(
-                                     a_objectid,
-                                     'DateCompleted'),
-                                 t_hashvalue);
+                                        api.pkg_columnquery.numericvalue(
+                                            a_objectid,
+                                            'LSPId'),
+                                        a_objectid,
+                                        api.pkg_columnquery.VALUE(a_objectid,
+                                                                  'Outcome'),
+                                        api.pkg_columnquery.datevalue(
+                                            a_objectid,
+                                            'CreatedDate'),
+                                        api.pkg_columnquery.datevalue(
+                                            a_objectid,
+                                            'DateCompleted'),
+                                        t_hashvalue);
 
                     COMMIT;
                 END IF;
 
+                -- do not send application change when first created
                 RETURN;
         END;
 
@@ -449,30 +462,7 @@ BEGIN
 
         -- check if outcome has been set
         t_outcome := api.pkg_columnquery.VALUE(a_objectid, 'OutCome');
-
-        IF (t_outcome IS NOT NULL)
-        THEN
-            UPDATE bizmod_api.catering_app_t c
-               SET c.outcome =
-                       api.pkg_columnquery.VALUE(a_objectid, 'Outcome'),
-                   c.datecompleted =
-                       api.pkg_columnquery.datevalue(a_objectid,
-                                                     'DateCompleted')
-             WHERE c.processid = a_objectid;
-
-            COMMIT;
-        END IF;
-
-        t_packet := create_packet(a_objectid => a_objectid);
-
-        SELECT ORA_HASH(t_packet) INTO t_hashvalue FROM DUAL;
-
         t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
-
-        t_licensenumber :=
-            api.pkg_columnquery.VALUE(
-                api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
-                'licensenumber');
 
         t_header :=
             'Application Id: '
@@ -488,57 +478,86 @@ BEGIN
             || t_outcome
             || CHR(13);
 
-        IF (t_hashvalue != t_currhash)
+        IF (t_outcome IS NOT NULL)
         THEN
-            -- update LSP of any changes to application data
-            t_urlinfo :=
-                REPLACE(t_url_update, '<<applicationId>>', t_applicationid);
+            UPDATE bizmod_api.catering_app_t c
+               SET c.outcome =
+                       api.pkg_columnquery.VALUE(a_objectid, 'Outcome'),
+                   c.datecompleted =
+                       api.pkg_columnquery.datevalue(a_objectid,
+                                                     'DateCompleted')
+             WHERE c.processid = a_objectid;
 
-            t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(
-                    a_urlinfo   => t_urlinfo,
-                    a_method    => t_method_update,
-                    a_content   => t_packet);
+            COMMIT;
+        END IF;
 
-            IF (t_response IS NULL)
+        t_packet := create_packet(a_objectid => a_objectid);
+        t_text := t_packet.to_string;
+
+        SELECT ORA_HASH(t_text) INTO t_hashvalue FROM DUAL;
+
+        -- login to LSP
+        t_results := bizmod_api.utl_licenseinfo.lsplogin;
+
+        IF (t_results.get_number('status') = 200)
+        THEN
+            t_token :=
+                t_results.get_object('lspresponse').get_string('token');
+
+            IF (t_hashvalue != t_currhash)
             THEN
                 UPDATE bizmod_api.catering_app_t c
                    SET c.hashvalue = t_hashvalue
                  WHERE c.processid = a_objectid;
 
                 COMMIT;
-            ELSE
-                t_response :=
-                    json_query(t_response, '$' RETURNING CLOB PRETTY)
-                    || CHR(13)
-                    || CHR(13)
-                    || json_query(t_packet, '$' RETURNING CLOB PRETTY);
+                t_licensenumber :=
+                    api.pkg_columnquery.VALUE(
+                        api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
+                        'licensenumber');
+
+
+                -- update LSP of any changes to application data
+                t_urlinfo :=
+                    REPLACE(t_url_update,
+                            '<<applicationId>>',
+                            t_applicationid);
+
+                t_results :=
+                    bizmod_api.utl_licenseinfo.calllsp(
+                        a_urlinfo   => t_urlinfo,
+                        a_method    => t_method_update,
+                        a_content   => t_packet,
+                        a_token     => t_token);
+
+
+                t_results_text := t_results.TO_CLOB;
+                t_packet_value :=
+                    json_query(t_packet.TO_CLOB, '$' RETURNING CLOB PRETTY);
+
+                IF (t_results.get_number('status') != 200)
+                THEN
+                    t_sqlerrm :=
+                        t_results.get_object('lspresponse').to_string;
+                END IF;
+
+                INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                       processjob,
+                                                       info,
+                                                       errmsg,
+                                                       packet)
+                     VALUES (0,
+                             t_process,
+                             t_header || CHR(13) || t_packet_value,
+                             t_sqlerrm,
+                             t_packet_value);
+
+                COMMIT;
             END IF;
-
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg,
-                                                   packet)
-                     VALUES (
-                         0,
-                         t_process,
-                         t_header,
-                         CASE
-                             WHEN t_response IS NOT NULL
-                             THEN
-                                 'LSP Response: '
-                                 || SUBSTR(t_response, 1, 3990)
-                             ELSE
-                                 NULL
-                         END,
-                         json_query(t_packet, '$' RETURNING CLOB PRETTY));
-
-            COMMIT;
         END IF;
 
         IF (t_outcome IS NOT NULL
-        AND t_response IS NULL)
+        AND t_results.get_number('status') = 200)
         THEN
             t_urlinfo :=
                 REPLACE(
@@ -577,20 +596,22 @@ BEGIN
                 bizmod_api.utl_licenseinfo.calllsp(
                     a_urlinfo   => t_urlinfo,
                     a_method    => t_method_status,
-                    a_file      => t_data);
+                    a_file      => t_data,
+                    a_token     => t_token);
+
+            IF (t_results.get_number('status') != 200)
+            THEN
+                t_sqlerrm := t_results.get_object('lspresponse').to_string;
+            END IF;
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
                                                    info,
                                                    errmsg)
-                     VALUES (
-                         0,
+                 VALUES (0,
                          t_process,
                          t_header,
-                         CASE
-                             WHEN t_response IS NULL THEN NULL
-                             ELSE 'LSP Response: ' || CHR(13) || t_response
-                         END);
+                         t_sqlerrm);
 
             COMMIT;
         END IF;
@@ -611,7 +632,7 @@ BEGIN
                          t_header,
                          t_sqlerrm,
                          t_trace,
-                         t_packet);
+                         t_packet_value);
 
             COMMIT;
     END;

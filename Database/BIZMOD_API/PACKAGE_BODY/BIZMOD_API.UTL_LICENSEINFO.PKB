@@ -46,6 +46,12 @@ AS
     --  10.2.0  11/07/2024  TJL  BIZ-16535    Added logging for status codes 200's
     --  10.3.0  12/10/2024  TJL  BIZ-16906    Remove COMMIT from createjob process. ABIS throws error because
     --                                          the current ABIS transaction cannot be ended at this time.
+    --  10.4.0  01/21/2025  TJL               Added the ability to turn off sending emails thru the configuration table.
+    --  10.4.3  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
+    --  10.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function and change how CALLSSP handle's 
+    --                                          data being returned from LSP call.
+    --  10.5.1  02/06/2025  TJL  BIZ-17356    Corrected bug when no response text is received to log it
+    --  10.5.2  02/07/2025  TJL  BIZ-17356    Code cleanup
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -61,23 +67,45 @@ AS
 
     TYPE legalentity_type IS TABLE OF NUMBER;
 
-    t_legalentity  legalentity_type := legalentity_type();
+    FUNCTION lsplogin
+        RETURN json_object_t
+    IS
+        t_return       json_object_t;
+        t_loginid      VARCHAR2(1000);
+    BEGIN
+        SELECT c.parametervalue
+          INTO t_loginid
+          FROM bizmod_api.eservices_config_t c
+         WHERE c.process = 'CALLLSP'
+           AND c.dbname = UPPER(ora_database_name)
+           AND c.parametername = 'LOGINID';
 
+        -- call get token
+        t_return :=
+            bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => '/api/providermgmt/authenticate/login',
+                    a_method    => 'POST',
+                    a_content   => json_object_t.parse(t_loginid));
+        RETURN t_return;
+    END;
 
     FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
                      a_method       IN VARCHAR2,
-                     a_content      IN CLOB DEFAULT NULL,
-                     a_file         IN BLOB DEFAULT NULL)
-        RETURN CLOB
-    IS
+                     a_content      IN json_object_t DEFAULT json_object_t(),
+                     a_file         IN BLOB DEFAULT NULL,
+                     a_token        IN VARCHAR2 DEFAULT NULL)
+        RETURN json_object_t
+            IS
+        t_return       json_object_t := json_object_t();
+        t_content      CLOB := a_content.TO_CLOB;
+        ----------------------------------------------
+
         t_url          VARCHAR2(10000);
         t_wallet       VARCHAR2(10000);
-        t_seq          NUMBER;
         t_boundary     VARCHAR2(100)
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
-        t_request      UTL_HTTP.req;
-        t_response     UTL_HTTP.resp;
-        t_response_text CLOB;
+        t_http_request UTL_HTTP.req;
+        t_http_response UTL_HTTP.resp;
+        t_http_response_text CLOB;
         t_blob_len     NUMBER;
         t_chunk_size   NUMBER := 32767;
         t_offset       NUMBER := 1;
@@ -95,95 +123,62 @@ AS
                || UTL_TCP.crlf;
         t_body_end     VARCHAR2(100)
             := UTL_TCP.crlf || '--' || t_boundary || '--' || UTL_TCP.crlf;
---        t_response_header_name VARCHAR2(256);
---        t_response_header_value VARCHAR2(1024);
---        t_response_body VARCHAR2(32767);
         t_text         VARCHAR2(32767);
-        t_infotext     VARCHAR2(32767);
+        t_responsetext VARCHAR2(32767);
         t_length       NUMBER;
-        t_statuscode    NUMBER;
         t_sqlerrm      VARCHAR2(4000);
-        t_trace        VARCHAR2(4000);
-        --        t_keys         json_key_list;
-        --        t_column       VARCHAR2(100);
-        --        t_columns      VARCHAR2(4000);
---        t_value        VARCHAR2(4000);
-        t_info         json_object_t := json_object_t();
---        t_header       json_object_t := json_object_t();
     BEGIN
         BEGIN
-            BEGIN
-                SELECT url || a_urlinfo, wallet
-                  INTO t_url, t_wallet
-                  FROM (SELECT c.process, c.parametername, c.parametervalue
-                          FROM bizmod_api.eservices_config_t c
-                         WHERE c.process = 'CALLLSP'
-                           AND c.dbname = UPPER(ora_database_name))
-                           PIVOT (MAX(parametervalue)
-                                 FOR parametername
-                                 IN ('URL' url, 'WALLET' wallet));
-            EXCEPTION
-                WHEN NO_DATA_FOUND
-                THEN
-                    raise_application_error(-20001,
-                                            'Parameter Not Found',
-                                            TRUE);
-            END;
-
-            t_info.put('URL', t_url);
-            t_info.put('METHOD', a_method);
-            t_info.put('WALLET', t_wallet);
-            t_infotext := t_info.TO_CLOB;
-
-            INSERT INTO eservices_log_t(request,
-                                        packet,
-                                        info,
-                                        filedata,
-                                        requestdate)
-                 VALUES ('CALLLSP',
-                         a_content,
-                         t_infotext,
-                         a_file,
-                         SYSTIMESTAMP)
-              RETURNING seq
-                   INTO t_seq;
-
-            COMMIT;
+            SELECT url || a_urlinfo, wallet
+              INTO t_url, t_wallet
+              FROM (SELECT c.process, c.parametername, c.parametervalue
+                      FROM bizmod_api.eservices_config_t c
+                     WHERE c.process = 'CALLLSP'
+                       AND c.dbname = UPPER(ora_database_name))
+                       PIVOT (
+                             MAX(parametervalue)
+                             FOR parametername
+                             IN ('URL' url,
+                                'WALLET' wallet));
 
             UTL_HTTP.set_wallet(t_wallet, NULL);
 
             -- Open the HTTP request
-            t_request :=
+            t_http_request :=
                 UTL_HTTP.begin_request(url => t_url, method => a_method);
 
-            UTL_HTTP.set_header(t_request, 'X-Internal-Request', 'True');
-            UTL_HTTP.set_body_charset(t_request, 'UTF-8');
+            UTL_HTTP.set_header(t_http_request,
+                                'Authorization',
+                                'Bearer ' || a_token); --  10.4.2  01/28/2025  TJL  BIZ-17289
+
+            UTL_HTTP.set_header(t_http_request, 'X-Internal-Request', 'True');
+            UTL_HTTP.set_body_charset(t_http_request, 'UTF-8');
 
             IF (a_file IS NULL)
             THEN
-                IF (a_content IS NOT NULL)
+                IF (t_content IS NOT NULL)
                 THEN
                     t_length :=
                         UTL_RAW.LENGTH(
-                            UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(a_content),
+                            UTL_RAW.CONVERT(UTL_RAW.cast_to_raw(t_content),
                                             'american_america.al32utf8',
                                             'AMERICAN_america.WE8MSWIN1252'));
-                    UTL_HTTP.set_header(t_request,
+                    UTL_HTTP.set_header(t_http_request,
                                         'content-type',
                                         'application/json');
-                    UTL_HTTP.set_header(t_request,
+                    UTL_HTTP.set_header(t_http_request,
                                         'Content-Length',
                                         t_length);
 
-                    UTL_HTTP.write_text(t_request, a_content);
+                    UTL_HTTP.write_text(t_http_request, t_content);
                 END IF;
             ELSE
                 -- Set the request headers
-                UTL_HTTP.set_header(t_request,
+                UTL_HTTP.set_header(t_http_request,
                                     'Content-Type',
                                     t_content_type);
                 UTL_HTTP.set_header(
-                    t_request,
+                    t_http_request,
                     'Content-Length',
                     TO_CHAR(
                           DBMS_LOB.getlength(t_body_start)
@@ -191,7 +186,7 @@ AS
                         + DBMS_LOB.getlength(t_body_end)));
 
                 -- Write the start of the body to the request
-                UTL_HTTP.write_text(t_request, t_body_start);
+                UTL_HTTP.write_text(t_http_request, t_body_start);
 
                 -- Read the PDF file into a BLOB (replace this with your actual PDF file reading logic)
                 t_blob_len := DBMS_LOB.getlength(a_file);
@@ -203,82 +198,107 @@ AS
                                   t_chunk_size,
                                   t_offset,
                                   t_chunk);
-                    UTL_HTTP.write_raw(t_request, t_chunk);
+                    UTL_HTTP.write_raw(t_http_request, t_chunk);
                     t_offset := t_offset + t_chunk_size;
                 END LOOP;
 
                 -- Write the end of the body to the request
-                UTL_HTTP.write_text(t_request, t_body_end);
+                UTL_HTTP.write_text(t_http_request, t_body_end);
             END IF;
 
             -- Get the response
-            t_response := UTL_HTTP.get_response(t_request);
-            t_statuscode := t_response.status_code;
+            t_http_response := UTL_HTTP.get_response(t_http_request);
 
-                DBMS_LOB.createtemporary(t_response_text,
-                                         TRUE,
-                                         DBMS_LOB.session);
+            DBMS_LOB.createtemporary(t_http_response_text,
+                                     TRUE,
+                                     DBMS_LOB.session);
 
-                BEGIN
-                    LOOP
-                        UTL_HTTP.read_text(t_response, t_text, 32766);
-                        DBMS_LOB.writeappend(t_response_text,
-                                             LENGTH(t_text),
-                                             t_text);
-                    END LOOP;
-                EXCEPTION
-                    WHEN UTL_HTTP.end_of_body
-                    THEN
-                        UTL_HTTP.end_response(t_response);
-                END;
+            BEGIN
+                LOOP
+                    UTL_HTTP.read_text(t_http_response, t_text, 32766);
+                    DBMS_LOB.writeappend(t_http_response_text,
+                                         LENGTH(t_text),
+                                         t_text);
+                END LOOP;
+            EXCEPTION
+                WHEN UTL_HTTP.end_of_body
+                THEN
+                    UTL_HTTP.end_response(t_http_response);
+            END;
 
-                t_info.put('HTTPRESPONSE',t_response.status_code);
-                t_info.put('LSPRESPONSE', t_response_text);
+            t_return.put('status', t_http_response.status_code);
 
-            -- Close the HTTP request/response
-            UTL_HTTP.end_response(t_response);
-            UTL_HTTP.end_request(t_request);
+            IF (t_http_response_text IS JSON)
+            THEN
+                t_return.put('lspresponse',
+                             json_element_t.parse(t_http_response_text));
+            ELSE
+                t_return.put('lspresponse', nvl(t_http_response_text, to_char(t_http_response.status_code)));
+            END IF;
         EXCEPTION
             WHEN UTL_HTTP.request_failed
             THEN
-                t_sqlerrm :=
-                    'HTTP: '
-                    || UTL_HTTP.get_detailed_sqlerrm
-                    || CHR(13)
-                    || SQLERRM;
-                t_trace := DBMS_UTILITY.format_error_backtrace;
-                t_info.put('ORA-ERROR', t_sqlerrm);
-                t_response_text := t_response_text || CHR(13) || t_sqlerrm;
+                t_return.put('status', SQLCODE);
+                t_return.put(
+                    'ora-error',
+                    UTL_HTTP.get_detailed_sqlerrm
+                    || CHR(10)
+                    || DBMS_UTILITY.format_error_backtrace);
+            WHEN OTHERS
+            THEN
+                t_return.put('status', SQLCODE);
+                t_return.put(
+                    'ora-error',
+                    SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
         END;
 
-        t_infotext := t_info.TO_CLOB;
+        -- Close the HTTP request/response
+        UTL_HTTP.end_response(t_http_response);
+        UTL_HTTP.end_request(t_http_request);
 
-        IF (t_sqlerrm IS NULL)
+        IF (a_content.has('password'))
         THEN
-            UPDATE eservices_log_t e
-               SET response = t_infotext,
-                   responsedate = SYSTIMESTAMP
-             WHERE seq = t_seq
-               LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
-                       REJECT LIMIT UNLIMITED;
+            t_content := '{"email":"*****","password":"******"}';
+
+            IF (t_return.get_number('status') = 200)
+            THEN
+                t_responsetext :=
+                    json_object('status' VALUE t_return.get_number('status'));
+            ELSE
+                t_responsetext := t_return.TO_CLOB;
+            END IF;
         ELSE
-            UPDATE eservices_log_t e
-               SET response = t_infotext,
-                   responsedate = SYSTIMESTAMP,
-                   e.err = SUBSTR(t_sqlerrm || CHR(13) || t_trace, 1, 3990)
-             WHERE seq = t_seq
-               LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('UPDATE')
-                       REJECT LIMIT UNLIMITED;
+            t_responsetext := t_return.TO_CLOB;
         END IF;
-        
+
+        INSERT INTO eservices_log_t(request,
+                                    packet,
+                                    response,
+                                    info,
+                                    filedata,
+                                    requestdate,
+                                    responsedate,
+                                    err)
+                 VALUES ('CALLLSP',
+                         t_content,
+                         t_responsetext,
+                         t_url || '; ' || a_method,
+                         a_file,
+                         SYSTIMESTAMP,
+                         SYSTIMESTAMP,
+                         t_sqlerrm)
+                LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('INSERT')
+                        REJECT LIMIT UNLIMITED;
+
+        IF (SQL%ROWCOUNT = 0)
+        THEN
+            INSERT INTO err$_eservices_clob_t(seq, jsondata, filedata)
+                 VALUES (TO_CHAR(SYSTIMESTAMP), t_responsetext, a_file);
+        END IF;
+
         COMMIT;
 
-        RETURN CASE
-                   WHEN t_statuscode IN (200, 201, 204) THEN 
-                       NULL
-                   ELSE 
-                        t_info.TO_CLOB
-               END;
+        RETURN t_return;
     END;
 
 
@@ -474,8 +494,9 @@ AS
         t_bcc          VARCHAR2(512);
         t_conn         UTL_SMTP.connection;
         t_production   VARCHAR2(1);
+        t_disable      VARCHAR2(1); -- 01/21/2025 TJL
         t_subject      VARCHAR2(512) := a_subject;
-        t_host         VARCHAR2(512); -- := '134.186.202.119';
+        t_host         VARCHAR2(512);
         t_len          INTEGER;
         t_index        INTEGER;
         t_file_type    VARCHAR2(50);
@@ -488,13 +509,15 @@ AS
                pcc,
                pbcc,
                psmtp,
-               pprod
+               pprod,
+               pdisable --  10.4.0  01/21/2025  TJL
           INTO t_to,
                t_from,
                t_cc,
                t_bcc,
                t_host,
-               t_production
+               t_production,
+               t_disable --  10.4.0  01/21/2025  TJL
           FROM (SELECT c.parametername, c.parametervalue
                   FROM bizmod_api.eservices_config_t c
                  WHERE c.process = a_process
@@ -507,9 +530,11 @@ AS
                             'CC' pcc,
                             'BCC' pbcc,
                             'SMTPSERVER' psmtp,
-                            'PRODUCTION' pprod));
+                            'PRODUCTION' pprod,
+                            'DISABLE' pdisable));
 
-        IF (t_from IS NULL)
+        IF (t_from IS NULL
+         OR UPPER(NVL(t_disable, 'N')) = 'Y') --  10.4.0  01/21/2025  TJL
         THEN
             RETURN;
         END IF;
@@ -679,546 +704,5 @@ AS
     END;
 
 
-    FUNCTION get_address(a_objectid IN NUMBER, a_endpoint IN NUMBER)
-        RETURN json_object_t
-    AS
-        t_json         json_object_t := json_object_t();
-        t_objectid     NUMBER;
-    BEGIN
-        SELECT r.toobjectid
-          INTO t_objectid
-          FROM api.relationships r
-         WHERE r.endpointid = a_endpoint
-           AND r.fromobjectid = a_objectid;
-
-        t_json.put('ADDRESSLOCATION',
-                   api.pkg_columnquery.VALUE(t_objectid, 'ADDRESSLOCATION'));
-        t_json.put('ADDRESSLINE1',
-                   api.pkg_columnquery.VALUE(t_objectid, 'ADDRESSLINE1'));
-        t_json.put('ADDRESSLINE2',
-                   api.pkg_columnquery.VALUE(t_objectid, 'ADDRESSLINE2'));
-        t_json.put('ADDRESSLINE3',
-                   api.pkg_columnquery.VALUE(t_objectid, 'ADDRESSLINE3'));
-        t_json.put('USACITY',
-                   api.pkg_columnquery.VALUE(t_objectid, 'USACITY'));
-        t_json.put('USASTATE',
-                   api.pkg_columnquery.VALUE(t_objectid, 'USASTATE'));
-        t_json.put('ZIPCODE',
-                   api.pkg_columnquery.VALUE(t_objectid, 'ZIPCODE'));
-        t_json.put('COUNTRY',
-                   api.pkg_columnquery.VALUE(t_objectid, 'COUNTRY'));
-        t_json.put(
-            'PHONENUMBER',
-            REGEXP_REPLACE(
-                api.pkg_columnquery.VALUE(t_objectid, 'PHONENUMBER'),
-                '(\d{3})(\d{3})(\d{4})',
-                '(\1)\2-\3'));
-        t_json.put(
-            'FAXNUMBER',
-            REGEXP_REPLACE(
-                api.pkg_columnquery.VALUE(t_objectid, 'FAXNUMBER'),
-                '(\d{3})(\d{3})(\d{4})',
-                '(\1)\2-\3'));
-        t_json.put(
-            'INTERNATIONALPHONENUMBER',
-            REGEXP_REPLACE(
-                api.pkg_columnquery.VALUE(t_objectid,
-                                          'INTERNATIONALPHONENUMBER'),
-                '(\d{3})(\d{3})(\d{4})',
-                '(+1-\1-\2-\3)'));
-
-        IF (a_endpoint =
-            api.pkg_configquery.endpointidforname('j_Application',
-                                                  'Premises'))
-        THEN
-            t_json.put('CENSUSTRACT',
-                       api.pkg_columnquery.VALUE(t_objectid, 'CENSUSTRACT'));
-            t_json.put(
-                'CENSUSTRACTSOURCE',
-                api.pkg_columnquery.VALUE(t_objectid, 'CENSUSTRACTSOURCE'));
-            t_json.put(
-                'GEOCODEADDRESSLINE1',
-                api.pkg_columnquery.VALUE(t_objectid, 'GEOCODEADDRESSLINE1'));
-            t_json.put(
-                'OUTSIDECITYLIMITS',
-                api.pkg_columnquery.VALUE(t_objectid, 'OUTSIDECITYLIMITS'));
-            t_json.put('HIGHCRIME',
-                       api.pkg_columnquery.VALUE(t_objectid, 'HIGHCRIME'));
-            t_json.put(
-                'CARDROOMCASINO',
-                api.pkg_columnquery.VALUE(t_objectid, 'CARDROOMCASINO'));
-            t_json.put('NOEVENT',
-                       api.pkg_columnquery.VALUE(t_objectid, 'NOEVENT'));
-            t_json.put(
-                'ELIGIBLEFORTRANSFER',
-                api.pkg_columnquery.VALUE(t_objectid, 'ELIGIBLEFORTRANSFER'));
-        END IF;
-
-        RETURN t_json;
-    EXCEPTION
-        WHEN NO_DATA_FOUND
-        THEN
-            RETURN NULL;
-    END;
-
-
-    FUNCTION get_person(a_legalentityobjectid IN NUMBER)
-        RETURN json_object_t
-    AS
-        t_objectid     NUMBER;
-        t_entity       json_object_t := json_object_t();
-    BEGIN
-        -- get person relationship
-        SELECT r.toobjectid
-          INTO t_objectid
-          FROM api.relationships r
-         WHERE r.endpointid =
-               api.pkg_configquery.endpointidforname('o_LegalEntity',
-                                                     'Person')
-           AND r.fromobjectid = a_legalentityobjectid;
-
-        --        t_entity.put('OWNERTYPE',
-        --                     api.pkg_columnquery.VALUE(t_objectid, 'OwnerType'));
-        --               api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'));
-        t_entity.put('FIRSTNAME',
-                     api.pkg_columnquery.VALUE(t_objectid, 'FirstName'));
-        t_entity.put('MIDDLENAME',
-                     api.pkg_columnquery.VALUE(t_objectid, 'MiddleName'));
-        t_entity.put('LASTNAME',
-                     api.pkg_columnquery.VALUE(t_objectid, 'LastName'));
-        t_entity.put('SUFFIX',
-                     api.pkg_columnquery.VALUE(t_objectid, 'Suffix'));
-        t_entity.put('ALIASNAMES',
-                     api.pkg_columnquery.VALUE(t_objectid, 'AliasNames'));
-        t_entity.put(
-            'SOCIALSECURITYNUMBER',
-            api.pkg_columnquery.VALUE(t_objectid, 'SocialSecurityNumber'));
-        t_entity.put(
-            'DRIVERSLICENSENUMBER',
-            api.pkg_columnquery.VALUE(t_objectid, 'DriversLicenseNumber'));
-        t_entity.put(
-            'DRIVERSLICENSESTATE',
-            api.pkg_columnquery.VALUE(t_objectid, 'DriversLicenseState'));
-        t_entity.put('PASSPORTNUMBER',
-                     api.pkg_columnquery.VALUE(t_objectid, 'PassportNumber'));
-        t_entity.put('GENDER',
-                     api.pkg_columnquery.VALUE(t_objectid, 'Gender'));
-        t_entity.put('BIRTHDATE',
-                     api.pkg_columnquery.VALUE(t_objectid, 'BirthDate'));
-        t_entity.put('BIRTHCITY',
-                     api.pkg_columnquery.VALUE(t_objectid, 'BirthCity'));
-        t_entity.put('BIRTHSTATE',
-                     api.pkg_columnquery.VALUE(t_objectid, 'BirthState'));
-        t_entity.put('BIRTHCOUNTRY',
-                     api.pkg_columnquery.VALUE(t_objectid, 'BirthCountry'));
-        t_entity.put('MARITALSTATUS',
-                     api.pkg_columnquery.VALUE(t_objectid, 'MaritalStatus'));
-
-        t_entity.put(
-            'FEDERALEMPLOYERIDENTIFICATIONN',
-            api.pkg_columnquery.VALUE(t_objectid,
-                                      'FederalEmployerIdentificationn'));
-
-        t_entity.put(
-            'PERCENTAGEOFOWNERSHIP',
-            api.pkg_columnquery.VALUE(t_objectid, 'PercentageOfOwnership'));
-        t_entity.put(
-            'ADDRESS',
-            get_address(
-                a_objectid  => t_objectid,
-                a_endpoint  =>
-                    api.pkg_configquery.endpointidforname(
-                        api.pkg_columnquery.VALUE(t_objectid,
-                                                  'ObjectDefName'),
-                        'Address')));
-
-        RETURN t_entity;
-    END;
-
-    FUNCTION get_company(a_legalentityobjectid IN NUMBER)
-        RETURN json_object_t
-    AS
-        t_objectid     NUMBER;
-        t_entity       json_object_t := json_object_t();
-    BEGIN
-        -- get company relationship
-        SELECT r.toobjectid
-          INTO t_objectid
-          FROM api.relationships r
-         WHERE r.endpointid =
-               api.pkg_configquery.endpointidforname('o_LegalEntity',
-                                                     'Company')
-           AND r.fromobjectid = a_legalentityobjectid;
-
-        t_entity.put('COMPANYNAME',
-                     api.pkg_columnquery.VALUE(t_objectid, 'CompanyName'));
-        t_entity.put(
-            'COMPANYSTRUCTURE',
-            api.pkg_columnquery.VALUE(t_objectid, 'CompanyStructure'));
-        t_entity.put(
-            'DATEOFINCORPORATION',
-            api.pkg_columnquery.VALUE(t_objectid, 'DateOfIncorporation'));
-        t_entity.put(
-            'STATEOFINCORPORATION',
-            api.pkg_columnquery.VALUE(t_objectid, 'StateOfIncorporation'));
-        t_entity.put(
-            'CASECRETARYOFSTATENUMBER',
-            api.pkg_columnquery.VALUE(t_objectid, 'CASecretaryOfStateNumber'));
-        t_entity.put(
-            'FEDERALEMPLOYERIDENTIFICATIONN',
-            api.pkg_columnquery.VALUE(t_objectid,
-                                      'FederalEmployerIdentificationn'));
-
-        t_entity.put(
-            'ADDRESS',
-            get_address(
-                a_objectid  => t_objectid,
-                a_endpoint  =>
-                    api.pkg_configquery.endpointidforname(
-                        api.pkg_columnquery.VALUE(t_objectid,
-                                                  'ObjectDefName'),
-                        'Address')));
-
-        RETURN t_entity;
-    END;
-
-    FUNCTION get_titles(a_legalentityobjectid IN NUMBER)
-        RETURN json_array_t
-    AS
-        t_array        json_array_t := json_array_t();
-    BEGIN
-        FOR rec
-            IN (SELECT r.toobjectid objectid, r.relationshipid
-                  FROM api.relationships r
-                 WHERE r.endpointid =
-                       api.pkg_configquery.endpointidforname(
-                           api.pkg_columnquery.VALUE(a_legalentityobjectid,
-                                                     'ObjectDefName'),
-                           'Title')
-                   AND r.fromobjectid = a_legalentityobjectid)
-        LOOP
-            t_array.append(
-                api.pkg_columnquery.VALUE(rec.objectid, 'Description'));
-        END LOOP;
-
-        RETURN t_array;
-    END;
-
-    PROCEDURE get_legalentity(a_json IN json_object_t, a_list IN VARCHAR2)
-    AS
-        t_value        NUMBER;
-        t_next         VARCHAR2(1000);
-        t_pos          NUMBER;
-
-        t_array        json_array_t;
-        t_json         json_object_t;
-        t_tmp          json_object_t;
-        t_entity       json_object_t := json_object_t();
-
-        t_return       json_object_t := json_object_t();
-    BEGIN
-        t_value :=
-            TO_NUMBER(REGEXP_SUBSTR(a_list,
-                                    '[^/]+',
-                                    1,
-                                    1));
-        t_array := a_json.get_array('LEGALENTITIES');
-
-        -- get next level down
-        t_pos :=
-            INSTR(a_list,
-                  '/',
-                  1,
-                  2);
-
-        IF (t_pos > 0)
-        THEN
-            t_next := SUBSTR(a_list, t_pos);
-        END IF;
-
-        IF legalentity_type(t_value) SUBMULTISET t_legalentity
-        THEN
-            -- find object
-            FOR inx IN 0 .. t_array.get_size() - 1
-            LOOP
-                t_tmp := TREAT(t_array.get(inx) AS json_object_t);
-
-                IF t_tmp IS NOT NULL
-                THEN
-                    IF (t_tmp.get_number('OBJECTID') = t_value)
-                    THEN
-                        t_json := t_tmp;
-                        t_array := t_json.get_array('LEGALENTITIES');
-
-                        IF t_array IS NULL
-                        THEN
-                            t_json.put('LEGALENTITIES', json_array_t);
-                        END IF;
-
-                        EXIT;
-                    END IF;
-                END IF;
-            END LOOP;
-        END IF;
-
-        IF t_json IS NULL
-        THEN
-            t_legalentity.EXTEND(1);
-            t_legalentity(t_legalentity.COUNT) := t_value;
-
-            t_entity.put('OBJECTID', t_value);
-            t_entity.put(
-                'LESTRUCTUREREL',
-                api.pkg_columnquery.VALUE(t_value, 'LeStructureRel'));
-            t_entity.put(
-                'HIERARCHYLEVEL',
-                api.pkg_columnquery.VALUE(t_value, 'HierarchyLevel'));
-            t_entity.put(
-                'LEGALENTITYTYPE',
-                api.pkg_columnquery.VALUE(t_value, 'LegalEntityType'));
-            t_entity.put(
-                'P12TYPE',
-                CASE
-                    WHEN api.pkg_columnquery.VALUE(t_value, 'P12Status') =
-                         'Y'
-                    THEN
-                        'P12'
-                    WHEN api.pkg_columnquery.VALUE(t_value, 'P12AStatus') =
-                         'Y'
-                    THEN
-                        'P12A'
-                    ELSE
-                        NULL
-                END);
-
-            t_entity.put('OWNERTYPE',
-                         api.pkg_columnquery.VALUE(t_value, 'OwnerType'));
-            t_entity.put('TITLE',
-                         get_titles(a_legalentityobjectid => t_value));
-            t_entity.put(
-                'PERCENTAGEOFOWNERSHIP',
-                api.pkg_columnquery.VALUE(t_value, 'PercentageOfOwnership'));
-
-            CASE api.pkg_columnquery.VALUE(t_value, 'LegalEntityType')
-                WHEN 'Person'
-                THEN
-                    t_entity.put(
-                        'PERSON',
-                        get_person(a_legalentityobjectid => t_value));
-                WHEN 'Company'
-                THEN
-                    t_entity.put(
-                        'COMPANY',
-                        get_company(a_legalentityobjectid => t_value));
-                ELSE
-                    NULL;
-            END CASE;
-
-            t_array.append(t_entity);
-
-            t_json := json_object_t();
-            t_json.put('LEGALENTITIES', t_array);
-        END IF;
-
-        IF (t_pos > 0)
-        THEN
-            get_legalentity(a_json => t_json, a_list => t_next);
-        END IF;
-    END;
-
-    --    PROCEDURE get_legalentity2(a_json IN json_object_t, a_list IN VARCHAR2)
-    --    AS
-    --        t_value        NUMBER;
-    --        t_next         VARCHAR2(1000);
-    --        t_pos          NUMBER;
-    --
-    --        t_array        json_array_t;
-    --        t_json         json_object_t;
-    --        t_tmp          json_object_t;
-    --        t_entity       json_object_t := json_object_t();
-    --
-    --        t_return       json_object_t := json_object_t();
-    --    BEGIN
-    --        t_value :=
-    --            TO_NUMBER(REGEXP_SUBSTR(a_list,
-    --                                    '[^/]+',
-    --                                    1,
-    --                                    1));
-    --        t_array := a_json.get_array('LEGALENTITIES');
-    --dbms_output.put_line('t_value: ' || t_value);
-    --
-    --        -- get next level down
-    --        t_pos :=
-    --            INSTR(a_list,
-    --                  '/',
-    --                  1,
-    --                  2);
-    --
-    --        IF (t_pos > 0)
-    --        THEN
-    --            t_next := SUBSTR(a_list, t_pos);
-    --        END IF;
-    --dbms_output.put_line('t_pos: ' || t_pos || '  next: ' || t_next || '  cnt: ' || t_legalentity.count);
-    --
-    --        IF legalentity_type(t_value) SUBMULTISET t_legalentity
-    --        THEN
-    --            -- find object
-    --dbms_output.put_line('find object');
-    --            FOR inx IN 0 .. t_array.get_size() - 1
-    --            LOOP
-    --                t_tmp := TREAT(t_array.get(inx) AS json_object_t);
-    --
-    --                IF t_tmp IS NOT NULL
-    --                THEN
-    --                    IF (t_tmp.get_number('OBJECTID') = t_value)
-    --                    THEN
-    --                        t_json := t_tmp;
-    --                        t_array := t_json.get_array('LEGALENTITIES');
-    --
-    --                        IF t_array IS NULL
-    --                        THEN
-    --                            t_json.put('LEGALENTITIES', json_array_t);
-    --                        END IF;
-    --
-    --                        EXIT;
-    --                    END IF;
-    --                END IF;
-    --            END LOOP;
-    --        END IF;
-    --
-    --
-    --        IF (t_json IS NULL --    AND SUBSTR(api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'), 1, 3) !=
-    --                           --        'P12'
-    --           )
-    --        THEN
-    --                    DBMS_OUTPUT.put_line(
-    --                        'HierarchyLevel: ' || api.pkg_columnquery.VALUE(t_value, 'HierarchyLevel'));
-    --            --        DBMS_OUTPUT.put_line(
-    --            --            t_value
-    --            --            || '  name: '
-    --            --            || api.pkg_columnquery.VALUE(t_value, 'objectdefname'));
-    --
-    --            t_legalentity.EXTEND(1);
-    --            t_legalentity(t_legalentity.COUNT) := t_value;
-    --
-    --            t_entity.put('OBJECTID', t_value);
-    --            t_entity.put(
-    --                'LESTRUCTUREREL',
-    --                api.pkg_columnquery.VALUE(t_value, 'LeStructureRel'));
-    --            t_entity.put(
-    --                'HIERARCHYLEVEL',
-    --                api.pkg_columnquery.VALUE(t_value, 'HierarchyLevel'));
-    --            t_entity.put(
-    --                'LEGALENTITYTYPE',
-    --                        api.pkg_columnquery.VALUE(t_value, 'LegalEntityType')
-    --                );
-    --
-    --            t_entity.put(
-    --                'P12TYPE',
-    --                CASE SUBSTR(
-    --                         api.pkg_columnquery.VALUE(t_value, 'LEStructureRel'),
-    --                         1,
-    --                         3)
-    --                    WHEN 'P12'
-    --                    THEN
-    --                        api.pkg_columnquery.VALUE(t_value, 'LEStructureRel')
-    --                    ELSE
-    --                        NULL
-    --                END);
-    --
-    --
-    --                    t_entity.put(
-    --                        'OWNERTYPE',
-    --                        api.pkg_columnquery.VALUE(t_value, 'OwnerType'));
-    --                    t_entity.put(
-    --                        'TITLE',
-    --                        get_titles(a_legalentityobjectid => t_value));
-    --                    t_entity.put(
-    --                        'PERCENTAGEOFOWNERSHIP',
-    --                        api.pkg_columnquery.VALUE(t_value,
-    --                                                  'PercentageOfOwnership'));
-    --
-    --                    CASE api.pkg_columnquery.VALUE(t_value,
-    --                                                   'LegalEntityType')
-    --                        WHEN 'Person'
-    --                        THEN
-    --                            t_entity.put(
-    --                                'PERSON',
-    --                                get_person(a_legalentityobjectid => t_value));
-    --                        WHEN 'Company'
-    --                        THEN
-    --                            t_entity.put(
-    --                                'COMPANY',
-    --                                get_company(a_legalentityobjectid => t_value));
-    --                        ELSE
-    --                            NULL;
-    --                    END CASE;
-    --
-    --            t_array.append(t_entity);
-    --
-    --            t_json := json_object_t();
-    --            t_json.put('LEGALENTITIES', t_array);
-    --        END IF;
-    --
-    --        IF (t_pos > 0)
-    --        THEN
-    --            get_legalentity2(a_json => t_json, a_list => t_next);
-    --        END IF;
-    --    END;
-
-    -- ******************************************************
-    -- ******************************************************
-    FUNCTION get_legalentity(a_objectid IN NUMBER)
-        RETURN json_array_t
-    IS
-        t_array        json_array_t := json_array_t();
-        t_return       json_object_t := json_object_t();
-    BEGIN
-        t_return.put('LEGALENTITIES', t_array);
-
-        FOR rec
-            IN (    SELECT DISTINCT
-                           SYS_CONNECT_BY_PATH(r.toobjectid, '/')     path2
-                      FROM api.relationships r
-                           JOIN api.objects f ON f.objectid = r.toobjectid
-                START WITH r.fromobjectid = a_objectid
-                       AND (f.objectdefid =
-                            api.pkg_configquery.objectdefidforname(
-                                'o_LegalEntity')
-                         OR f.objectdefid =
-                            api.pkg_configquery.objectdefidforname(
-                                'j_License'))
-                       AND r.endpointid IN (292101,
-                                            338110,
-                                            310133,
-                                            298362,
-                                            311516,
-                                            314059,
-                                            329508,
-                                            427253,
-                                            447075,
-                                            340283)
-                CONNECT BY r.fromobjectid = PRIOR r.toobjectid
-                       AND r.relationshipid != PRIOR r.relationshipid
-                       AND f.objectdefid =
-                           api.pkg_configquery.objectdefidforname(
-                               'o_LegalEntity')
-                       AND r.endpointid IN (292101,
-                                            338110,
-                                            310133,
-                                            298362,
-                                            311516,
-                                            314059,
-                                            329508,
-                                            427253,
-                                            447075,
-                                            340283)
-                  ORDER BY path2)
-        LOOP
-            get_legalentity(a_json => t_return, a_list => rec.path2);
-        END LOOP;
-
-        RETURN t_return.get_array('LEGALENTITIES');
-    END;
 END;
 /

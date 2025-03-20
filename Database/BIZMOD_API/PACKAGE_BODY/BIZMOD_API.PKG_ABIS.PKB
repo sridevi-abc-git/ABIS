@@ -13,6 +13,8 @@ AS
     --                                        License Applications
     --     2.0   09/12/2024  TJL BIZ-16077  adjusted logging
     --     3.0    09/30/2024 BN  BIZ-16397  ERROR notification to LSP
+    --   4.0.0  02/05/2025  TJL  BIZ-17356  Added test in newfee to only send update when 
+    --                                        new fee is only on applications.
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -76,7 +78,8 @@ AS
     IS
 
     BEGIN
-        IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPID') IS NOT NULL)
+        IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPID') IS NOT NULL 
+           AND api.pkg_columnquery.value(a_objectid, 'ObjectDefName') = 'j_Application')
         THEN
                 update bizmod_api.license_app_t
                    set newfee = 'Y'

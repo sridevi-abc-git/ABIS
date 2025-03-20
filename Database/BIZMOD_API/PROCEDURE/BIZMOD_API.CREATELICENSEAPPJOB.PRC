@@ -21,6 +21,9 @@ IS
     --                                      Changed how Legal Entity packet is processed
     --   3.4.1  12/11/2024  TJL  BIZ-16842  Added support for Spouses being entered in LSP
     --                                       application.
+    --   3.5.0  01/08/2025  TJL  BIZ-17077  Made a changed to person lookup logic.
+    --   3.5.1  01/09/2025  TJL  BIZ-17077  Added clearing a variable between person lookup loop.
+    --   3.6.0  01/10/2025  TJL             Change handling priority draw license application.
     -- ****************************************************************************
 
     PROCEDURE add_secondary_license_types(
@@ -87,11 +90,10 @@ IS
         t_licensetypedefid api.pkg_definition.udt_id;
         t_licensetypecodeobjectid api.pkg_definition.udt_id;
         t_licensetypeobjectid api.pkg_definition.udt_id;
-        t_licensetypeobjectid86 api.pkg_definition.udt_id;
-        t_licensetypecategoryid api.pkg_definition.udt_id;
         t_endpointidto NUMBER;
         t_gallonagerange VARCHAR2(15);
         t_additionalmilliongallons NUMBER;
+        t_countyobjectid api.pkg_definition.udt_id;
     BEGIN
         FOR rec
             IN (SELECT *
@@ -102,6 +104,9 @@ IS
                                licensetypecode
                                    VARCHAR2(3)
                                    PATH '$.LICENSETYPECODE',
+                       prioritydrawcounty
+                           VARCHAR2(100)
+                           PATH '$.PRIORITYDRAWCOUNTY',
                                gallonage NUMBER PATH '$.GALLONAGE',
                                numberofmonthslicensed
                                    NUMBER
@@ -119,6 +124,11 @@ IS
                                    FORMAT JSON
                                    PATH '$.SECONDARYLICENSETYPES')))
         LOOP
+            if (rec.licensetypecode = '48')
+            then
+                rec.licensetypecode := '47';
+            end if;
+            
             --dbms_output.put_line('ltc: ' || rec.licensetypecode);
             SELECT ltc.objectid
               INTO t_licensetypecodeobjectid
@@ -181,9 +191,45 @@ IS
                 END LOOP;
             END IF;
 
-            -- The following is for cases that involved gallonage, and seasonal to set
+            -- The following is for cases that involved primary draw, gallonage, and seasonal to set
             --   the special values for each type
             CASE
+                WHEN rec.licensetypecode IN ('21', '47')
+                THEN
+            api.pkg_columnupdate.setvalue(a_jobid,
+                                          'PriorityApplicationType',
+                                          api.pkg_columnquery.value(a_jobid,
+                                          'ApplicationType'));
+
+            api.pkg_columnupdate.setvalue(a_jobid,
+                                          'CopyLicDetailsToAppProcHasRun',
+                                          'Y');
+            api.pkg_columnupdate.setvalue(a_jobid, 'PriorityUpgrade', 'No');
+            api.pkg_columnupdate.setvalue(a_jobid,
+                                          'IsPriorityApplication',
+                                          'Y');
+
+            -- *****************************************************************
+            -- Add priority Draw County and license type
+            -- *****************************************************************
+            -- set priority draw county
+            t_countyobjectid :=
+                api.pkg_simplesearch.objectbyindex(
+                    'o_CaCounty',
+                    'CountyName',
+                    rec.prioritydrawcounty);
+
+            if (t_countyobjectid is not null)
+            then
+            t_endpointid :=
+                api.pkg_configquery.endpointidforname('j_application',
+                                                      'PriorityCounty');
+            t_relid :=
+                api.pkg_relationshipupdate.new(t_endpointid,
+                                               a_jobid,
+                                               t_countyobjectid);
+                end if;
+                
                 WHEN rec.licensetypecode IN ('02', '22')
                 THEN
                     -- from gallonage entered figure out codes
@@ -236,41 +282,6 @@ IS
                     api.pkg_columnupdate.setvalue(t_licensetypeobjectid,
                                                   'SeasonStartMonth',
                                                   rec.seasonstartmonth);
---                WHEN rec.licensetypecode IN ('86')
---                THEN
---                    -- create primary licene type
---                    t_licensetypedefid :=
---                        api.pkg_configquery.objectdefidforname(
---                            'o_PrimaryLicenseType');
---                    t_licensetypeobjectid86 :=
---                        api.pkg_objectupdate.new(t_licensetypedefid);
---
---                    -- create relationship from primary license type to license type catagory
---                    SELECT ltc.objectid
---                      INTO t_licensetypecategoryid
---                      FROM query.o_licensetypecategory ltc
---                     WHERE ltc.licensetypecode = '20';
---
---                    t_endpointidto :=
---                        api.pkg_configquery.endpointidforname(
---                            'o_PrimaryLicenseType',
---                            'LicTypeCatPrimary');
---                    t_relid :=
---                        api.pkg_relationshipupdate.new(
---                            t_endpointidto,
---                            t_licensetypeobjectid86,
---                            t_licensetypecategoryid);
---
---                    --     add primary license type to application
---                    t_endpointidto :=
---                        api.pkg_configquery.endpointidforname(
---                            'j_application',
---                            'PrimaryLicenseType');
---                    t_relid :=
---                        api.pkg_relationshipupdate.new(
---                            t_endpointidto,
---                            a_jobid,
---                            t_licensetypeobjectid86);
                 ELSE
                     NULL;
             END CASE;
@@ -558,8 +569,6 @@ IS
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
     BEGIN
-        --        DBMS_OUTPUT.put_line('add_title: ' || a_legal_entity);
-
         FOR rec
             IN (SELECT *
                   FROM JSON_TABLE(
@@ -577,9 +586,6 @@ IS
                     a_objectdefname => 'o_Title',
                     a_columnname => 'Description',
                     a_lowvalue  => rec.description);
-
-
-            --            DBMS_OUTPUT.put_line(CHR(9) || t_objectid);
 
             -- create relationship from title object to legal entity object
             t_endpointid :=
@@ -615,7 +621,7 @@ IS
                            '$[*]'
                            COLUMNS(
                                ownertype VARCHAR2(4000) PATH '$.OWNERTYPE',
-                               title CLOB FORMAT JSON PATH '$.TITLETYPE',
+                               title CLOB FORMAT JSON PATH '$.TITLE',
                                onsalemanager
                                    VARCHAR2(4000)
                                    PATH '$.ONSALEMANAGER',
@@ -760,20 +766,19 @@ IS
                 WHEN 0
                 THEN
                     t_objectid := NULL;
-                WHEN 1
-                THEN
-                    t_objectid := t_list(1).objectid;
-                ELSE
-                    t_objectid := t_list(1).objectid;
+                ELSE  
+                    -- 3.5.1  01/09/2025  TJL  BIZ-17077
+                    t_objectid := NULL;
 
+                    -- 3.5.0  01/08/2025  TJL  BIZ-17077
                     FOR inx IN 1 .. t_list.COUNT
                     LOOP
-                        IF (NVL(rec.socialsecuritynumber, 0) =
+                        IF (NVL(rec.socialsecuritynumber, '0') =
                             NVL(
                                 api.pkg_columnquery.VALUE(
                                     t_list(1).objectid,
                                     'SocialSecurityNumber'),
-                                000))
+                                '0'))
                         THEN
                             t_objectid := t_list(1).objectid;
                             EXIT;
@@ -1438,11 +1443,10 @@ BEGIN
         t_endpointidfrom NUMBER;
         t_relid        api.pkg_definition.udt_id;
         t_transfromlic api.pkg_definition.udt_id;
-        t_endpointid   api.pkg_definition.udt_id;
-        t_countyobjectid api.pkg_definition.udt_id;
         t_dbanamesobjectid api.pkg_definition.udt_id;
         t_dbaendpointid api.pkg_definition.udt_id;
         t_dba          api.pkg_definition.udt_id;
+        t_count        NUMBER;
         t_entity       CLOB;
         t_company      CLOB;
         t_person       CLOB;
@@ -1467,8 +1471,6 @@ BEGIN
                multiplestockmembershiptrans,
                lspid,
                underconstruction,
-               prioritydrawapplication,
-               prioritydrawcounty,
                dba,
                felony,
                violation,
@@ -1499,12 +1501,6 @@ BEGIN
                        underconstruction
                            VARCHAR2(3)
                            PATH '$.UNDERCONSTRUCTION',
-                       prioritydrawapplication
-                           VARCHAR2(1)
-                           PATH '$.PRIORITYDRAWAPPLICATION',
-                       prioritydrawcounty
-                           VARCHAR2(100)
-                           PATH '$.PRIORITYDRAWCOUNTY',
                        dba VARCHAR2(4000) PATH '$.DBA',
                        felony VARCHAR2(3) PATH '$.FELONY',
                        violation VARCHAR2(3) PATH '$.VIOLATION',
@@ -1530,6 +1526,18 @@ BEGIN
                        escrow VARCHAR2(4000) FORMAT JSON PATH '$.ESCROW',
                        legal_entities CLOB FORMAT JSON PATH '$.LEGALENTITIES'));
 
+        -- Check for duplicate key
+        SELECT COUNT(*) INTO t_Count
+        FROM bizmod_api.license_app_t la
+        WHERE la.lspid = t_apprec.lspapplicationid;
+
+        IF (t_count > 0)
+        THEN
+            api.pkg_errors.raiseerror(
+                -20000,
+                'Duplicate LSP Appication Id: ' || t_apprec.lspapplicationid);
+        END IF;
+        
         -- ************************************************************************
         -- Create new application job
         -- ************************************************************************
@@ -1586,47 +1594,11 @@ BEGIN
                                       'LicensePurchasePrice',
                                       t_apprec.licensepurchaseprice);
 
-        INSERT INTO bizmod_api.license_app_t(lspid, jobid, createddate)
-             VALUES (t_apprec.lspapplicationid, t_jobid, SYSDATE);
+        INSERT INTO bizmod_api.license_app_t(lspid, jobid, createddate, licensenumber)
+             VALUES (t_apprec.lspapplicationid, t_jobid, SYSDATE, api.pkg_columnquery.value(t_jobid, 'LicenseNumber'));
 
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
-
-        IF (t_apprec.prioritydrawapplication = 'Y')
-        THEN
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'PriorityApplicationType',
-                                          t_apprec.applicationtype);
-
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'CopyLicDetailsToAppProcHasRun',
-                                          'Y');
-            api.pkg_columnupdate.setvalue(t_jobid, 'PriorityUpgrade', 'No');
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'IsPriorityApplication',
-                                          'Y');
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'ApplicationType',
-                                          t_apprec.applicationtype);
-
-            -- *****************************************************************
-            -- Add priority Draw County and license type
-            -- *****************************************************************
-            -- set priority draw county
-            t_countyobjectid :=
-                api.pkg_simplesearch.objectbyindex(
-                    'o_CaCounty',
-                    'CountyName',
-                    t_apprec.prioritydrawcounty);
-
-            t_endpointid :=
-                api.pkg_configquery.endpointidforname('j_application',
-                                                      'PriorityCounty');
-            t_relid :=
-                api.pkg_relationshipupdate.new(t_endpointid,
-                                               t_jobid,
-                                               t_countyobjectid);
-        END IF;
 
         IF (t_apprec.applicationtype IN ('Transfer', 'Intercounty Transfer'))
         THEN
@@ -1684,8 +1656,6 @@ BEGIN
                        COLUMNS(entity CLOB FORMAT JSON PATH '$.ENTITY',
                                company CLOB FORMAT JSON PATH '$.COMPANY',
                                person CLOB FORMAT JSON PATH '$.PERSON'));
-
-
 
             IF (t_entity IS NOT NULL)
             THEN
@@ -1805,5 +1775,7 @@ BEGIN
 END;
 /
 
+
+GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO ABC;
 
 GRANT EXECUTE ON BIZMOD_API.CREATELICENSEAPPJOB TO POSSEEXTENSIONS;

@@ -29,6 +29,9 @@ IS
     --   6.0.2   05/24/2024 TJL  BIZ-15485    Changed to call the new calllsp function.
     --   6.0.2   05/28/2024 TJL  BIZ-15021    Added field OutsideEvent
     --   7.1     08/13/2024 TJL  BIZ-15808    Change call to new calllsp function
+    --   7.2.0   02/04/2025 TJL  BIZ-17356    Added handling of the return value from CALLLSP and call
+    --                                          to lsplogin
+    --                                          
     -- ****************************************************************************
     --************************
     --Object Id
@@ -106,17 +109,27 @@ IS
     --*****
     --Misc
     --*****
+    t_sqlcode      NUMBER;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000);
-    t_results      CLOB;
+--    t_results      CLOB;
     t_response     CLOB;
     t_output       CLOB;
     t_count        NUMBER;
     t_json_app     json_object_t;
     t_parameternames json_object_t;
     t_replacementvalues json_object_t;
+    
+    t_body         json_object_t := json_object_t();
+    t_body_value   CLOB;
+    t_results      json_object_t;
+    t_token        VARCHAR2(1000);
+    t_results_text VARCHAR2(32767);
+    t_app_status   varchar2(20) := 'Posted';    
+    
 BEGIN
+    BEGIN
     --*****************
     --Clear any error
     --*****************
@@ -551,36 +564,101 @@ BEGIN
            o
      WHERE ROWNUM = 1;
 
-    --**********************************
-    --Format data packet and use CallLSP
-    --**********************************
-    t_results := json_object('feeObjectId' VALUE t_feeobjid);
+        --**************
+        --Error Handling
+        --**************
+        EXCEPTION
+            WHEN OTHERS
+            THEN
+                    t_sqlcode := SQLCODE;
+                    t_sqlerrm := SQLERRM;
+                    t_trace := DBMS_UTILITY.format_error_backtrace;
+--                    t_results.put('status', SQLCODE);
+--                    t_results.put(
+--                        'ora-error',
+--                        SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
+            t_app_status := 'Errored';
+                --*****************
+                --Clear any error
+                --*****************
+                api.pkg_logicaltransactionupdate.resettransaction;
+                ROLLBACK;
+        end;
 
-    t_urlinfo :=
-        REPLACE(REPLACE(t_url_status, '<<applicationId>>', t_applicationid),
-                '<<status>>',
-                'Posted');
+-- *****************************************************************
+--  Notify LSP of application is completed
 
-    t_response :=
-        bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
-                                           a_method    => t_method);
+    t_results := bizmod_api.utl_licenseinfo.lsplogin;
+    IF (t_results.get_number('status') = 200)
+    THEN
+        t_token :=
+            t_results.get_object('lspresponse').get_string('token');
 
-    IF (t_response IS NULL)
+        t_urlinfo :=
+            REPLACE(REPLACE(t_url_status, '<<applicationId>>', t_applicationid),
+                    '<<status>>',
+                    t_app_status);
+
+            t_results :=
+                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
+                                                   a_method    => t_method,
+                                                   a_token     => t_token);
+    end if;
+
+    -- if status is error then update result packet with the error information
+    IF (t_results.get_number('status') = 200 and t_app_status = 'Posted')
     THEN
         t_urlinfo :=
             REPLACE(t_url_fees, '<<lsppaymentid>>', t_lsppaymentid);
 
-        t_response :=
+        --**********************************
+        --Format data packet and use CallLSP
+        --**********************************
+        t_body.put('feeObjectId', t_feeobjid);
+        
+        t_results :=
             bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
                                                a_method    => t_method,
-                                               a_content   => t_results);
+                                               a_content   => t_body,
+                                               a_token     => t_token);
     END IF;
+
+----**************
+----Error Handling
+----**************
+--EXCEPTION
+--    WHEN OTHERS
+--    THEN
+--            t_sqlerrm := SQLERRM;
+--            t_trace := DBMS_UTILITY.format_error_backtrace;
+--            t_results.put('status', SQLCODE);
+--            t_results.put(
+--                'ora-error',
+--                SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
+--
+--        --*****************
+--        --Clear any error
+--        --*****************
+--        api.pkg_logicaltransactionupdate.resettransaction;
+--        ROLLBACK;
+--end;
+
+    t_results_text := t_results.TO_CLOB;
+    t_body_value := t_body.TO_CLOB;
+
+    IF (t_results.get_number('status') != 200
+    AND t_sqlerrm IS NULL)
+    THEN
+        t_sqlerrm := t_results.get_object('lspresponse').to_string;
+    END IF;
+
 
     -- 12/06/2023 TJL add log update
     INSERT INTO bizmod_api.e_process_log_t(seq,
                                            processjob,
                                            info,
                                            errmsg,
+                                           bktrace,
                                            packet)
              VALUES (
                  a_seq,
@@ -594,77 +672,73 @@ BEGIN
                  || 'p_IssueCatererEventAuth: '
                  || t_isscatobjid
                  || CHR(13),
-                 CASE
-                     WHEN t_response IS NOT NULL
-                     THEN
-                         'LSP Response: ' || SUBSTR(t_response, 1, 3990)
-                     ELSE
-                         NULL
-                 END,
-                 t_results);
+                 t_sqlerrm,
+                 t_trace,
+                 t_results_text);
 
     --********************
     --Update eServices Log
     --********************
     UPDATE bizmod_api.eservices_log_t
-       SET response = t_results
+       SET response = t_results_text
      WHERE seq = a_seq;
 
     COMMIT;
+    
 --**************
 --Error Handling
 --**************
-EXCEPTION
-    WHEN OTHERS
-    THEN
-        t_sqlerrm := SQLERRM;
-        t_trace := DBMS_UTILITY.format_error_backtrace;
-
-        --*****************
-        --Clear any error
-        --*****************
-        api.pkg_logicaltransactionupdate.resettransaction;
-        ROLLBACK;
-
-        INSERT INTO bizmod_api.e_process_log_t(seq,
-                                               processjob,
-                                               info,
-                                               errmsg,
-                                               bktrace)
-                 VALUES (
-                     a_seq,
-                     'CREATECATERINGAPPJOB',
-                     'Application Id: '
-                     || t_applicationid
-                     || CHR(13)
-                     || 'License Number: '
-                     || t_licensenumber
-                     || CHR(13)
-                     || 'p_IssueCatererEventAuth: '
-                     || t_isscatobjid,
-                     t_sqlerrm,
-                     t_trace);
-
-        UPDATE bizmod_api.eservices_log_t
-           SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
-         WHERE seq = a_seq;
-
-        COMMIT;
-
-        BEGIN
-            -- update LSP of any changes to application data
-            t_urlinfo :=
-                REPLACE(
-                    REPLACE(t_url_status,
-                            '<<applicationId>>',
-                            t_applicationid),
-                    '<<status>>',
-                    'Errored');
-
-            t_response :=
-                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
-                                                   a_method    => t_method);
-        END;
+--EXCEPTION
+--    WHEN OTHERS
+--    THEN
+--        t_sqlerrm := SQLERRM;
+--        t_trace := DBMS_UTILITY.format_error_backtrace;
+--
+--        --*****************
+--        --Clear any error
+--        --*****************
+--        api.pkg_logicaltransactionupdate.resettransaction;
+--        ROLLBACK;
+--
+--        INSERT INTO bizmod_api.e_process_log_t(seq,
+--                                               processjob,
+--                                               info,
+--                                               errmsg,
+--                                               bktrace)
+--                 VALUES (
+--                     a_seq,
+--                     'CREATECATERINGAPPJOB',
+--                     'Application Id: '
+--                     || t_applicationid
+--                     || CHR(13)
+--                     || 'License Number: '
+--                     || t_licensenumber
+--                     || CHR(13)
+--                     || 'p_IssueCatererEventAuth: '
+--                     || t_isscatobjid,
+--                     t_sqlerrm,
+--                     t_trace);
+--
+--        UPDATE bizmod_api.eservices_log_t
+--           SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
+--         WHERE seq = a_seq;
+--
+--        COMMIT;
+--
+--        BEGIN
+--            -- update LSP of any changes to application data
+--            t_urlinfo :=
+--                REPLACE(
+--                    REPLACE(t_url_status,
+--                            '<<applicationId>>',
+--                            t_applicationid),
+--                    '<<status>>',
+--                    'Errored');
+--
+--            t_response :=
+--                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
+--                                                   a_method    => t_method);
+--        END;
 END;
 /
 

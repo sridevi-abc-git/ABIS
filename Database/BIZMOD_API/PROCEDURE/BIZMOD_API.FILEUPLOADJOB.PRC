@@ -14,6 +14,7 @@ IS
     --   1.0     12/15/2023  TJL  BIZ-13929    Added addional logging and error handling
     --   2.0     10/01/2024  TJL  BIZ-16341    Added APPLICATION parameter to indicate
     --                                           which type of application is being updated
+    --   3.0.0   01/30/2025  TJL  BIZ-17335    Remove brackets so data is no longer as an array
     -- ****************************************************************************
     t_doc          api.pkg_definition.udt_id;
     t_rel          api.pkg_definition.udt_id;
@@ -50,7 +51,7 @@ BEGIN
                '$'
                COLUMNS(
                    packet_type VARCHAR2(1000) PATH '$.PACKET_TYPE',
-                   NESTED PATH '$.DATA[*]'
+                   NESTED PATH '$.DATA'
                        COLUMNS(
                            lsp_applicationid
                                VARCHAR2(100)
