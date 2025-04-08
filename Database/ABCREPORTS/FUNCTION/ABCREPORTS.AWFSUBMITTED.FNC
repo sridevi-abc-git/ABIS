@@ -13,8 +13,8 @@ IS
       Ver:       Date           Ticket        Comment
        1.0   08/04/2023 TJL  BIZ-12143   Initial Function Created
        1.0   08/11/2023 TJL  BIZ-12327   Added additional fields confirmation # and payment Type
+       2.1   12/05/2024 TJL  BIZ-16612   Added a test for null payment when payment is manually made
     **************************************************************************/
-    lv_status_msg  VARCHAR2(8096);
     lblob_csv      BLOB;
     ld_start       DATE;
     ld_end         DATE;
@@ -60,25 +60,30 @@ BEGIN
                      || CHR(34)
                      || CASE
                             WHEN a.awffeeamount = 0
-                             AND NVL(completed, 'N') = 'Y'
+                             AND NVL(a.completed, 'N') = 'Y'
                             THEN
                                 'COMPLETED'
                             WHEN a.awffeeamount > 0
-                             AND NVL(amountpaid, 0) > 0
-                             AND NVL(completed, 'N') = 'Y'
+                             AND NVL(p.amountpaid, 0) > 0
+                             AND NVL(a.completed, 'N') = 'Y'
                             THEN
                                 'COMPLETED'
                             WHEN a.awffeeamount > 0
-                             AND NVL(amountpaid, 0) > 0
-                             AND NVL(completed, 'N') = 'N'
+                             AND p.amountpaid is null
+                             AND NVL(a.completed, 'N') = 'Y'
+                            THEN
+                                'COMPLETED'
+                            WHEN a.awffeeamount > 0
+                             AND NVL(p.amountpaid, 0) > 0
+                             AND NVL(a.completed, 'N') = 'N'
                             THEN
                                 'PAID'
                             WHEN a.awffeeamount < 0
-                             AND NVL(completed, 'N') = 'Y'
+                             AND NVL(a.completed, 'N') = 'Y'
                             THEN
                                 'COMPLETED'
                             WHEN a.awffeeamount < 0
-                             AND NVL(completed, 'N') = 'N'
+                             AND NVL(a.completed, 'N') = 'N'
                             THEN
                                 'REFUND PENDING'
                             ELSE
@@ -94,6 +99,9 @@ BEGIN
                          AND a.description = p.description)
                WHERE a.submitteddate IS NOT NULL
                  AND trunc(a.submitteddate) BETWEEN ld_start AND ld_end
+                 AND NOT (a.awffeeamount > 0
+                             AND p.amountpaid is null
+                             AND NVL(a.completed, 'N') = 'Y')
             ORDER BY CASE
                          WHEN a.awffeeamount = 0 THEN 1
                          WHEN a.awffeeamount > 0 THEN 2

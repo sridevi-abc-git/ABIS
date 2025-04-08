@@ -11,16 +11,18 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Date              Comment
-    --        05/12/2021  TJL             Initial Package Created
-    --        11/29/2022  TJL             Added filters to prevent duplicate payments being
-    --                                      added to payment table.
-    --        12/09/2022  TJL             Added call to create a ABIS Payment Job
-    --        12/07/2023  TJL             Added commit before creating payment job
-    --   3.1  02/26/2024  TJL  BIZ-14645  Added status filter to license type select
-    --   4.0  04/24/2024  TJL  BIZ-15142  Added extra validation and enhance error logging
-    --   4.1  05/13/2024  TJL  BIZ-15465  Corrected bug in AWF payment returning a message
-    --                                      that fees already paid.
-    --   5.0  08/08/2024  TJL  BIZ-16000  Change to new createjob procedure
+    --          05/12/2021  TJL             Initial Package Created
+    --          11/29/2022  TJL             Added filters to prevent duplicate payments being
+    --                                        added to payment table.
+    --          12/09/2022  TJL             Added call to create a ABIS Payment Job
+    --          12/07/2023  TJL             Added commit before creating payment job
+    --   3.1    02/26/2024  TJL  BIZ-14645  Added status filter to license type select
+    --   4.0    04/24/2024  TJL  BIZ-15142  Added extra validation and enhance error logging
+    --   4.1    05/13/2024  TJL  BIZ-15465  Corrected bug in AWF payment returning a message
+    --                                        that fees already paid.
+    --   5.0    08/08/2024  TJL  BIZ-16000  Change to new createjob procedure
+    --   6.0    11/21/2024  BN              License type code null issue.
+    --   7.0.0  12/11/2024  TJL  BIZ-16948  When License Type Code is NULL change it to 'NA'
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
     t_packet       CLOB := EMPTY_CLOB();
@@ -59,7 +61,7 @@ BEGIN
                                        COLUMNS(
                                            "LINE" FOR ORDINALITY,
                                            licensetypecode VARCHAR2(3)
-                                               PATH '$.LICENSETYPECODE',
+                                               PATH '$.LICENSETYPECODE' default 'NA' on empty,
                                            feeobjid NUMBER PATH '$.FEEOBJID',
                                            description VARCHAR2(20)
                                                PATH '$.DESCRIPTION',
@@ -71,7 +73,13 @@ BEGIN
         t_count := 0;
         t_licensenumber := paidfees.licensenumber;
         t_paid := 'N';      -- 05/13/2024 TJL BIZ-15465
-        
+
+        IF(paidfees.licensetypecode IS NULL)
+        THEN
+            paidfees.licensetypecode := SUBSTR(paidfees.description, 0, 2);
+        END IF;
+
+
         BEGIN
             -- check if entry already their (duplicate payment)
             IF (paidfees.seq IS NOT NULL)
@@ -115,7 +123,7 @@ BEGIN
                         'N'
                 END;
             END IF;
-            
+
             IF (paidfees.seq IS NULL)
             THEN
                 -- add payment record

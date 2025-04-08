@@ -16,6 +16,7 @@ IS
     --    Date                  Comment
     -- 05/15/2012             Created
     -- 08/16/2018 TJL         Initial Check-in
+    -- 10/31/2024 PK          Fixed issueReq 2355 466443 Apple Socal LLC by Pawan on 10/31/2024
     -- **************************************************************************
 
     gc_stockholderendpoint   udt_id
@@ -706,6 +707,7 @@ IS
                 api.pkg_columnupdate.setvalue(e.leobjectid,
                                               'P12AStatus',
                                               'N');
+               BEGIN
 
                 SELECT shp.p12aparentobjectid,
                        shp.p12astockholderobjectid,
@@ -723,6 +725,10 @@ IS
                     api.pkg_relationshipupdate.new(gc_stockholderendpoint,
                                                    t_parentobjectid,
                                                    t_stockholderobjectid);
+                Exception when no_data_found -- Fixed issueReq 2355 466443 Apple Socal LLC by Pawan on 10/31/2024
+                 THEN  pkg_debug.putline('******* No relationship to remove *******'); 
+                 END;                                     
+                                                   
             END LOOP;
 
             api.pkg_columnupdate.removevalue(t_masterleobjid,
@@ -988,5 +994,4 @@ IS
   end UpdateP12AMasterLE;
       
 END pkg_p12a;
-
 /

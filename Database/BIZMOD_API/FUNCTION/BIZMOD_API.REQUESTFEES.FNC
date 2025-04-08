@@ -1,5 +1,4 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet       IN CLOB,
-                                                  a_seq          IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestfees(a_packet IN CLOB, a_seq IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -23,6 +22,7 @@ IS
     --                           BIZ-15616  Corrected bug in wrong message being returned to LSP
     --   7.0    07/11/2024  TJL  BIZ-15837  Removed CVR test
     --   8.0.0  10/14/2024  TJL  BIZ-16408  Add filter to control what fees are returned
+    --   9.0.0  12/11/2024  TJL  BIZ-16948  When License Type code is NULL return 'NA'
     -- ****************************************************************************
 
     PROCEDURE get_fee_amounts(fees IN OUT bizmod_api.fee_tbl)
@@ -170,7 +170,10 @@ IS
                                AND NVL(fs2.otherfeecode, 'x') =
                                    NVL(fs.otherfeecode, 'x')
                                AND fs2.effectivedate <=
-                                   fees(indx).renewaldate);
+                                   trunc(
+                                       api.pkg_columnquery.datevalue(
+                                           fees(indx).feeobjid,
+                                           'TransactionDate')));
 
                     fees(indx).totalowing :=
                         t_totalowing + fees(indx).adjustedamount;
@@ -195,38 +198,41 @@ BEGIN
         t_trace        VARCHAR2(4000);
     BEGIN
         t_licensenumber := json_value(a_packet, '$.*.LICENSENUMBER');
-        t_filter        := UPPER(json_value(a_packet, '$.*.FILTER')) || '%';  --10/14/2024  TJL  BIZ-16408
-dbms_output.put_line('filter: ' || t_filter);        
+        t_filter := UPPER(json_value(a_packet, '$.*.FILTER')) || '%'; --10/14/2024  TJL  BIZ-16408
+        DBMS_OUTPUT.put_line('filter: ' || t_filter);
+
         WITH
             f
             AS
-                (SELECT DISTINCT o.objectid      jobid,
-                                 reo.objectid    feeobjid,
-                                 fs.feeactivity,
+                (SELECT DISTINCT
+                        o.objectid                       jobid,
+                        reo.objectid                     feeobjid,
+                        fs.feeactivity,
+                        NVL(fs.licensetypecode, 'NA')    licensetypecode,
+                        ltc.licensetypename,
+                        CASE NVL(
                                  fs.licensetypecode,
-                                 ltc.licensetypename,
-                                 CASE fs.licensetypecode
-                                     WHEN api.pkg_columnquery.VALUE(
-                                              o.objectid,
-                                              'LicenseTypeCode')
-                                     THEN
-                                         (SELECT CASE
-                                                     WHEN MAX(r.toobjectid)
-                                                              IS NULL
-                                                     THEN
-                                                         'P'
-                                                     ELSE
-                                                         'B'
-                                                 END
-                                            FROM api.relationships r
-                                           WHERE r.endpointid =
-                                                 api.pkg_configquery.endpointidforname(
-                                                     'j_LicenseType',
-                                                     'MasterLicenseType')
-                                             AND r.fromobjectid = o.objectid)
-                                     ELSE
-                                         'S'
-                                 END             secondaryprimary
+                                 api.pkg_columnquery.VALUE(o.objectid,
+                                                           'LicenseTypeCode'))
+                            WHEN api.pkg_columnquery.VALUE(o.objectid,
+                                                           'LicenseTypeCode')
+                            THEN
+                                (SELECT CASE
+                                            WHEN MAX(r.toobjectid) IS NULL
+                                            THEN
+                                                'P'
+                                            ELSE
+                                                'B'
+                                        END
+                                   FROM api.relationships r
+                                  WHERE r.endpointid =
+                                        api.pkg_configquery.endpointidforname(
+                                            'j_LicenseType',
+                                            'MasterLicenseType')
+                                    AND r.fromobjectid = o.objectid)
+                            ELSE
+                                'S'
+                        END                              primarysecondary
                    FROM (SELECT objectid
                            FROM TABLE(
                                     CAST(
@@ -324,7 +330,7 @@ dbms_output.put_line('filter: ' || t_filter);
                              'PEND'))
         SELECT bizmod_api.fee_rec(
                    f.jobid,
-                   f.secondaryprimary,
+                   f.primarysecondary,
                    api.pkg_columnquery.datevalue(f.jobid,
                                                  'dup_ExpirationDate'),
                    api.pkg_columnquery.datevalue(f.jobid, 'renewaldate'),
@@ -347,21 +353,21 @@ dbms_output.put_line('filter: ' || t_filter);
                    NULL,
                    NULL,
                    CASE
-                           WHEN api.pkg_columnquery.VALUE(f.jobid, 'Status') IN
-                                    ('REVPEN', 'REV PENDING')
-                           THEN
-                               'Revoke-pending'
-                           WHEN api.pkg_columnquery.VALUE(f.jobid, 'status') =
-                                'SLMS HOLD'
-                           THEN
-                               'SLMS-hold'
-                           ELSE
-                               'New'
-                       END,
+                       WHEN api.pkg_columnquery.VALUE(f.jobid, 'Status') IN
+                                ('REVPEN', 'REV PENDING')
+                       THEN
+                           'Revoke-pending'
+                       WHEN api.pkg_columnquery.VALUE(f.jobid, 'status') =
+                            'SLMS HOLD'
+                       THEN
+                           'SLMS-hold'
+                       ELSE
+                           'New'
+                   END,
                    f.feeobjid)
           BULK COLLECT INTO t_fees
           FROM f
-         WHERE f.feeactivity like t_filter; --10/14/2024  TJL  BIZ-16408
+         WHERE f.feeactivity LIKE t_filter; --10/14/2024  TJL  BIZ-16408
 
         IF (t_fees.COUNT = 0)
         THEN -- BIZ-15616
@@ -615,6 +621,3 @@ dbms_output.put_line('filter: ' || t_filter);
     END;
 END;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.REQUESTFEES TO BIZMOD_USER;
