@@ -16,14 +16,14 @@ IS
     -- ****************************************************************************
     t_json_obj     json_object_t := json_object_t();
     t_json_data    json_object_t := json_object_t();
-    t_process      VARCHAR2(40) := 'CREATELICENSEAPPCHANGE';
+    t_process      VARCHAR2(40) := 'CHANGELICENSEAPPJOB';
     t_packet       CLOB;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000 BYTE);
 BEGIN
     bizmod_api.utl_licenseinfo.createjob(
-        a_procedure => 'CREATELICENSEAPPCHANGEJOB',
+        a_procedure => 'CHANGEICENSEAPPJOB',
         a_description => 'Change License Application',
         a_argument1 => a_seq);
 
