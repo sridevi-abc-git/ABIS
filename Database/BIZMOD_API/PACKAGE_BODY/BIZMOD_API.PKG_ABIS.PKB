@@ -15,7 +15,7 @@ AS
     --     3.0   09/30/2024  BN   BIZ-16397  ERROR notification to LSP
     --   4.0.0   02/05/2025  TJL  BIZ-17356  Added test in newfee to only send update when
     --                                        new fee is only on applications.
-    --   5.0.0   04/03/2028  TJL  BIZ-17503  Added common applications procedures
+    --   5.0.1   04/03/2028  TJL  BIZ-17503  Added common applications procedures
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -77,16 +77,15 @@ AS
     PROCEDURE newfee(a_objectid     IN api.pkg_definition.udt_id,
                      a_asofdate        DATE)
     IS
-
     BEGIN
         IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPID') IS NOT NULL
-           AND api.pkg_columnquery.value(a_objectid, 'ObjectDefName') = 'j_Application')
+        AND api.pkg_columnquery.VALUE(a_objectid, 'ObjectDefName') =
+            'j_Application')
         THEN
-                update bizmod_api.license_app_t
-                   set newfee = 'Y'
-                 where jobid = a_objectid;
+            UPDATE bizmod_api.license_app_t
+               SET newfee = 'Y'
+             WHERE jobid = a_objectid;
         END IF;
-
     END;
 
 
@@ -94,23 +93,22 @@ AS
                               a_asofdate     IN DATE,
                               a_jobid        IN api.pkg_definition.udt_id,
                               a_status       IN VARCHAR2 DEFAULT NULL)
-    is
+    IS
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
-    begin
+    BEGIN
         IF (api.pkg_columnquery.VALUE(a_jobid, 'LSPId') IS NOT NULL)
         THEN
-                bizmod_api.utl_licenseinfo.createjob(
-                    a_procedure => 'APPLICATIONSAVEJOB',
-                    a_description =>
-                        'Application Saved Notify LSP ID ' || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
-                    a_argument1 => a_objectid,
-                    a_argument2 => SYSDATE,
-                    a_argument3 => a_jobid,
-                    a_argument4 => a_status);
-
-        end if;
-
+            bizmod_api.utl_licenseinfo.createjob(
+                a_procedure => 'APPLICATIONSAVEJOB',
+                a_description =>
+                    'Application Saved Notify LSP ID '
+                    || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
+                a_argument1 => a_objectid,
+                a_argument2 => SYSDATE,
+                a_argument3 => a_jobid,
+                a_argument4 => a_status);
+        END IF;
     EXCEPTION
         WHEN OTHERS
         THEN
@@ -122,13 +120,17 @@ AS
                                                    info,
                                                    errmsg,
                                                    bktrace)
-                 VALUES (0,
-                         'APPLICATIONSAVE',
-                         'Application Object Id: ' || a_jobid || chr(13) ||
-                         'Process Id: ' || a_objectid,
-                         t_sqlerrm,
-                         t_trace);
-    end;
+                     VALUES (
+                                0,
+                                'APPLICATIONSAVE',
+                                'Application Object Id: '
+                                || a_jobid
+                                || CHR(13)
+                                || 'Process Id: '
+                                || a_objectid,
+                                t_sqlerrm,
+                                t_trace);
+    END;
 
     PROCEDURE add_secondary_license_types(
         a_primary_objectid IN api.pkg_definition.udt_id,
@@ -740,10 +742,12 @@ AS
                                        VARCHAR2(4000)
                                        PATH '$.FEDERALEMPLOYERIDENTIFICATIONN',
                                    remove
-                                       varchar2(1) 
-                                       PATH '$.REMOVE' DEFAULT 'N' ON EMPTY)))
+                                       VARCHAR2(1)
+                                       PATH '$.REMOVE'
+                                       DEFAULT 'N' ON EMPTY)))
             LOOP
-                continue when entity.remove = 'Y';
+                CONTINUE WHEN entity.remove = 'Y';
+
                 IF (api.pkg_columnquery.VALUE(entity.objectid, 'P12Status') =
                     'Y')
                 THEN
@@ -1056,77 +1060,97 @@ AS
         END IF;
     END add_escrow;
 
-    procedure create_legalentity(a_parent                IN api.pkg_definition.udt_id, 
-                                 a_child                 IN api.pkg_definition.udt_id, 
-                                 a_endpointid            IN api.pkg_definition.udt_id, 
-                                 a_percentageofownership IN varchar2,
-                                 a_ownertype             IN varchar2,
-                                 a_title                 IN varchar2)
+    FUNCTION create_legalentity(a_parent       IN api.pkg_definition.udt_id,
+                                a_child        IN api.pkg_definition.udt_id,
+                                a_endpointid   IN api.pkg_definition.udt_id,
+                                a_percentageofownership IN VARCHAR2,
+                                a_ownertype    IN VARCHAR2,
+                                a_title        IN VARCHAR2)
+        RETURN api.pkg_definition.udt_id
     IS
         t_relid        api.pkg_definition.udt_id;
-        t_entityobjectid  api.pkg_definition.udt_id;
-    begin
-                t_entityobjectid :=
-                    api.pkg_objectupdate.new(
-                        api.pkg_configquery.objectdefidforname('o_LegalEntity'));
-                        
-                -- add relation ship to parent legal entity
-                t_relid :=
-                    api.pkg_relationshipupdate.new(api.pkg_configquery.endpointidforname('o_legalentity',
-                                                   substr(api.pkg_columnquery.value(a_child, 'ObjectDefName'),3)),
-                                                   t_entityobjectid,
-                                                   a_child
-                                                   );
+        t_entityobjectid api.pkg_definition.udt_id;
+        t_HierarchyLevel    number;
+    BEGIN
+            IF (api.pkg_columnquery.VALUE(a_parent, 'ObjectDefName') =
+                'j_Application')
+            THEN
+                t_HierarchyLevel := 1;
+        else
+        t_HierarchyLevel := api.pkg_columnquery.numericVALUE(a_parent, 'HierarchyLevel_Stored') + 1;
+        end if;
+    
+        t_entityobjectid :=
+            api.pkg_objectupdate.new(
+                api.pkg_configquery.objectdefidforname('o_LegalEntity'));
 
-                -- add information to legal entity just created
-                api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                              'HierarchyLevel_Stored',
-                                              api.pkg_columnquery.value(a_parent, 'HierarchyLevel_Stored') + 1);
-                if (a_percentageofownership is not NULL)
-                then
-                api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                              'OwnerType',
-                                              a_ownertype);
-                api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                              'PercentageOfOwnership',
-                                              a_percentageofownership);
-                end if;
-                if (a_title is not null)
-                then
-                PKG_ABIS.add_title(a_entityobjectid => t_entityobjectid,
-                          a_legal_entity => a_title);
-                end if; 
-                
-                api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                          'dup_LastName',
-                                          api.pkg_columnquery.VALUE(a_child, 'LastName'));
-                api.pkg_columnupdate.setvalue(
-                    t_entityobjectid,
-                    'dup_FormattedName',
-                    api.pkg_columnquery.VALUE(a_child, 'FormattedName'));
+        -- add relation ship to parent legal entity
+        t_relid :=
+            api.pkg_relationshipupdate.new(a_endpointid,
+                                           a_parent,
+                                           t_entityobjectid);
 
-                -- add relation ship to parent legal entity
-                t_relid :=
-                    api.pkg_relationshipupdate.new(a_endpointid,
-                                                   a_parent,
-                                                   t_entityobjectid);
+        -- add information to legal entity just created
+        api.pkg_columnupdate.setvalue(
+            t_entityobjectid,
+            'HierarchyLevel_Stored',t_HierarchyLevel);
+ 
+            api.pkg_columnupdate.setvalue(t_entityobjectid,
+                                          'dup_HierarchyLevel',t_HierarchyLevel);
 
-                api.pkg_logicaltransactionupdate.endtransaction;
-                COMMIT;
-    end create_legalentity;
+        IF (a_percentageofownership IS NOT NULL)
+        THEN
+            api.pkg_columnupdate.setvalue(t_entityobjectid,
+                                          'OwnerType',
+                                          a_ownertype);
+            api.pkg_columnupdate.setvalue(t_entityobjectid,
+                                          'PercentageOfOwnership',
+                                          a_percentageofownership);
+        END IF;
+
+        IF (a_title IS NOT NULL)
+        THEN
+            pkg_abis.add_title(a_entityobjectid => t_entityobjectid,
+                               a_legal_entity => a_title);
+        END IF;
+
+        api.pkg_columnupdate.setvalue(
+            t_entityobjectid,
+            'dup_LastName',
+            api.pkg_columnquery.VALUE(a_child, 'LastName'));
+        api.pkg_columnupdate.setvalue(
+            t_entityobjectid,
+            'dup_FormattedName',
+            api.pkg_columnquery.VALUE(a_child, 'FormattedName'));
+
+        -- add relation ship to parent legal entity
+        t_relid :=
+            api.pkg_relationshipupdate.new(
+                api.pkg_configquery.endpointidforname(
+                    'o_legalentity',
+                    SUBSTR(
+                        api.pkg_columnquery.VALUE(a_child, 'ObjectDefName'),
+                        3)),
+                t_entityobjectid,
+                a_child);
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+        
+        RETURN t_entityobjectid;
+    END create_legalentity;
 
 
     PROCEDURE add_person(a_entityobjectid IN api.pkg_definition.udt_id,
                          a_person       IN CLOB)
     IS
-        t_entityobjectid api.pkg_definition.udt_id;
         t_objectdefid  api.pkg_definition.udt_id;
         t_objectid     api.pkg_definition.udt_id;
         t_searchname   VARCHAR2(2000);
         t_list         api.udt_objectlist;
+        t_newentity    api.pkg_definition.udt_id;
     BEGIN
         FOR rec
-            IN (SELECT *
+            IN (SELECT j.*
                   FROM JSON_TABLE(
                            a_person,
                            '$[*]'
@@ -1167,7 +1191,7 @@ AS
                                    VARCHAR2(4000)
                                    PATH '$.MARITALSTATUS',
                                address CLOB FORMAT JSON PATH '$.ADDRESS',
-                               person CLOB FORMAT JSON PATH '$.PERSON')))
+                               person CLOB FORMAT JSON PATH '$.PERSON')) j)
         LOOP
             -- *****************************************************************
             -- check if person is already in system
@@ -1292,66 +1316,97 @@ AS
             IF (api.pkg_columnquery.VALUE(a_entityobjectid, 'ObjectDefName') =
                 'j_Application')
             THEN
-                create_legalentity(a_parent              => a_entityobjectid, 
-                                 a_child                 => t_objectid,
-                                 a_endpointid            => CASE rec.onsalemanager
-                                                            WHEN 'Y'
-                                                            THEN
-                                                                api.pkg_configquery.endpointidforname(
-                                                                    'j_Application',
-                                                                    'OnSaleManager')
-                                                            ELSE
-                                                                api.pkg_configquery.endpointidforname(
-                                                                    'j_Application',
-                                                                    'Applicant')
-                                                            END,
-                                 a_percentageofownership => rec.percentageofownership,
-                                 a_ownertype             => rec.ownertype,
-                                 a_title                 => rec.title);
+                t_newentity :=
+                    create_legalentity(
+                        a_parent    => a_entityobjectid,
+                        a_child     => t_objectid,
+                        a_endpointid =>
+                            CASE rec.onsalemanager
+                                WHEN 'Y'
+                                THEN
+                                    api.pkg_configquery.endpointidforname(
+                                        'j_Application',
+                                        'OnSaleManager')
+                                ELSE
+                                    api.pkg_configquery.endpointidforname(
+                                        'j_Application',
+                                        'Applicant')
+                            END,
+                        a_percentageofownership => rec.percentageofownership,
+                        a_ownertype => rec.ownertype,
+                        a_title     => rec.title);
+                        
+                    IF (rec.person IS NOT NULL)
+                    THEN
+                        add_person(a_entityobjectid => t_newentity,
+                                   a_person    => rec.person);
+                    END IF;
             ELSE
                 IF (api.pkg_columnquery.VALUE(a_entityobjectid, 'IsAPerson') =
                     'Y')
                 THEN
-                create_legalentity(a_parent              => a_entityobjectid, 
-                                 a_child                 => t_objectid,
-                                 a_endpointid            => api.pkg_configquery.endpointidforname(
-                                                                'o_LegalEntity',
-                                                                'Spouse1'),
-                                 a_percentageofownership => rec.percentageofownership,
-                                 a_ownertype             => rec.ownertype,
-                                 a_title                 => rec.title);
-                
+                    t_newentity :=
+                        create_legalentity(
+                            a_parent    => a_entityobjectid,
+                            a_child     => t_objectid,
+                            a_endpointid =>
+                                api.pkg_configquery.endpointidforname(
+                                    'o_LegalEntity',
+                                    'Spouse1'),
+                            a_percentageofownership =>
+                                rec.percentageofownership,
+                            a_ownertype => rec.ownertype,
+                            a_title     => rec.title);
+
+                    IF (rec.person IS NOT NULL)
+                    THEN
+                        add_person(a_entityobjectid => t_newentity,
+                                   a_person    => rec.person);
+                    END IF;
                 ELSE
                     IF (rec.percentageofownership IS NOT NULL)
                     THEN
-                create_legalentity(a_parent              => a_entityobjectid, 
-                                 a_child                 => t_objectid,
-                                 a_endpointid            => api.pkg_configquery.endpointidforname(
-                                                                'o_LegalEntity',
-                                                                'StockHolder'),
-                                 a_percentageofownership => rec.percentageofownership,
-                                 a_ownertype             => rec.ownertype,
-                                 a_title                 => null); --rec.title);
-                    end if;            
-                    if (rec.title is not null)
-                    then
-                create_legalentity(a_parent              => a_entityobjectid, 
-                                 a_child                 => t_objectid,
-                                 a_endpointid            => api.pkg_configquery.endpointidforname(
-                                                                'o_LegalEntity',
-                                                                'Officer'),
-                                 a_percentageofownership => null, --rec.percentageofownership,
-                                 a_ownertype             => null, --rec.ownertype,
-                                 a_title                 => rec.title);
+                        t_newentity :=
+                            create_legalentity(
+                                a_parent    => a_entityobjectid,
+                                a_child     => t_objectid,
+                                a_endpointid =>
+                                    api.pkg_configquery.endpointidforname(
+                                        'o_LegalEntity',
+                                        'StockHolder'),
+                                a_percentageofownership =>
+                                    rec.percentageofownership,
+                                a_ownertype => rec.ownertype,
+                                a_title     => NULL); --rec.title);
+
+                        IF (rec.person IS NOT NULL)
+                        THEN
+                            add_person(a_entityobjectid => t_newentity,
+                                       a_person    => rec.person);
+                        END IF;
+                    END IF;
+
+                    IF (rec.title IS NOT NULL)
+                    THEN
+                        t_newentity :=
+                            create_legalentity(
+                                a_parent    => a_entityobjectid,
+                                a_child     => t_objectid,
+                                a_endpointid =>
+                                    api.pkg_configquery.endpointidforname(
+                                        'o_LegalEntity',
+                                        'Officer'),
+                                a_percentageofownership => NULL, --rec.percentageofownership,
+                                a_ownertype => NULL, --rec.ownertype,
+                                a_title     => rec.title);
+
+                        IF (rec.person IS NOT NULL)
+                        THEN
+                            add_person(a_entityobjectid => t_newentity,
+                                       a_person    => rec.person);
+                        END IF;
                     END IF;
                 END IF;
-            END IF;
-
-            IF (rec.person IS NOT NULL)
-            THEN
-                add_person(
-                    a_entityobjectid => t_entityobjectid,
-                    a_person    => rec.person);
             END IF;
         END LOOP;
     END add_person;
@@ -1361,11 +1416,10 @@ AS
     IS
         t_objectdefid  api.pkg_definition.udt_id;
         t_objectid     api.pkg_definition.udt_id;
+        t_newentity    api.pkg_definition.udt_id;
 
         t_list         api.udt_objectlist;
     BEGIN
-        DBMS_OUTPUT.put_line('add_company: ' || a_legal_entity);
-
         FOR rec
             IN (SELECT *
                   FROM JSON_TABLE(
@@ -1402,6 +1456,7 @@ AS
                                company CLOB FORMAT JSON PATH '$.COMPANY',
                                person CLOB FORMAT JSON PATH '$.PERSON')))
         LOOP
+
             -- chech to see if existing company
             SELECT api.udt_object(objectid)
               BULK COLLECT INTO t_list
@@ -1476,46 +1531,85 @@ AS
             IF (api.pkg_columnquery.VALUE(a_entityobjectid, 'ObjectDefName') =
                 'j_Application')
             THEN
-                create_legalentity(a_parent              => a_entityobjectid, 
-                                 a_child                 => t_objectid,
-                                 a_endpointid            => api.pkg_configquery.endpointidforname(
-                                                                    'j_Application',
-                                                                    'Applicant'),
-                                 a_percentageofownership => rec.percentageofownership,
-                                 a_ownertype             => rec.ownertype,
-                                 a_title                 => rec.title);
-            
-                else
+                t_newentity :=
+                    create_legalentity(
+                        a_parent    => a_entityobjectid,
+                        a_child     => t_objectid,
+                        a_endpointid =>
+                            api.pkg_configquery.endpointidforname(
+                                'j_Application',
+                                'Applicant'),
+                        a_percentageofownership => rec.percentageofownership,
+                        a_ownertype => rec.ownertype,
+                        a_title     => rec.title);
 
-                    IF (rec.percentageofownership IS NOT NULL)
+                IF (rec.company IS NOT NULL)
+                THEN
+                    add_company(a_entityobjectid => t_newentity,
+                                a_legal_entity => rec.company);
+                END IF;
+
+                IF (rec.person IS NOT NULL)
+                THEN
+                    add_person(a_entityobjectid => t_newentity,
+                               a_person    => rec.person);
+                END IF;
+            ELSE
+                IF (rec.percentageofownership IS NOT NULL)
+                THEN
+                    t_newentity :=
+                        create_legalentity(
+                            a_parent    => a_entityobjectid,
+                            a_child     => t_objectid,
+                            a_endpointid =>
+                                api.pkg_configquery.endpointidforname(
+                                    'o_LegalEntity',
+                                    'StockHolder'),
+                            a_percentageofownership =>
+                                rec.percentageofownership,
+                            a_ownertype => rec.ownertype,
+                            a_title     => NULL); --rec.title);
+                    IF (rec.company IS NOT NULL)
                     THEN
-                create_legalentity(a_parent              => a_entityobjectid, 
-                                 a_child                 => t_objectid,
-                                 a_endpointid            => api.pkg_configquery.endpointidforname(
-                                                                'o_LegalEntity',
-                                                                'StockHolder'),
-                                 a_percentageofownership => rec.percentageofownership,
-                                 a_ownertype             => rec.ownertype,
-                                 a_title                 => null); --rec.title);
-                    end if;            
-                    if (rec.title is not null)
-                    then
-                create_legalentity(a_parent              => a_entityobjectid, 
-                                 a_child                 => t_objectid,
-                                 a_endpointid            => api.pkg_configquery.endpointidforname(
-                                                                'o_LegalEntity',
-                                                                'Officer'),
-                                 a_percentageofownership => null, --rec.percentageofownership,
-                                 a_ownertype             => null, --rec.ownertype,
-                                 a_title                 => rec.title);
+                        add_company(a_entityobjectid => t_newentity,
+                                    a_legal_entity => rec.company);
+                    END IF;
+
+                    IF (rec.person IS NOT NULL)
+                    THEN
+                        add_person(a_entityobjectid => t_newentity,
+                                   a_person    => rec.person);
                     END IF;
                 END IF;
 
+                IF (rec.title IS NOT NULL)
+                THEN
+                    t_newentity :=
+                        create_legalentity(
+                            a_parent    => a_entityobjectid,
+                            a_child     => t_objectid,
+                            a_endpointid =>
+                                api.pkg_configquery.endpointidforname(
+                                    'o_LegalEntity',
+                                    'Officer'),
+                            a_percentageofownership => NULL, --rec.percentageofownership,
+                            a_ownertype => NULL, --rec.ownertype,
+                            a_title     => rec.title);
+                    IF (rec.company IS NOT NULL)
+                    THEN
+                        add_company(a_entityobjectid => t_newentity,
+                                    a_legal_entity => rec.company);
+                    END IF;
+
+                    IF (rec.person IS NOT NULL)
+                    THEN
+                        add_person(a_entityobjectid => t_newentity,
+                                   a_person    => rec.person);
+                    END IF;
+                END IF;
+            END IF;
+
         END LOOP;
     END add_company;
-
-
-
-
 END;
 /

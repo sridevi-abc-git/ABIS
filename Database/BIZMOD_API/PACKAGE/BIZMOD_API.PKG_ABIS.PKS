@@ -12,7 +12,7 @@ AS
     --                                        new procedures and functions to support
     --                                        License Applications
     --     2.0    09/30/2024 BN   BIZ-16397  ERROR notification to LSP
-    --     3.0.0  04/03/2028 TJL  BIZ-17503  Added common applications procedures
+    --     3.0.1  04/03/2028 TJL  BIZ-17503  Added common applications procedures
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     IN api.pkg_definition.udt_id,
                                 a_asofdate     IN DATE);
@@ -44,26 +44,26 @@ AS
     PROCEDURE copy_legal_entities(
         a_objectid     IN api.pkg_definition.udt_id,
         a_legal_entity IN CLOB);
-        
+
     PROCEDURE add_attorney(a_jobid        IN api.pkg_definition.udt_id,
                            a_attorney     IN CLOB);
 
     PROCEDURE add_escrow(a_jobid        IN api.pkg_definition.udt_id,
                          a_escrow       IN CLOB);
-        
-    procedure create_legalentity(a_parent                IN api.pkg_definition.udt_id, 
-                                 a_child                 IN api.pkg_definition.udt_id, 
-                                 a_endpointid            IN api.pkg_definition.udt_id, 
-                                 a_percentageofownership IN varchar2,
-                                 a_ownertype             IN varchar2,
-                                 a_title                 IN varchar2);
+
+    FUNCTION create_legalentity(a_parent       IN api.pkg_definition.udt_id,
+                                a_child        IN api.pkg_definition.udt_id,
+                                a_endpointid   IN api.pkg_definition.udt_id,
+                                a_percentageofownership IN VARCHAR2,
+                                a_ownertype    IN VARCHAR2,
+                                a_title        IN VARCHAR2)
+        RETURN api.pkg_definition.udt_id;
 
     PROCEDURE add_person(a_entityobjectid IN api.pkg_definition.udt_id,
                          a_person       IN CLOB);
 
     PROCEDURE add_company(a_entityobjectid IN api.pkg_definition.udt_id,
                           a_legal_entity IN CLOB);
-
 END;
 /
 
