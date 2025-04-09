@@ -11,27 +11,18 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --             Date                         Comment
-    --   1.0.0  04/03/2025  TJL  BIZ-17503  Initial Package Created
+    --   1.0.1  04/03/2025  TJL  BIZ-17503  Initial Package Created
     -- ****************************************************************************
 
     TYPE apprec_t IS RECORD(applicationtype VARCHAR2(50),
                             transferchangetype VARCHAR2(100),
---                            transferfromlicensenumber VARCHAR2(50),
---                            transfertolicensenumber VARCHAR2(50),
                             changelicensenumber VARCHAR2(50),
                             multiplestockmembershiptrans VARCHAR2(1),
                             lspapplicationid VARCHAR2(40),
---                            underconstruction VARCHAR2(3),
                             dba VARCHAR2(4000),
---                            felony VARCHAR2(3),
---                            violation VARCHAR2(3),
---                            licensepurchaseprice NUMBER,
                             primarylicensetypes VARCHAR2(4000),
                             premiseaddress VARCHAR2(4000),
                             mailingaddress VARCHAR2(4000),
---                            istemporarymailingaddress VARCHAR2(3),
---                            attorney CLOB,
---                            escrow CLOB,
                             legal_entities CLOB);
 
     PROCEDURE exchange_primary_license_types(
@@ -55,8 +46,6 @@ IS
         t_feeschedule  api.pkg_definition.udt_id;
         t_secondaries  VARCHAR2(4000);
     BEGIN
-        DBMS_OUTPUT.put_line('exchange_primary_license_types');
-
         FOR rec
             IN (SELECT *
                   FROM JSON_TABLE(
@@ -69,10 +58,6 @@ IS
                                exchangelicensetypecode
                                    VARCHAR2(3)
                                    PATH '$.EXCHANGELICENSETYPECODE',
-                               --
-                               --                       prioritydrawcounty
-                               --                           VARCHAR2(100)
-                               --                           PATH '$.PRIORITYDRAWCOUNTY',
                                gallonage NUMBER PATH '$.GALLONAGE',
                                numberofmonthslicensed
                                    NUMBER
@@ -82,18 +67,11 @@ IS
                                    PATH '$.SEASON_START_MONTH',
                                primarycount NUMBER PATH '$.PRIMARYCOUNT',
                                isbranch VARCHAR2(1) PATH '$.ISBRANCH',
-                               --                               masterlicense
-                               --                                   VARCHAR2(50)
-                               --                                   PATH '$.MASTERLICENSE',
                                secondarylicensetypes
                                    VARCHAR2(4000)
                                    FORMAT JSON
                                    PATH '$.SECONDARYLICENSETYPES')))
         LOOP
-            DBMS_OUTPUT.put_line('app: ' || a_jobid);
-            DBMS_OUTPUT.put_line('ltc: ' || rec.licensetypecode);
-            DBMS_OUTPUT.put_line('exc: ' || rec.exchangelicensetypecode);
-
             SELECT ltc.objectid,
                    ltc.secondarylicensetypecodes,
                    ltc.populationapplies
@@ -141,7 +119,6 @@ IS
                                'o_PrimaryLicenseType',
                                'LicTypeCatSecondary'))
             LOOP
-                DBMS_OUTPUT.put_line('moving secondary ' || sec.toobjectid);
                 -- move secondary to new secondary
                 t_endpointid :=
                     api.pkg_configquery.endpointidforname(
@@ -151,7 +128,6 @@ IS
                     api.pkg_relationshipupdate.new(t_endpointid,
                                                    t_licensetypeobjectid,
                                                    sec.toobjectid);
-                DBMS_OUTPUT.put_line('new ');
                 api.pkg_columnupdate.setvalue(
                     t_relid_sec,
                     'NewCount',
@@ -191,19 +167,9 @@ IS
                   FROM query.o_licensetypecategory c
                  WHERE c.licensetypecode = sec.licensetypecode;
 
-                DBMS_OUTPUT.put_line(
-                    'before:  '
-                    || sec.licensetypecode
-                    || '  '
-                    || sec.primarycount
-                    || '  secs: '
-                    || t_secondaries);
-
                 -- check if valid secondary for license type
                 IF (INSTR(t_secondaries, sec.licensetypecode) > 0)
                 THEN
-                    DBMS_OUTPUT.put_line(
-                        sec.licensetypecode || '  ' || sec.primarycount);
                     -- create releationship between primary license type and license type catagory
                     t_endpointid :=
                         api.pkg_configquery.endpointidforname(
@@ -499,15 +465,16 @@ IS
                         rectitle.relationshipid);
                 END LOOP;
             END IF;
-        --    dbms_output.put_line('Description: ' || t_title);
-
-
-
         END LOOP;
 
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
     END;
+-- **************************************************************
+-- **************************************************************
+--   Main Process
+-- **************************************************************
+-- **************************************************************
 BEGIN
     DECLARE
         t_apprec       apprec_t;
@@ -541,22 +508,13 @@ BEGIN
 
         SELECT applicationtype,
                transferchangetype,
---               transferfromlicensenumber,
---               transfertolicensenumber,
                changelicensenumber,
                multiplestockmembershiptrans,
                lspid,
---               underconstruction,
                dba,
---               felony,
---               violation,
---               REGEXP_REPLACE(licensepurchaseprice, '[^.[:digit:]]+', ''),
                primary_license_types,
                premise_address,
                mailing_address,
---               istemporarymailingaddress,
---               attorney,
---               escrow,
                legal_entities
           INTO t_apprec
           FROM JSON_TABLE(
@@ -567,12 +525,6 @@ BEGIN
                        transferchangetype
                            VARCHAR2(100)
                            PATH '$.TRANSFERCHANGETYPE',
---                       transferfromlicensenumber
---                           VARCHAR2(50)
---                           PATH '$.TRANSFERFROMLICENSENUMBER',
---                       transfertolicensenumber
---                           VARCHAR2(50)
---                           PATH '$.TRANSFERTOLICENSENUMBER',
                        changelicensenumber
                            VARCHAR2(50)
                            PATH '$.CHANGELICENSENUMBER',
@@ -580,15 +532,7 @@ BEGIN
                            VARCHAR2(1)
                            PATH '$.MULTIPLESTOCKMEMBERSHIPTRANS',
                        lspid VARCHAR2(40) PATH '$.LSPAPPLICATIONID',
---                       underconstruction
---                           VARCHAR2(3)
---                           PATH '$.UNDERCONSTRUCTION',
                        dba VARCHAR2(4000) PATH '$.DBA',
---                       felony VARCHAR2(3) PATH '$.FELONY',
---                       violation VARCHAR2(3) PATH '$.VIOLATION',
---                       licensepurchaseprice
---                           NUMBER
---                           PATH '$.LICENSEPURCHASEPRICE',
                        primary_license_types
                            VARCHAR2(4000)
                            FORMAT JSON
@@ -601,11 +545,6 @@ BEGIN
                            VARCHAR2(4000)
                            FORMAT JSON
                            PATH '$.MAILINGADDRESS',
---                       istemporarymailingaddress
---                           VARCHAR2(3)
---                           PATH '$.ISTEMPORARYMAILINGADDRESS',
---                       attorney VARCHAR2(4000) FORMAT JSON PATH '$.ATTORNEY',
---                       escrow VARCHAR2(4000) FORMAT JSON PATH '$.ESCROW',
                        legal_entities CLOB FORMAT JSON PATH '$.LEGALENTITIES'));
 
         -- Check for duplicate key
@@ -621,8 +560,6 @@ BEGIN
                 'Duplicate LSP Appication Id: ' || t_apprec.lspapplicationid);
         END IF;
 
-        DBMS_OUTPUT.put_line(
-            'LSP Application Id: ' || t_apprec.lspapplicationid);
         -- ************************************************************************
         -- Create new application job
         -- ************************************************************************
@@ -674,68 +611,12 @@ BEGIN
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
-        --        IF (t_apprec.dba IS NOT NULL)
-        --        THEN
-        --            t_dbanamesobjectid :=
-        --                api.pkg_objectupdate.new(
-        --                    api.pkg_configquery.objectdefidforname('o_DBANames'));
-        --
-        --            api.pkg_columnupdate.setvalue(t_dbanamesobjectid,
-        --                                          'DBA',
-        --                                          t_apprec.dba);
-        --            api.pkg_columnupdate.setvalue(t_dbanamesobjectid,
-        --                                          'PrimaryDBA',
-        --                                          'Y');
-        --
-        --            t_dbaendpointid :=
-        --                api.pkg_configquery.endpointidforname('j_application',
-        --                                                      'DBANames');
-        --
-        --            t_dba :=
-        --                api.pkg_relationshipupdate.new(t_dbaendpointid,
-        --                                               t_jobid,
-        --                                               t_dbanamesobjectid);
-        --        END IF;
-
-        --        -- api.pkg_columnupdate.setvalue(t_jobid, 'PrimaryDBA', t_apprec.dba);
-        --        api.pkg_columnupdate.setvalue(t_jobid,
-        --                                      'UnderConstruction',
-        --                                      t_apprec.underconstruction);
-        --        api.pkg_columnupdate.setvalue(t_jobid, 'Felony', t_apprec.felony);
-        --        api.pkg_columnupdate.setvalue(t_jobid,
-        --                                      'Violation',
-        --                                      t_apprec.violation);
-        --        api.pkg_columnupdate.setvalue(t_jobid,
-        --                                      'LicensePurchasePrice',
-        --                                      t_apprec.licensepurchaseprice);
-        --        IF (t_apprec.applicationtype IN
-        --                ('Transfer', 'Intercounty Transfer', 'Original')
-        --         OR t_apprec.transferchangetype IN ('AddPrimaryLicenseType'))
-
         IF (t_apprec.transferchangetype IN ('AddPrimaryLicenseType'))
         THEN
             pkg_abis.add_primary_license_types(
                 a_jobid     => t_jobid,
                 a_primarylicensetypes => t_apprec.primarylicensetypes);
         END IF;
-
-        --        add_address(a_jobid     => t_jobid,
-        --                    a_address_type => 'Premises',
-        --                    a_address   => t_apprec.premiseaddress);
-        --
-        --        add_address(a_jobid     => t_jobid,
-        --                    a_address_type => 'MailingAddress',
-        --                    a_address   => t_apprec.mailingaddress);
-        --
-        --        api.pkg_columnupdate.setvalue(t_jobid,
-        --                                      'IsTemporaryMailingAddress',
-        --                                      t_apprec.istemporarymailingaddress);
-        --
-        --        add_attorney(a_jobid => t_jobid, a_attorney => t_apprec.attorney);
-        --
-        --        add_escrow(a_jobid => t_jobid, a_escrow => t_apprec.escrow);
-
-        DBMS_OUTPUT.put_line('type: ' || t_apprec.transferchangetype);
 
         IF (t_apprec.transferchangetype IN
                 ('MembershipTransfer', 'StockTransfer'))
@@ -839,9 +720,9 @@ BEGIN
             END IF;
 
             -- "ApplicationCreatedDate" must be set last before save
-            --        api.pkg_columnupdate.setvalue(t_jobid,
-            --                                      'ApplicationCreatedDate',
-            --                                      SYSDATE);
+            api.pkg_columnupdate.setvalue(t_jobid,
+                                          'ApplicationCreatedDate',
+                                          SYSDATE);
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
@@ -863,7 +744,7 @@ BEGIN
                                                bktrace)
                  VALUES (
                             a_seq,
-                            'CREATELICENSEAPPCHANGEJOB',
+                            'CHANGELICENSEAPPJOB',
                             'Application Id: '
                             || t_apprec.lspapplicationid
                             || CHR(13)
@@ -878,13 +759,10 @@ BEGIN
 
         COMMIT;
 
-        -- dbms_output.put_line('ApplicationSave being called');
-
         -- notify LSP application has completed
-        --        bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
-        --                                            a_asofdate  => SYSDATE,
-        --                                            a_jobid     => t_jobid);
-        COMMIT;
+        bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
+                                            a_asofdate  => SYSDATE,
+                                            a_jobid     => t_jobid);
     EXCEPTION
         WHEN OTHERS
         THEN
@@ -893,12 +771,11 @@ BEGIN
 
             api.pkg_logicaltransactionupdate.resettransaction;
             ROLLBACK;
-            DBMS_OUTPUT.put_line(t_sqlerrm || CHR(13) || t_trace);
 
-            --            bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
-            --                                                a_asofdate  => SYSDATE,
-            --                                                a_jobid     => t_jobid,
-            --                                                a_status    => 'ERRORED');
+            bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
+                                                a_asofdate  => SYSDATE,
+                                                a_jobid     => t_jobid,
+                                                a_status    => 'ERRORED');
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
@@ -907,7 +784,7 @@ BEGIN
                                                    bktrace)
                      VALUES (
                                 a_seq,
-                                'CREATELICENSEAPPJOB',
+                                'CHANGELICENSEAPPJOB',
                                 'Application Id: '
                                 || t_apprec.lspapplicationid
                                 || CHR(13)
@@ -925,3 +802,6 @@ BEGIN
     END;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.CHANGELICENSEAPPJOB TO POSSEEXTENSIONS;
