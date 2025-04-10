@@ -15,7 +15,7 @@ AS
     --     3.0   09/30/2024  BN   BIZ-16397  ERROR notification to LSP
     --   4.0.0   02/05/2025  TJL  BIZ-17356  Added test in newfee to only send update when
     --                                        new fee is only on applications.
-    --   5.0.1   04/03/2028  TJL  BIZ-17503  Added common applications procedures
+    --   5.0.2   04/03/2028  TJL  BIZ-17503  Added common applications procedures
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -1386,7 +1386,7 @@ AS
                         END IF;
                     END IF;
 
-                    IF (rec.title IS NOT NULL)
+                    IF (LENGTH(nvl(rec.title, '[]')) > 3)
                     THEN
                         t_newentity :=
                             create_legalentity(
@@ -1582,7 +1582,7 @@ AS
                     END IF;
                 END IF;
 
-                IF (rec.title IS NOT NULL)
+                IF (LENGTH(nvl(rec.title, '[]')) > 3)
                 THEN
                     t_newentity :=
                         create_legalentity(
