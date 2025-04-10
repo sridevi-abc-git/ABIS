@@ -15,7 +15,9 @@ AS
     --     3.0   09/30/2024  BN   BIZ-16397  ERROR notification to LSP
     --   4.0.0   02/05/2025  TJL  BIZ-17356  Added test in newfee to only send update when
     --                                        new fee is only on applications.
-    --   5.0.2   04/03/2028  TJL  BIZ-17503  Added common applications procedures
+    --   5.0.2   04/03/2025  TJL  BIZ-17503  Added common applications procedures
+    --   5.0.3   04/10/2025  TJL  BIZ-17503  Removed updationg company information when 
+    --                                         doing legal entity copy
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -716,7 +718,6 @@ AS
     IS
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
-        t_objectid     api.pkg_definition.udt_id;
     BEGIN
         IF (a_legal_entity IS NOT NULL)
         THEN
@@ -728,26 +729,8 @@ AS
                                COLUMNS(
                                    objectid
                                        NUMBER
-                                       PATH '$.LEGALENTITYOBJECTID',
-                                   dateofincorporation
-                                       DATE
-                                       PATH '$.DATEOFINCORPORATION',
-                                   stateofincorporation
-                                       VARCHAR2(4000)
-                                       PATH '$.STATEOFINCORPORATION',
-                                   casecretaryofstatenumber
-                                       VARCHAR2(4000)
-                                       PATH '$.CASECRETARYOFSTATENUMBER',
-                                   federalemployeridentificationn
-                                       VARCHAR2(4000)
-                                       PATH '$.FEDERALEMPLOYERIDENTIFICATIONN',
-                                   remove
-                                       VARCHAR2(1)
-                                       PATH '$.REMOVE'
-                                       DEFAULT 'N' ON EMPTY)))
+                                       PATH '$.LEGALENTITYOBJECTID')))
             LOOP
-                CONTINUE WHEN entity.remove = 'Y';
-
                 IF (api.pkg_columnquery.VALUE(entity.objectid, 'P12Status') =
                     'Y')
                 THEN
@@ -802,54 +785,6 @@ AS
                         a_endpointid => t_endpointid,
                         a_lookup    => FALSE);
 
-                    -- case if company
-                    IF (api.pkg_columnquery.VALUE(entity.objectid,
-                                                  'IsCompany') =
-                        'Y')
-                    THEN
-                        -- get company info to update
-                        SELECT r.toobjectid
-                          INTO t_objectid
-                          FROM api.relationships r
-                         WHERE r.endpointid IN
-                                   (api.pkg_configquery.endpointidforname(
-                                        'o_LegalEntity',
-                                        'Company'))
-                           AND r.fromobjectid = entity.objectid;
-
-                        -- update company info if needed
-                        IF (entity.dateofincorporation IS NOT NULL)
-                        THEN
-                            api.pkg_columnupdate.setvalue(
-                                t_objectid,
-                                'DateOfIncorporation',
-                                entity.dateofincorporation);
-                        END IF;
-
-                        IF (entity.stateofincorporation IS NOT NULL)
-                        THEN
-                            api.pkg_columnupdate.setvalue(
-                                t_objectid,
-                                'StateoFinCorporation',
-                                entity.stateofincorporation);
-                        END IF;
-
-                        IF (entity.casecretaryofstatenumber IS NOT NULL)
-                        THEN
-                            api.pkg_columnupdate.setvalue(
-                                t_objectid,
-                                'CaSecretaryOfStateNumber',
-                                entity.casecretaryofstatenumber);
-                        END IF;
-
-                        IF (entity.federalemployeridentificationn IS NOT NULL)
-                        THEN
-                            api.pkg_columnupdate.setvalue(
-                                t_objectid,
-                                'FederalEmployerIdentificationN',
-                                entity.federalemployeridentificationn);
-                        END IF;
-                    END IF;
                 END IF;
             END LOOP;
         END IF;
