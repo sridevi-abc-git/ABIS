@@ -61,7 +61,6 @@ BEGIN
         t_person       CLOB;
         t_rel          api.pkg_definition.udt_id;
         t_officeid     api.pkg_definition.udt_id;
-        t_cityid       api.pkg_definition.udt_id;
     BEGIN
         --*****************
         --Clear any error
@@ -217,8 +216,8 @@ BEGIN
         THEN
             BEGIN
                 -- get office for premise address
-                SELECT c.toobjectid
-                  INTO t_cityid
+                SELECT co.districtofficeid
+                  INTO t_officeid
                   FROM api.relationships  r
                        JOIN api.relationships c
                            ON (r.toobjectid = c.fromobjectid
@@ -226,16 +225,12 @@ BEGIN
                                api.pkg_configquery.endpointidforname(
                                    'o_Address',
                                    'CACity'))
+                       JOIN bizmod_api.citytooffice_t co
+                           ON (co.cacityid = c.toobjectid)
                  WHERE r.endpointid =
                        api.pkg_configquery.endpointidforname('j_Application',
                                                              'Premises')
                    AND r.fromobjectid = t_jobid;
-
-                -- get office id
-                SELECT c.districtofficeid
-                  INTO t_officeid
-                  FROM bizmod_api.citytooffice_t c
-                 WHERE c.cacityid = NVL(t_cityid, 0);
 
                 -- set alternate base file office for premise city
                 api.pkg_columnupdate.setvalue(t_jobid,
