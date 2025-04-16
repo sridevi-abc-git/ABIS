@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+This file is used by the publish/package process of your Web project. You can customize the behavior of this process
+by editing this MSBuild file. In order to learn more about this please visit http://go.microsoft.com/fwlink/?LinkID=208121. 
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <TimeStampOfAssociatedLegacyPublishXmlFile />
+    <EncryptedPassword>AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAALjV7xlobGEWyD0iZY4vcqAAAAAACAAAAAAADZgAAwAAAABAAAAA7/zyV5EQQw0VZXmB6Ckq+AAAAAASAAACgAAAAEAAAAPrCsxsWHVutyoBxnIDamqYYAAAAVq3izNhCimhheCKFvsfPx/5UmqoLxp41FAAAAE7ySYxVNVN+4e+Rzjl9Ms9YqqpL</EncryptedPassword>
+    <_PublishTargetUrl>http://localhost:61392/</_PublishTargetUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <File Include="bin/ABCRQSUtils.dll">
+      <publishTime>03/28/2020 12:53:13</publishTime>
+    </File>
+    <File Include="bin/ABCRQSUtils.pdb">
+      <publishTime>02/09/2019 10:37:18</publishTime>
+    </File>
+    <File Include="bin/LQS.asmx">
+      <publishTime>03/21/2019 13:49:31</publishTime>
+    </File>
+    <File Include="bin/LQS.asmx.cs">
+      <publishTime>03/21/2019 14:59:41</publishTime>
+    </File>
+    <File Include="bin/LQSService.asmx">
+      <publishTime>03/21/2019 15:51:04</publishTime>
+    </File>
+    <File Include="bin/LQSService.asmx.cs">
+      <publishTime>11/10/2019 23:00:37</publishTime>
+    </File>
+    <File Include="bin/LQSService.dll">
+      <publishTime>03/02/2021 13:07:45</publishTime>
+    </File>
+    <File Include="bin/LQSService.pdb">
+      <publishTime>03/21/2019 14:59:42</publishTime>
+    </File>
+    <File Include="bin/Oracle.DataAccess.dll">
+      <publishTime>07/31/2014 22:18:52</publishTime>
+    </File>
+    <File Include="bin/Renci.SshNet.dll">
+      <publishTime>09/28/2017 12:44:14</publishTime>
+    </File>
+    <File Include="bin/Renci.SshNet.pdb">
+      <publishTime>09/28/2017 12:44:14</publishTime>
+    </File>
+    <File Include="LQS.asmx">
+      <publishTime>03/21/2019 13:49:31</publishTime>
+    </File>
+    <File Include="LQSService.asmx">
+      <publishTime>03/21/2019 15:51:04</publishTime>
+    </File>
+    <File Include="LQSService.svc">
+      <publishTime>03/12/2019 14:33:46</publishTime>
+    </File>
+    <File Include="Web.config">
+      <publishTime>03/02/2021 13:07:45</publishTime>
+    </File>
+  </ItemGroup>
+</Project>
