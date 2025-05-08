@@ -15,15 +15,18 @@ IS
     -----------------------------------------------------------------------------
     --    Date                       Comment
     -- 08/16/2018 TJL             Initial Check-in
-    -- 02/18/2020 PK     WO-20669 Adding Email functionality for price posting and changeing this 
-    --                            procedure to Copy Email details and relationsihps from license to 
+    -- 02/18/2020 PK     WO-20669 Adding Email functionality for price posting and changeing this
+    --                            procedure to Copy Email details and relationsihps from license to
     --                            an application to transfer or change a license.
+    -- 06/9/2023  NZA             Updated CopyPriorityLicDetailsToApp due to max object id issue.
+    -- 05/08/2025 PK              Added code to copy food Lesse to license job 
     -- **************************************************************************
 
     -- Public constant declarations
     t_addrmailobjid                 udt_id;
     t_applegalentityappepid         udt_id;
     t_applegalentityosmepid         udt_id;
+    t_applegalentityflappepid       udt_id;
     t_applegalentityp12epid         udt_id;
     t_applegalentityprip12id        udt_id;
     t_applicationtype               query.j_application.applicationtype%TYPE;
@@ -38,6 +41,7 @@ IS
     t_licensetypeexchange           query.j_application.licensetypeexchange%TYPE;
     t_liclelicenseeepid             udt_id;
     t_licleosmepid                  udt_id;
+    t_liclefllicepid                udt_id;
     t_liclep12epid                  udt_id;
     t_licleprip12epid               udt_id;
     t_licobjid                      udt_id;
@@ -81,12 +85,16 @@ IS
         t_transfertoobjid             udt_id;
         t_donotcopyexternal           VARCHAR(1) := 'Y';
     BEGIN
+
         t_applegalentityappepid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'Applicant');
         t_applegalentityosmepid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'OnSaleManager');
+        t_applegalentityflappepid :=
+            api.pkg_configquery.endpointidforname('j_Application',
+                                                  'FoodLesseeApp');  -- 05/08/2025 PK              Added code to copy food Lesse to license job 
         t_applegalentityp12epid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'P12Applicant');
@@ -100,6 +108,9 @@ IS
         t_licleosmepid   :=
             api.pkg_configquery.endpointidforname('j_License',
                                                   'OSMLegalEntity');
+        t_liclefllicepid :=
+            api.pkg_configquery.endpointidforname('j_License',
+                                                  'FoodLesseeLic');  -- 05/08/2025 PK              Added code to copy food Lesse to license job 
         t_liclep12epid   :=
             api.pkg_configquery.endpointidforname('j_License', 'P12Licensee');
         t_licleprip12epid   :=
@@ -432,7 +443,7 @@ IS
                 WHEN OTHERS THEN
                     NULL;
             END;                                           -- Premises Address
-            
+
             BEGIN -- WO-20669 Added by Pawan for Priceposting email on 2/18/2020
                 -- find Email Address on Transfer and Change license, if exists, and relate to application
                 IF t_applicationtype IN ('Transfer', 'Change') --QWE Copy address from transfer to
@@ -507,6 +518,7 @@ IS
                                   WHERE fromobjectid = t_licobjid
                                     AND endpointid IN (t_liclelicenseeepid,
                                                        t_licleosmepid,
+                                                       t_liclefllicepid,
                                                        t_liclep12epid,
                                                        t_licleprip12epid))
                     LOOP
@@ -529,6 +541,9 @@ IS
                             WHEN c_le.endpointid = t_licleosmepid THEN
                                 t_createrelendpointid   :=
                                     t_applegalentityosmepid;
+                            WHEN c_le.endpointid = t_liclefllicepid THEN
+                                t_createrelendpointid   :=
+                                    t_applegalentityflappepid;
                             WHEN c_le.endpointid = t_liclep12epid THEN
                                 t_createrelendpointid   :=
                                     t_applegalentityp12epid;
@@ -1010,6 +1025,7 @@ IS
                                           'CopyLicDetailsToAppProcHasRun',
                                           'Y');
         END IF;                                     -- IF t_CopyProcAlreadyRan
+
     END;                                  -- procedure CopyLicDetailsToApp end
 
     ----------------------------------------------------------------------------------------------------
@@ -1025,12 +1041,16 @@ IS
                                           a_asofdate      DATE)
     IS
     BEGIN
+
         t_applegalentityappepid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'Applicant');
         t_applegalentityosmepid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'OnSaleManager');
+        t_applegalentityflappepid :=
+            api.pkg_configquery.endpointidforname('j_Application',
+                                                  'FoodLesseeApp');  -- 05/08/2025 PK              Added code to copy food Lesse to license job 
         t_applegalentityp12epid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'P12Applicant');
@@ -1044,6 +1064,9 @@ IS
         t_licleosmepid   :=
             api.pkg_configquery.endpointidforname('j_License',
                                                   'OSMLegalEntity');
+        t_liclefllicepid :=
+            api.pkg_configquery.endpointidforname('j_License',
+                                                  'FoodLesseeLic');  -- 05/08/2025 PK              Added code to copy food Lesse to license job 
         t_liclep12epid   :=
             api.pkg_configquery.endpointidforname('j_License', 'P12Licensee');
         t_licleprip12epid   :=
@@ -1227,13 +1250,15 @@ IS
                              WHERE r.fromobjectid = t_licobjid
                                AND r.endpointid IN (t_liclelicenseeepid,
                                                     t_licleosmepid,
+                                                    t_liclefllicepid,
                                                     t_liclep12epid,
                                                     t_licleprip12epid)
                                AND r2.endpointid IN
                                        (t_lepersonepid, t_lecompanyepid))
                     LOOP
                         BEGIN
-                            SELECT MAX(r2.toobjectid) toobjectid2
+
+                            SELECT r2.toobjectid toobjectid2
                               INTO t_duplicateapplicant
                               FROM api.relationships  r
                                    JOIN api.relationships r2
@@ -1241,11 +1266,15 @@ IS
                              WHERE r.fromobjectid = a_appobjectid
                                AND r.endpointid IN (t_applegalentityappepid,
                                                     t_applegalentityosmepid,
+                                                    t_applegalentityflappepid,
                                                     t_applegalentityp12epid,
                                                     t_applegalentityprip12id)
                                AND r2.endpointid IN
                                        (t_lepersonepid, t_lecompanyepid)
-                               AND r2.toobjectid = c_le.r2toobjid;
+                               AND r2.toobjectid = c_le.r2toobjid
+                            ORDER BY r.logicaltransactionid DESC
+                            fetch first 1 rows only;
+
                         EXCEPTION
                             WHEN NO_DATA_FOUND THEN
                                 t_duplicateapplicant   := NULL;
@@ -1268,6 +1297,9 @@ IS
                                 WHEN c_le.endpointid = t_licleosmepid THEN
                                     t_createrelendpointid   :=
                                         t_applegalentityosmepid;
+                                 WHEN c_le.endpointid = t_liclefllicepid THEN
+                                    t_createrelendpointid   :=
+                                        t_applegalentityflappepid ;
                                 WHEN c_le.endpointid = t_liclep12epid THEN
                                     t_createrelendpointid   :=
                                         t_applegalentityp12epid;
