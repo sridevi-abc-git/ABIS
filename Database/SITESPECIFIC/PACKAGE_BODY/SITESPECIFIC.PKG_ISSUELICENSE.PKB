@@ -18,11 +18,15 @@ IS
     -- 09/25/2018 NW   WO  2748 - Designated Expiration Date is setting to past
     -- 01/03/2019 TJL  WO 16435 - Added initializing number of months Licensed for
     --                            variable use in testing for seasonals.
-    --                            Procedure setexpmonthyear 
-    --02/18/2020 PK   WO 20669 - Added code for original, change and transfer -Issue License.
-    --03/27/2020 PK   WO 20669 - Added code for Transfer Apps
-    --08/05/2021 TJL  WO 25899 - Added checking payment method to determine if to use 10 day
-    --                             business rule (validatepaymentcheck)
+    --                            Procedure setexpmonthyear
+    -- 02/18/2020 PK   WO 20669 - Added code for original, change and transfer -Issue License.
+    -- 03/27/2020 PK   WO 20669 - Added code for Transfer Apps
+    -- 08/05/2021 TJL  WO 25899 - Added checking payment method to determine if to use 10 day
+    --                              business rule (validatepaymentcheck)
+    -- 06/12/2023 NZA  CX 030043 - Added function GetConditionalDoc used in several places
+    --                               This replaces the "Max" function call
+    -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
+    --                              so that it would be copied over to License created t_licleflepid  and  t_applegalentityflepid
     -- **************************************************************************
 
     -- Variable Declarations for package
@@ -35,6 +39,7 @@ IS
     t_appexternalfilenum          query.j_application.externalfilenum%TYPE;
     t_applegalentityappepid       udt_id;
     t_applegalentityosmepid       udt_id;
+    t_applegalentityflepid        udt_id;
     t_applegalentityp12epid       udt_id;
     t_applegalentityprip12id      udt_id;
     t_applicreldefid              udt_id;
@@ -83,6 +88,7 @@ IS
     t_licltepid                   udt_id;
     t_liclelicenseeepid           udt_id;
     t_licleosmepid                udt_id;
+    t_licleflepid                 udt_id;
     t_liclep12epid                udt_id;
     t_licleprip12epid             udt_id;
     t_liclictypereldefid          udt_id;
@@ -486,6 +492,37 @@ IS
             END IF;
         END IF;
     END setexpmonthyear;
+  ----------------------------------------------------------------------------------------------------
+    --   * GetConditionalDoc() -- PUBLIC
+    -- Get the Object ID for the latest ABC 172 document.
+    -- Returns t_abc172docid, which can be used to access the related document.
+    ----------------------------------------------------------------------------------------------------
+    FUNCTION GetConditionalDoc(a_appobjectid udt_id)
+        RETURN udt_id
+    IS
+        t_abc172docid   udt_id;
+        t_EPId          udt_Id;
+    BEGIN
+        t_EPId := api.pkg_configquery.endpointidforname(
+                   'j_Application',
+                   'ABCWordDocument');
+
+        SELECT c.toobjectid
+          INTO t_abc172docid
+          FROM api.relationships  c
+               JOIN query.d_abcworddocument d
+                   ON d.objectid = c.toobjectid
+         WHERE c.fromobjectid = a_appobjectid
+           AND c.endpointid = t_EPId
+           AND d.wordreporttype like 'ABC-172%'
+         ORDER BY c.logicaltransactionid DESC
+         fetch first 1 rows only;
+
+        return t_abc172docid;
+
+    EXCEPTION WHEN NO_DATA_FOUND THEN
+        return NULL;
+    END GetConditionalDoc;
 
     ----------------------------------------------------------------------------------------------------
     --  IssueOriginalLicense() -- PUBLIC
@@ -512,16 +549,19 @@ IS
             api.pkg_configquery.objectdefidforname('r_ApplicationDBANames');
         t_licdbanamesreldefid   :=
             api.pkg_configquery.objectdefidforname('r_LicenseDBANames');
-        t_applegalentityappepid   :=
+        t_applegalentityappepid :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'Applicant');
-        t_applegalentityosmepid   :=
+        t_applegalentityosmepid :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'OnSaleManager');
-        t_applegalentityp12epid   :=
+        t_applegalentityflepid  :=
+            api.pkg_configquery.endpointidforname('j_Application',
+                                                  'FoodLesseeApp');   -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
+        t_applegalentityp12epid :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'P12Applicant');
-        t_applegalentityprip12id   :=
+        t_applegalentityprip12id :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'PrimaryP12Applicant');
         t_liclelicenseeepid   :=
@@ -530,6 +570,9 @@ IS
         t_licleosmepid   :=
             api.pkg_configquery.endpointidforname('j_License',
                                                   'OSMLegalEntity');
+        t_licleflepid   :=
+            api.pkg_configquery.endpointidforname('j_License',
+                                                  'FoodLesseeLic');    -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
         t_liclep12epid   :=
             api.pkg_configquery.endpointidforname('j_License', 'P12Licensee');
         t_licleprip12epid   :=
@@ -605,7 +648,7 @@ IS
         t_appemailaddrreldefid  :=
             api.pkg_configquery.objectdefidforname('r_EmailsApplication'); -- WO 20669 Added by Pawan on 2/18/2020 for Price posting email
         t_licemailaddrreldefid  :=
-            api.pkg_configquery.objectdefidforname('r_EmailsLicense'); -- WO 20669 Added by Pawan on 2/18/2020 for Price posting email    
+            api.pkg_configquery.objectdefidforname('r_EmailsLicense'); -- WO 20669 Added by Pawan on 2/18/2020 for Price posting email
 
 
         BEGIN
@@ -748,19 +791,19 @@ IS
                 WHEN NO_DATA_FOUND THEN
                     t_newrelobjectid   := NULL;
             END;
-            
+
             BEGIN
-              -- ### relate the Email Address to the license     WO 20669 Added by Pawan on 2/18/2020 for Price Posting email    
+              -- ### relate the Email Address to the license     WO 20669 Added by Pawan on 2/18/2020 for Price Posting email
                  SELECT c.fromobjectid
                   INTO t_emailaddrobjectid
                   FROM api.relationships c
-                 WHERE c.relationshipdefid = t_appemailaddrreldefid     
+                 WHERE c.relationshipdefid = t_appemailaddrreldefid
                    AND c.toobjectid = a_appobjectid;
 
                 -- find the endpointid for the lic/email relationship
                 t_endpointid   :=
-                    gettoendpointid(t_licemailaddrreldefid, t_licdefid); 
-                                                                       
+                    gettoendpointid(t_licemailaddrreldefid, t_licdefid);
+
                 -- relate the email address to the license
                 t_newrelobjectid   :=
                     api.pkg_relationshipupdate.new(t_endpointid,
@@ -769,22 +812,11 @@ IS
             EXCEPTION
                 WHEN NO_DATA_FOUND THEN
                     t_newrelobjectid   := NULL;
-            END; --Ended WO 20669 Added by Pawan on 2/18/2020 for Price Posting email  
+            END; --Ended WO 20669 Added by Pawan on 2/18/2020 for Price Posting email
 
             -- Find the current revision of the Conditions Document ABC-172 (if exists), and relate to License
             BEGIN
-                SELECT MAX(c.toobjectid)
-                  INTO t_abc172docid
-                  FROM api.relationships  c
-                       JOIN query.d_abcworddocument d
-                           ON d.objectid = c.toobjectid
-                          AND d.wordreporttype = 'ABC-172'
-                 WHERE c.fromobjectid = a_appobjectid
-                   AND c.endpointid =
-                       api.pkg_configquery.endpointidforname(
-                           'j_Application',
-                           'ABCWordDocument');
-
+                t_abc172docid := GetConditionalDoc(a_appobjectid);
                 IF t_abc172docid IS NOT NULL THEN
                     t_newrelobjectid   :=
                         api.pkg_relationshipupdate.new(
@@ -1382,6 +1414,7 @@ IS
                               WHERE fromobjectid = a_appobjectid
                                 AND endpointid IN (t_applegalentityappepid,
                                                    t_applegalentityosmepid,
+                                                   t_applegalentityflepid,
                                                    t_applegalentityp12epid,
                                                    t_applegalentityprip12id))
                 LOOP
@@ -1399,6 +1432,8 @@ IS
                             t_createrelendpointid   := t_liclelicenseeepid;
                         WHEN c_le.endpointid = t_applegalentityosmepid THEN
                             t_createrelendpointid   := t_licleosmepid;
+                        WHEN c_le.endpointid = t_applegalentityflepid THEN
+                            t_createrelendpointid   := t_licleflepid; 
                         WHEN c_le.endpointid = t_applegalentityp12epid THEN
                             t_createrelendpointid   := t_liclep12epid;
                         WHEN c_le.endpointid = t_applegalentityprip12id --When looking at the Primary P12 Relationship Copy the rel
@@ -1520,6 +1555,9 @@ IS
         t_applegalentityosmepid       :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'OnSaleManager');
+        t_applegalentityflepid        :=
+            api.pkg_configquery.endpointidforname('j_Application',
+                                                  'FoodLesseeApp');   -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
         t_applegalentityp12epid       :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'P12Applicant');
@@ -1536,6 +1574,9 @@ IS
         t_licleosmepid                :=
             api.pkg_configquery.endpointidforname('j_License',
                                                   'OSMLegalEntity');
+        t_licleflepid   :=
+            api.pkg_configquery.endpointidforname('j_License',
+                                                  'FoodLesseeLic');    -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
         t_liclep12epid                :=
             api.pkg_configquery.endpointidforname('j_License', 'P12Licensee');
         t_licleprip12epid             :=
@@ -1751,7 +1792,7 @@ IS
                         -20000,
                         'ERROR with Existing Premises Address. ' || SQLERRM);
             END;
-            
+
              BEGIN
              -- Email Address Added by Pawan WO 20669 for transfer apps --3/27/2020
                 --Always Copy the Email Address from the Application to the new License
@@ -1778,18 +1819,7 @@ IS
             --End Added by Pawan WO 20669 for transfer apps --3/27/2020
             -- Find the current revision of Conditions Document ABC-172 (if exists), and relate to License
             BEGIN
-                SELECT MAX(c.toobjectid)
-                  INTO t_abc172docid
-                  FROM api.relationships  c
-                       JOIN query.d_abcworddocument d
-                           ON d.objectid = c.toobjectid
-                          AND d.wordreporttype = 'ABC-172'
-                 WHERE c.fromobjectid = a_appobjectid
-                   AND c.endpointid =
-                       api.pkg_configquery.endpointidforname(
-                           'j_Application',
-                           'ABCWordDocument');
-
+                t_abc172docid := GetConditionalDoc(a_appobjectid);
                 IF t_abc172docid IS NOT NULL THEN
                     t_endpointid   :=
                         api.pkg_configquery.endpointidforname(
@@ -1815,6 +1845,7 @@ IS
                                AND endpointid IN
                                        (t_liclelicenseeepid,
                                         t_licleosmepid,
+                                        t_licleflepid,
                                         t_liclep12epid))
                     LOOP
                         IF c_le2.endpointid <> t_liclep12epid THEN -- Copy the Legal Entity associated with the Application
@@ -1840,6 +1871,7 @@ IS
                              WHERE fromobjectid = a_appobjectid
                                AND endpointid IN (t_applegalentityappepid,
                                                   t_applegalentityosmepid,
+                                                  t_applegalentityflepid,
                                                   t_applegalentityp12epid,
                                                   t_applegalentityprip12id))
                     LOOP
@@ -1855,11 +1887,13 @@ IS
 
                         -- Get the endpoint for the rel from license to le
                         CASE
-                            WHEN c_le.endpointid = t_applegalentityappepid THEN
+                            WHEN c_le.endpointid = t_applegalentityappepid THEN 
                                 t_createrelendpointid   :=
                                     t_liclelicenseeepid;
                             WHEN c_le.endpointid = t_applegalentityosmepid THEN
                                 t_createrelendpointid   := t_licleosmepid;
+                            WHEN c_le.endpointid = t_applegalentityflepid THEN
+                                t_createrelendpointid   := t_licleflepid;
                             WHEN c_le.endpointid = t_applegalentityp12epid THEN
                                 t_createrelendpointid   := t_liclep12epid;
                             WHEN c_le.endpointid = t_applegalentityprip12id --When looking at the Primary P12 Relationship Copy the rel
@@ -2921,6 +2955,9 @@ IS
         t_applegalentityosmepid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'OnSaleManager');
+        t_applegalentityflepid        :=
+            api.pkg_configquery.endpointidforname('j_Application',
+                                                  'FoodLesseeApp');   -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
         t_applegalentityp12epid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'P12Applicant');
@@ -2935,6 +2972,9 @@ IS
         t_licleosmepid   :=
             api.pkg_configquery.endpointidforname('j_License',
                                                   'OSMLegalEntity');
+        t_licleflepid   :=
+            api.pkg_configquery.endpointidforname('j_License',
+                                                  'FoodLesseeLic');   --05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
         t_liclep12epid   :=
             api.pkg_configquery.endpointidforname('j_License', 'P12Licensee');
         t_licleprip12epid   :=
@@ -3103,12 +3143,12 @@ IS
             WHEN NO_DATA_FOUND THEN
                 t_newrelobjectid   := NULL;
         END;
-        
+
  -- Email Address Added by Pawan WO 20669 for transfer apps --3/30/2020
  --Remove existing Email License relationship
-    BEGIN                 
+    BEGIN
             SELECT r.relationshipid
-              INTO t_emailaddrobjectid 
+              INTO t_emailaddrobjectid
               FROM query.r_EmailsLicense r
              WHERE r.licensejobid = t_chnglicobjid;
 
@@ -3132,7 +3172,7 @@ IS
                                                           'LicenseEmail'),
                     t_chnglicobjid,
                      t_emailaddrobjectid);
-        
+
                EXCEPTION
              WHEN NO_DATA_FOUND THEN
                     t_newrelobjectid   := NULL;
@@ -3140,17 +3180,7 @@ IS
 
         -- Find the current revision of Conditions Document ABC-172 (if exists), and relate to License
         BEGIN
-            SELECT MAX(c.toobjectid)
-              INTO t_abc172docid
-              FROM api.relationships  c
-                   JOIN query.d_abcworddocument d
-                       ON d.objectid = c.toobjectid
-                      AND d.wordreporttype = 'ABC-172'
-             WHERE c.fromobjectid = a_appobjectid
-               AND c.endpointid =
-                   api.pkg_configquery.endpointidforname('j_Application',
-                                                         'ABCWordDocument');
-
+            t_abc172docid := GetConditionalDoc(a_appobjectid);
             IF t_abc172docid IS NOT NULL THEN
                 t_endpointid   :=
                     api.pkg_configquery.endpointidforname('j_License',
@@ -3267,6 +3297,7 @@ IS
                   FROM api.relationships c
                  WHERE c.endpointid IN (t_liclelicenseeepid,
                                         t_licleosmepid,
+                                        t_licleflepid,
                                         t_liclep12epid,
                                         t_licleprip12epid)
                    AND c.fromobjectid = t_chnglicobjid)
@@ -3299,6 +3330,7 @@ IS
                        AND endpointid IN
                                (t_applegalentityappepid,
                                 t_applegalentityosmepid,
+                                t_applegalentityflepid,
                                 t_applegalentityp12epid))
             LOOP
                 IF c_le.endpointid NOT IN
@@ -3314,7 +3346,9 @@ IS
                     WHEN c_le.endpointid = t_applegalentityappepid THEN
                         t_createrelendpointid   := t_liclelicenseeepid;
                     WHEN c_le.endpointid = t_applegalentityosmepid THEN
-                        t_createrelendpointid   := t_licleosmepid;
+                        t_createrelendpointid   := t_licleosmepid; 
+                    WHEN c_le.endpointid = t_applegalentityflepid THEN
+                        t_createrelendpointid   := t_licleflepid;
                     WHEN c_le.endpointid = t_applegalentityp12epid THEN
                         t_createrelendpointid   := t_liclep12epid;
                     WHEN c_le.endpointid = t_applegalentityprip12id --When looking at the Primary P12 Relationship Copy the rel
@@ -4350,6 +4384,9 @@ IS
         t_applegalentityosmepid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'OnSaleManager');
+        t_applegalentityflepid    :=
+            api.pkg_configquery.endpointidforname('j_Application',
+                                                  'FoodLesseeApp');   -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
         t_applegalentityp12epid   :=
             api.pkg_configquery.endpointidforname('j_Application',
                                                   'P12Applicant');
@@ -4376,6 +4413,9 @@ IS
         t_licleosmepid   :=
             api.pkg_configquery.endpointidforname('j_License',
                                                   'OSMLegalEntity');
+        t_licleflepid   :=
+            api.pkg_configquery.endpointidforname('j_License',
+                                                  'FoodLesseeLic');   -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
         t_liclep12epid   :=
             api.pkg_configquery.endpointidforname('j_License', 'P12Licensee');
         t_licleprip12epid   :=
@@ -4604,10 +4644,10 @@ IS
             WHEN NO_DATA_FOUND THEN
                 t_newrelobjectid   := NULL;
         END;
-        
+
                   BEGIN                  --remove existing Email Address relationship -- WO 20669 Added by Pawan for Price posting email Change License
             SELECT r.relationshipid
-              INTO t_emailaddrobjectid  
+              INTO t_emailaddrobjectid
               FROM query.r_EmailsLicense r
              WHERE r.licensejobid = t_chnglicobjid;
 
@@ -4624,7 +4664,7 @@ IS
               FROM query.r_EmailsApplication r
              WHERE r.applicationjobid = a_appobjectid;
 
-            -- Relate Email Address object 
+            -- Relate Email Address object
             t_newrelobjectid   :=
                 api.pkg_relationshipupdate.new(
                     api.pkg_configquery.endpointidforname('j_License',
@@ -4639,15 +4679,7 @@ IS
 
         -- Find the current revision of Conditions Document ABC-172 (if exists), and relate to License
         BEGIN
-            SELECT MAX(c.toobjectid)
-              INTO t_abc172docid
-              FROM api.relationships  c
-                   JOIN query.d_abcworddocument d
-                       ON d.objectid = c.toobjectid
-                      AND d.wordreporttype = 'ABC-172'
-             WHERE c.fromobjectid = a_appobjectid
-               AND c.endpointid = t_appworddocmentepid;
-
+            t_abc172docid := GetConditionalDoc(a_appobjectid);
             IF t_abc172docid IS NOT NULL THEN
                 t_endpointid   := t_licworddocumentepid;
                 t_newrelobjectid   :=
@@ -4747,6 +4779,7 @@ IS
                   FROM api.relationships c
                  WHERE c.endpointid IN (t_liclelicenseeepid,
                                         t_licleosmepid,
+                                        t_licleflepid,   -- 05/08/2025PK               Added Food Lessee to Original, change anf trannsfer application code 
                                         t_liclep12epid,
                                         t_licleprip12epid)
                    AND c.fromobjectid = t_chnglicobjid)
@@ -4777,6 +4810,7 @@ IS
                           WHERE fromobjectid = a_appobjectid
                             AND endpointid IN (t_applegalentityappepid,
                                                t_applegalentityosmepid,
+                                               t_applegalentityflepid,
                                                t_applegalentityp12epid,
                                                t_applegalentityprip12id))
             LOOP
@@ -4792,8 +4826,10 @@ IS
                 CASE
                     WHEN c_le.endpointid = t_applegalentityappepid THEN
                         t_createrelendpointid   := t_liclelicenseeepid;
-                    WHEN c_le.endpointid = t_applegalentityosmepid THEN
+                    WHEN c_le.endpointid = t_applegalentityosmepid THEN 
                         t_createrelendpointid   := t_licleosmepid;
+                    WHEN c_le.endpointid = t_applegalentityflepid THEN 
+                        t_createrelendpointid   := t_licleflepid;    -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
                     WHEN c_le.endpointid = t_applegalentityp12epid THEN
                         t_createrelendpointid   := t_liclep12epid;
                     WHEN c_le.endpointid = t_applegalentityprip12id --When looking at the Primary P12 Relationship Copy the rel
@@ -6728,7 +6764,7 @@ IS
                                                      f.feeid))
                                              ltcode,
                                      qp.paymentmethod -- 08/05/2021 TJL WO 25899
-                                     paymentmethod                                             
+                                     paymentmethod
                                     FROM api.jobs j
                                          JOIN api.fees f ON f.jobid = j.jobid
                                          JOIN api.feetransactions ft
@@ -6800,7 +6836,7 @@ IS
                               AND a_processpayment = 'Y')
                         GROUP BY ltcode)
                 LOOP
-                    IF f2.depositdate > 
+                    IF f2.depositdate >
                     -- 08/05/2021 TJL WO 25899
                     CASE f2.paymentmethod
                              WHEN 'CRCD' THEN SYSDATE + 1
