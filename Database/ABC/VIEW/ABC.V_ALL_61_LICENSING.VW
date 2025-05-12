@@ -9,7 +9,7 @@ Select jl.Objectid  Job_ID,
          api.pkg_ColumnQuery.VALUE (b.ObjectId, 'PrimaryLicensee') PrimaryLicensee,
          SUBSTR (api.pkg_ColumnQuery.VALUE (jl.ObjectId, 'LicenseNumber'), 1,40)  LicenseNumber,
          'LICENSING 61' Assign_type,
-         api.pkg_ColumnQuery.VALUE (b.ObjectId, 'AssignStaffName') AssignStaffName,
+         api.pkg_ColumnQuery.VALUE (b.ObjectId, 'ASSIGNEDTONAME') AssignStaffName,
          (SELECT AttributeValue
              FROM possedata.ObjectColumnData d
             WHERE ObjectId = b.ObjectId AND ColumnDefId = 444086) dup_LicensingRepresentative,
