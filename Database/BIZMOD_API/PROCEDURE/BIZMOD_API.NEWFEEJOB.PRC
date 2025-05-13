@@ -23,6 +23,7 @@ AS
     --   4.2.1  02/13/2026 TJL  BIZ-17356  Limit string length for info value
     --   4.2.2  02/14/2025 TJL  BIZ-17356  Change how lsp response for error is handled.
     --   5.0.0  03/05/2025 TJL  BIZ-17503  Corrected bug in logging errors from CALLLSP
+    --   6.0.0  04/22/2025 TJL  BIZ-18056  Added saving new fees to e_fees_t table
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/';
     t_method      constant varchar2(10) := 'PATCH';
@@ -114,6 +115,30 @@ BEGIN
         UPDATE bizmod_api.license_app_t a
            set a.newfee = null
          where a.jobid = a_objectid;
+         
+        --   6.0.0  04/22/2025 TJL  BIZ-18056
+        MERGE INTO bizmod_api.e_fees_t f
+             USING (SELECT f.jobid,
+                           f.description,
+                           (SELECT reo.objectid
+                              FROM api.registeredexternalobjects reo
+                             WHERE (reo.linkvalue = TO_CHAR(f.feeid)
+                                AND reo.objectdefid =
+                                    api.pkg_configquery.objectdefidforname('o_Fee')))
+                               feeobjid,
+                           f.amount
+                      FROM api.fees f where f.jobid = a_objectid
+                           ) a
+                ON (f.feeobjid = a.feeobjid)
+        WHEN NOT MATCHED
+        THEN
+            INSERT VALUES (a.jobid,
+                           a.description,
+                           a.feeobjid,
+                           a.amount,
+                           NULL,
+                           SYSDATE);
+                 
     COMMIT;
 END;
 /
