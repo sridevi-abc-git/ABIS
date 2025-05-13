@@ -30,6 +30,7 @@ IS
     --                                        applications to pkg_abis
     --   6.0.0  04/14/2025  TJL  BIZ-17979  Added setting the Alternate Base File Office when
     --                                        Base File Office is HQ
+    --   7.0.0   04/30/2025  TJL  BIZ-18052  Added sorting to legal entity
     -- ****************************************************************************
 
     TYPE apprec_t IS RECORD(lspapplicationid VARCHAR2(40),
@@ -296,6 +297,29 @@ BEGIN
                 pkg_abis.add_person(a_entityobjectid => t_jobid,
                                     a_person    => t_person);
             END IF;
+
+            -- 04/30/2025  TJL  BIZ-18052
+            -- order legal entities by name after being added to application
+            FOR rec
+                IN (SELECT l.legalentity, l.formattedname, ROWNUM * 10 line
+                      FROM (  SELECT r.toobjectid                                  legalentity,
+                                     api.pkg_columnquery.VALUE(r.toobjectid,
+                                                               'FormattedName')    formattedname
+                                FROM api.relationships r
+                               WHERE r.fromobjectid = t_jobid
+                                 AND r.endpointid IN
+                                         (api.pkg_configquery.endpointidforname(
+                                              'j_Application',
+                                              'OnSaleManager'),
+                                          api.pkg_configquery.endpointidforname(
+                                              'j_Application',
+                                              'Applicant'))
+                            ORDER BY formattedname) l)
+            LOOP
+                api.pkg_columnupdate.setvalue(rec.legalentity,
+                                              'SortKey',
+                                              rec.line);
+            END LOOP;
         END IF;
 
         -- "ApplicationCreatedDate" must be set last before save
