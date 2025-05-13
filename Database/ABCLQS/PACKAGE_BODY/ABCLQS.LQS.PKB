@@ -26,6 +26,7 @@ CREATE OR REPLACE PACKAGE BODY ABCLQS.LQS AS
 -- 03/05/2020 NW            Added PP_Legal_Entity_XML to LQS_STREAMS.PKB
 -- 02/22/2021 THL   24000   Added report type 29 to get covid relief fee information 
 -- 12/23/2021 NW            Added report type 30 for Alcohol To Go project
+-- 04/16/2025 PK    4545    Excluded 91 from LT list as per Jaime's request.
 
 -- *************************************************************************************************
 
@@ -91,7 +92,7 @@ BEGIN
       SELECT ltc2.licensetypecode || '-' || ltc2.licensetypename "DESCRIPTION", ltc2.licensetypecode "VALUE"
         FROM (SELECT ltc.licensetypename licensetypename,
                      ltc.licensetypecode licensetypecode
-                FROM mart.licensetypecategory ltc
+                FROM mart.licensetypecategory ltc where ltc.LICENSETYPECODE not in '92' -- excluded 92 as Jaime said LT 92 is public then more licensee will apply for it and it will create more enforcement issues in the state. 
            UNION ALL
               SELECT 'Temporary Retail Permit' licensetypename, '30' licensetypecode
                 FROM DUAL) ltc2

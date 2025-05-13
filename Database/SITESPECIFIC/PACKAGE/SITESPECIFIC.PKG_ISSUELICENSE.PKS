@@ -169,6 +169,7 @@ AS
      *********************************************************************************/
     PROCEDURE issuemulticaterereventauths(a_objectid udt_id, a_asofdate DATE);
 END pkg_issuelicense;
+
 /
 
 

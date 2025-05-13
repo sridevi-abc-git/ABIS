@@ -39,6 +39,7 @@ CREATE OR REPLACE PACKAGE BODY ABCLQS.LQS_DETAIL AS
 -- 07/10/2019 NW    18416   LQS: 603828 not found - inline sub-query returns more than one record for master-license
 -- 12/10/2019 TJL   20023   Added returning Section Code with condition information  
 -- 06/15/2020 NW            Formatting
+-- 02/25/2025 PK            Added Notification for LA fires
 -- ****************************************************************************
 
 ---------------------------------------------------
@@ -119,7 +120,8 @@ SELECT
       ( GET_CURRENT_DISCIPLANARY_ACT(LA.JOBID)) CURRENT_DISCIPLANARY_ACTION, 
       ( GET_DISCIPLANARY_HISTORY(LA.JOBID)) DISCIPLANARY_HISTORY, 
       ( GET_HOLDS(l_license)) HOLD_INFO, 
-      ( GET_ESCROW(LA.JOBID)) ESCROW
+      ( GET_ESCROW(LA.JOBID)) ESCROW,
+      ( GET_NOTIFICATIONS(LA.JOBID)) NOTIFICATIONS
     )
 	).GETCLOBVAL()
 INTO l_xmlclob
@@ -842,6 +844,27 @@ WHERE A.APPLICATIONOBJECTID = p_JobId;
   
 RETURN l_XML;
 END GET_ESCROW;
+
+FUNCTION GET_NOTIFICATIONS
+-----------------------------------------------  
+( p_JobId INTEGER)
+RETURN XMLTYPE
+IS
+  l_XML XMLTYPE;
+
+BEGIN
+SELECT
+  XMLAGG(
+    XMLELEMENT("NOTIFICATIONS",  SUBSTR(LA.LAWILDFIREEXTENSION ||' "LA Wildfire Renewal Extension"',1,250)
+     -- XMLFOREST(LA.LAWILDFIREEXTENSION "LA Wildfire Renewal Extension") 
+  ) )  
+INTO l_xml
+FROM mart.license LA
+WHERE LA.jobid= p_JobId
+and LA.LAWILDFIREEXTENSION = 'Y';
+  
+RETURN l_XML;
+END GET_NOTIFICATIONS;
 
 ---------------
 END LQS_DETAIL;

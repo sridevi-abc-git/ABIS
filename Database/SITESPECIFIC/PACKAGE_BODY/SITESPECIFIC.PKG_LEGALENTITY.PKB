@@ -15,6 +15,11 @@ AS
     -----------------------------------------------------------------------------
     --    Date                  Comment
     -- 08/16/2018 TJL         Initial Check-in
+    -- 05/08/2025 PK          Added to Food Lessee to procedure LegalEntityHierarchy
+    -- 05/08/2025 PK          Added Food Lessee to PROCEDURE getappforle
+    -- 05/08/2025 PK          Added Food Lessee to  PROCEDURE getlicforle
+    -- 05/08/2025 PK          Added to Food Lessee to procedure LegalEntityHierarchy license
+    -- 05/08/2025 PK          Added code for food lessee lic and app to  FUNCTION getlegalentityidforrel
     -- **************************************************************************
 
     gc_stockholderendpoint      udt_id
@@ -55,6 +60,12 @@ AS
     gc_managerle                udt_id
         := api.pkg_configquery.endpointidforname('j_Application',
                                                  'OnSaleManager');
+    gc_foodlesseele                udt_id                                  -- Added by Pawan on 05/08/2025
+        := api.pkg_configquery.endpointidforname('j_Application',
+                                                 'FoodLesseeApp');
+    gc_foodlesseelelic                udt_id                               -- Added by Pawan on 05/08/2025
+        := api.pkg_configquery.endpointidforname('j_License',
+                                                 'FoodLesseeLic');
     gc_lelicensee               udt_id
         := api.pkg_configquery.endpointidforname('o_LegalEntity',
                                                  'LegalEntityLicense');
@@ -84,7 +95,7 @@ AS
 
     /*---------------------------------------------------------------------------
     * GetLegalEntityHierarchy() -- PUBLIC
-    * Modified by: Andy Patterson & Daniel Magill (CXUSA)
+    * Modified by: Andy Patterson  Magill (CXUSA)
     * Modified on: 10/28/2015
     * We added the two lines in the CONNECT BY clause that prevent this code from
     * looping back up to the top-level Legal Entity object. Also, don't copy the
@@ -335,6 +346,8 @@ AS
                                           gc_applicantle,
                                           gc_p12le,
                                           gc_managerle,
+                                          gc_foodlesseele,
+                                          gc_foodlesseelelic,
                                           gc_licp12le,
                                           gc_licmanagerle)
                      AND r.fromobjectid = a_objectid)
@@ -370,6 +383,8 @@ AS
                                           gc_applicantle,
                                           gc_p12le,
                                           gc_managerle,
+                                          gc_foodlesseele,
+                                          gc_foodlesseelelic,
                                           gc_licp12le,
                                           gc_licmanagerle)
                      AND r.fromobjectid = a_objectid
@@ -537,9 +552,10 @@ AS
                           a_endpointid       udt_id,
                           a_relatedobjectids OUT api.udt_objectlist)
     IS
-        t_applicantendpointid      udt_id;
-        t_osmapplicantendpointid   udt_id;
-        t_topparentleobjectid      udt_id;
+        t_applicantendpointid               udt_id;
+        t_osmapplicantendpointid            udt_id;
+        t_topparentleobjectid               udt_id;
+        t_foodlesseeapplicantendpointid     udt_id;
     BEGIN
         a_relatedobjectids   := api.udt_objectlist();
         t_applicantendpointid   :=
@@ -548,6 +564,10 @@ AS
         t_osmapplicantendpointid   :=
             api.pkg_configquery.endpointidforname('o_LegalEntity',
                                                   'OSMApplication');
+                                                  
+        t_foodlesseeapplicantendpointid   :=
+            api.pkg_configquery.endpointidforname('o_LegalEntity',
+                                                  'FoodLesseeApplication');
 
         FOR c
             IN (SELECT r.toobjectid
@@ -556,7 +576,7 @@ AS
                            ON r2.rootobjectid = r.fromobjectid
                  WHERE r2.nodeobjectid = a_objectid
                    AND r.endpointid IN
-                           (t_applicantendpointid, t_osmapplicantendpointid))
+                           (t_applicantendpointid, t_osmapplicantendpointid,  t_foodlesseeapplicantendpointid))
         LOOP
             a_relatedobjectids.EXTEND(1);
             a_relatedobjectids(a_relatedobjectids.COUNT)   :=
@@ -581,7 +601,7 @@ AS
                        JOIN api.relationships r
                            ON r2.rootobjectid = r.fromobjectid
                  WHERE r2.nodeobjectid = a_objectid
-                   AND r.endpointid IN (gc_lelicensee, gc_leosmlicensee)
+                   AND r.endpointid IN (gc_lelicensee, gc_leosmlicensee, gc_foodlesseelelic)
                 UNION ALL
                 SELECT r.toobjectid
                   FROM query.r_legalentityroot  r2
@@ -760,7 +780,7 @@ AS
             END IF;
 
             --The SQL from GetLegalEntityHierarchy sometimes returns things twice
-            --This Ensures that duplicates do not create extra LE & RELS
+            --This Ensures that duplicates do not create extra LE 
             t_exists                              := 0;
             x                                     := legalentityxref.FIRST;
 
@@ -987,6 +1007,8 @@ AS
              WHERE r.endpointid IN (gc_licenseele,
                                     gc_applicantle,
                                     gc_managerle,
+                                    gc_foodlesseele,
+                                    gc_foodlesseelelic,
                                     gc_licmanagerle)
                AND r.fromobjectid = a_jobid
                AND r.toobjectid = a_rowobjectid;
@@ -1382,12 +1404,18 @@ AS
         t_osmapplicaint        udt_id
             := api.pkg_configquery.endpointidforname('o_LegalEntity',
                                                      'OSMApplication');
+        t_foodlesseeapp       udt_id
+            := api.pkg_configquery.endpointidforname('o_LegalEntity',
+                                                     'FoodLesseeApplication');
         t_legalentitylic       udt_id
             := api.pkg_configquery.endpointidforname('o_LegalEntity',
                                                      'LegalEntityLicense');
         t_osmlicensee          udt_id
             := api.pkg_configquery.endpointidforname('o_LegalEntity',
                                                      'OSMLicense');
+        t_foodlesseelic       udt_id
+            := api.pkg_configquery.endpointidforname('o_LegalEntity',
+                                                     'FoodLesseeLicense');
         t_officerlegalentity   udt_id
             := api.pkg_configquery.endpointidforname('o_LegalEntity',
                                                      'OfficerParentEntity');
@@ -1405,8 +1433,10 @@ AS
                    WHERE r.relationshipid = a_relationshipid
                      AND r.endpointid IN (t_appapplicaint,
                                           t_osmapplicaint,
+                                          t_foodlesseeapp,
                                           t_legalentitylic,
                                           t_osmlicensee,
+                                          t_foodlesseelic,
                                           t_officerlegalentity,
                                           t_stockholderentity,
                                           t_spouselegalentity))
@@ -2176,9 +2206,10 @@ AS
         CLOSE t_legalentities;
     END;
 END pkg_legalentity;
-
 /
 
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_LEGALENTITY TO BIZMOD_API;
 
 GRANT EXECUTE ON SITESPECIFIC.PKG_LEGALENTITY TO POSSEEXTENSIONS;
 

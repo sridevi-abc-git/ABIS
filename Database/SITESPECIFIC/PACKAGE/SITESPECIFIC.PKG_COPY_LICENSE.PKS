@@ -43,6 +43,7 @@ AS
     PROCEDURE copyprioritylicdetailstoapp(a_appobjectid   udt_id,
                                           a_asofdate      DATE);
 END pkg_copy_license;
+
 /
 
 

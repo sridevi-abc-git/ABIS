@@ -16,6 +16,7 @@ IS
     --    Date                  Comment
     -- 08/16/2018 TJL         Initial Check-in
     -- 05/28/2020 PK          WO-21594 Adding Spouse reflecting under the wrong entity
+    -- 05/08/2025 PK          Added foodlesseeApplication and License to FUNCTION rootconnectedtojob
     -- **************************************************************************
     SUBTYPE udt_idlist IS api.pkg_definition.udt_idlist;
 
@@ -587,6 +588,7 @@ IS
                            'AppApplication',
                            'ApplicationCopyApp',
                            'OSMApplication',
+                           'FoodLesseeApplication',
                            'P12Application',
                            'PrimaryP12Application',
                            -- Licenses
@@ -594,6 +596,7 @@ IS
                            'PrimaryP12License',
                            'LicenseCopy',
                            'LegalEntityLicense',
+                           'FoodLesseeLicense',
                            'OSMLicense');
 
         RETURN t_jobrelationshipcount > 0;
