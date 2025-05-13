@@ -48,10 +48,11 @@ AS
     --                                          the current ABIS transaction cannot be ended at this time.
     --  10.4.0  01/21/2025  TJL               Added the ability to turn off sending emails thru the configuration table.
     --  10.4.3  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
-    --  10.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function and change how CALLSSP handle's 
+    --  10.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function and change how CALLSSP handle's
     --                                          data being returned from LSP call.
     --  10.5.1  02/06/2025  TJL  BIZ-17356    Corrected bug when no response text is received to log it
     --  10.5.2  02/07/2025  TJL  BIZ-17356    Code cleanup
+    --  11.0.0  05/02/2025  TJL  BIZ-18056    Change prototype parameter on calllsp
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -90,7 +91,7 @@ AS
 
     FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
                      a_method       IN VARCHAR2,
-                     a_content      IN json_object_t DEFAULT json_object_t(),
+                     a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
                      a_file         IN BLOB DEFAULT NULL,
                      a_token        IN VARCHAR2 DEFAULT NULL)
         RETURN json_object_t
@@ -256,17 +257,22 @@ AS
         UTL_HTTP.end_response(t_http_response);
         UTL_HTTP.end_request(t_http_request);
 
-        IF (a_content.has('password'))
+        IF (a_content.is_Object) -- 05/02/2025  TJL  BIZ-18056
         THEN
-            t_content := '{"email":"*****","password":"******"}';
-
-            IF (t_return.get_number('status') = 200)
+            IF (treat(a_content as json_object_t).has('password'))
             THEN
-                t_responsetext :=
-                    json_object('status' VALUE t_return.get_number('status'));
+                t_content := '{"email":"*****","password":"******"}';
+
+                IF (t_return.get_number('status') = 200)
+                THEN
+                    t_responsetext :=
+                        json_object('status' VALUE t_return.get_number('status'));
+                ELSE
+                    t_responsetext := t_return.TO_CLOB;
+                END IF;
             ELSE
                 t_responsetext := t_return.TO_CLOB;
-            END IF;
+            end if;
         ELSE
             t_responsetext := t_return.TO_CLOB;
         END IF;
