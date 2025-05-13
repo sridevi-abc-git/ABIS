@@ -44,11 +44,172 @@ IS
     --  13.0.0  11/26/2024  TJL  BIZ-16612  Add checking for AWF fees manually being paid
     --  13.0.1  12/05/2024  BN   BIZ-16805  Change how application object id is retrieved
     --  13.1.0  12/09/2024  TJL  BIZ-16612  Added reseting AWF required flag when fee manually paid
+    --  14.0.1  04/22/2025  TJL  BIZ-18056  Added procedure manualpayment to notify LSP when
+    --                                         when payments are made
     -- ****************************************************************************
 
-    -- ****************************************************************************
-    --  a_fiscalstart - 3 months and a_fiscalend dates should be for the previous fiscal year
-    -- ****************************************************************************
+    PROCEDURE manualpayments
+    AS
+        t_url CONSTANT VARCHAR2(1000)
+                           := '/api/licensing/internal/license-applications/<<applicationId>>/fees' ;
+        t_method CONSTANT VARCHAR2(10) := 'PUT';
+        t_urlinfo      VARCHAR2(10000);
+        t_process CONSTANT VARCHAR2(32) := 'MANUALPAYMENT';
+        t_body         VARCHAR2(4000);
+        t_applicationid NUMBER;
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
+        t_value        CLOB;
+        t_body_value   CLOB;
+        t_results      json_object_t;
+        t_token        VARCHAR2(1000);
+        t_results_text VARCHAR2(32767);
+        t_element      json_element_t;
+
+    BEGIN
+        -- update eservices fee table for fees paid on line
+        FOR fees
+            IN (SELECT f.feeobjid
+                  FROM bizmod_api.e_fees_t  f
+                       JOIN api.fees a
+                           ON (a.feeid =
+                               api.pkg_columnquery.numericvalue(f.feeobjid,
+                                                                'FeeId')
+                           AND (a.paidamount + a.amount + a.adjustedamount) <=
+                               0)
+                       JOIN bizmod_api.e_payments_t p
+                           ON (p.feeobjid = f.feeobjid)
+                 WHERE f.paiddate IS NULL)
+        LOOP
+            UPDATE bizmod_api.e_fees_t f
+               SET f.paiddate = SYSDATE
+             WHERE f.feeobjid = fees.feeobjid;
+        END LOOP;
+
+        COMMIT;
+
+        -- check for any manual payments made in abis
+    FOR j IN (  SELECT f.jobid
+                    FROM bizmod_api.e_fees_t f
+                   WHERE f.paiddate IS NULL
+                GROUP BY f.jobid)
+    LOOP
+        SELECT json_arrayagg(
+                   (SELECT reo.objectid -- feeobjid
+                      FROM api.registeredexternalobjects reo
+                     WHERE reo.objectdefid =
+                           api.pkg_configquery.objectdefidforname('o_fee')
+                       AND reo.linkvalue = TO_CHAR(a.feeid)))
+          INTO t_body
+          FROM api.fees a
+         WHERE a.paidamount != 0
+           AND a.jobid = j.jobid;
+            BEGIN
+                t_applicationid :=
+                    api.pkg_columnquery.VALUE(j.jobid, 'LSPId');
+                t_urlinfo :=
+                    REPLACE(t_url, '<<applicationId>>', t_applicationid);
+
+                t_element := json_array_t.parse(t_body);
+
+                t_results := bizmod_api.utl_licenseinfo.lsplogin;
+
+                IF (t_results.get_number('status') = 200)
+                THEN
+                    t_token :=
+                        t_results.get_object('lspresponse').get_string(
+                            'token');
+
+                    t_results :=
+                        bizmod_api.utl_licenseinfo.calllsp(
+                            a_urlinfo   => t_url || t_applicationid,
+                            a_method    => t_method,
+                            a_content   => t_element, --t_body,
+                            a_token     => t_token);
+                END IF;
+            EXCEPTION
+                WHEN OTHERS
+                THEN
+                    t_sqlerrm := SQLERRM;
+                    t_results.put('status', SQLCODE);
+                    t_results.put(
+                        'ora-error',
+                        SQLERRM
+                        || CHR(10)
+                        || DBMS_UTILITY.format_error_backtrace);
+            END;
+
+            t_results_text := t_results.TO_CLOB;
+            t_body_value := t_body;
+
+            IF (t_results.get_number('status') != 200
+            AND t_sqlerrm IS NULL)
+            THEN
+                t_sqlerrm :=
+                    CASE t_results.get_type('lspresponse')
+                        WHEN 'OBJECT'
+                        THEN
+                            t_results.get_object('lspresponse').TO_CLOB
+                            || CHR(13)
+                        ELSE
+                            t_results.TO_CLOB
+                    END;
+            END IF;
+
+            IF (t_sqlerrm IS NOT NULL)
+            THEN
+                INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                       processjob,
+                                                       info,
+                                                       errmsg,
+                                                       bktrace,
+                                                       packet)
+                         VALUES (
+                                    0,
+                                    t_process,
+                                    SUBSTR(
+                                        'Application Id: '
+                                        || t_applicationid
+                                        || CHR(13)
+                                        || 'License Number: '
+                                        || api.pkg_columnquery.VALUE(
+                                               j.jobid,
+                                               'LICENSENUMBER')
+                                        || CHR(13)
+                                        || 'j_Application: '
+                                        || j.jobid
+                                        || CHR(13)
+                                        || t_results_text,
+                                        1,
+                                        3999),
+                                    SUBSTR(t_sqlerrm, 1, 4000),
+                                    t_trace,
+                                    t_value);
+            END IF;
+
+            -- get the fees that were paid to update fees table
+            FOR rec
+                IN (SELECT f.feeobjid
+                      FROM bizmod_api.e_fees_t  f
+                           JOIN api.fees a
+                               ON (a.feeid =
+                                   api.pkg_columnquery.numericvalue(
+                                       f.feeobjid,
+                                       'FeeId')
+                               AND a.paidamount + a.amount + a.adjustedamount <=
+                                   0)
+                     WHERE f.paiddate IS NULL
+                       AND f.jobid = j.jobid)
+            LOOP
+                UPDATE bizmod_api.e_fees_t f
+                   SET f.paiddate = SYSDATE
+                 WHERE f.feeobjid = rec.feeobjid;
+            END LOOP;
+
+            COMMIT;
+        END LOOP;
+    END;
+
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
                             a_fiscalend       DATE,
                             a_jobid           NUMBER)
@@ -70,8 +231,9 @@ IS
 
         IF (t_application IS NULL)
         THEN
+            t_application :=
+                bizmod_api.utl_licenseinfo.get_application(a_jobid, '02|22');
 
-            t_application := bizmod_api.utl_licenseinfo.get_application(a_jobid, '02|22');
             UPDATE bizmod_api.licensetype_t lt
                SET lt.applicationjobid = t_application
              WHERE lt.licensetypejobid = a_jobid;
@@ -944,6 +1106,11 @@ BEGIN
             END IF;
 
             -- ************************************************************
+            -- Notify LSP of manual payment in ABIS
+            -- ************************************************************
+            manualpayments;
+
+            -- ************************************************************
             -- Update license and AWF info
             -- ************************************************************
             updateinfo;
@@ -1143,7 +1310,7 @@ BEGIN
                                         api.pkg_columnquery.VALUE(
                                             b.paymentobjectid,
                                             'BatchId'))    paymentbatch,
-                                        b.licensetypejobid
+                                    b.licensetypejobid
                                FROM (SELECT a.ROWID
                                                 id,
                                             api.pkg_columnquery.VALUE(
@@ -1185,8 +1352,9 @@ BEGIN
                            p.awffeeid,
                            p.paymentbatch,
                            api.pkg_columnquery.datevalue(p.paymentbatch,
-                                                         'CompletedDate')    paymentbatchdate,
-                           p.licensetypejobid                              
+                                                         'CompletedDate')
+                               paymentbatchdate,
+                           p.licensetypejobid
                       FROM p)
             LOOP
                 -- update awf record with payment information
@@ -1196,11 +1364,10 @@ BEGIN
                        a.paymentbatchdate = rec.paymentbatchdate,
                        a.completed = 'Y'
                  WHERE ROWID = rec.id;
-                 
+
                 UPDATE bizmod_api.licensetype_t lic
                    SET lic.awfflag = 'N'
                  WHERE lic.licensetypejobid = rec.licensetypejobid;
-                 
             END LOOP;
 
             -- ********************************************************************
