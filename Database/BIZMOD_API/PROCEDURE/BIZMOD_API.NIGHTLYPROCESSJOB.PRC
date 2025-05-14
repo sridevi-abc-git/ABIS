@@ -46,6 +46,8 @@ IS
     --  13.1.0  12/09/2024  TJL  BIZ-16612  Added reseting AWF required flag when fee manually paid
     --  14.0.1  04/22/2025  TJL  BIZ-18056  Added procedure manualpayment to notify LSP when
     --                                         when payments are made
+    --  15.0.0  05/14/2025  TJL  BIZ-18387  Corrected bug in manual payments causing exception
+    --                                         being thrown
     -- ****************************************************************************
 
     PROCEDURE manualpayments
@@ -55,7 +57,6 @@ IS
         t_method CONSTANT VARCHAR2(10) := 'PUT';
         t_urlinfo      VARCHAR2(10000);
         t_process CONSTANT VARCHAR2(32) := 'MANUALPAYMENT';
-        t_body         VARCHAR2(4000);
         t_applicationid NUMBER;
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
@@ -89,28 +90,22 @@ IS
         COMMIT;
 
         -- check for any manual payments made in abis
-    FOR j IN (  SELECT f.jobid
-                    FROM bizmod_api.e_fees_t f
-                   WHERE f.paiddate IS NULL
-                GROUP BY f.jobid)
+        -- 05/14/2025  TJL  BIZ-18387
+    FOR j IN (
+              SELECT f.jobid,
+                     json_arrayagg(f.feeobjid) body
+                FROM bizmod_api.e_fees_t f
+               WHERE f.paiddate IS NULL
+                 AND api.pkg_columnquery.VALUE(f.feeobjid, 'Paidamount') < 0
+            GROUP BY f.jobid)
     LOOP
-        SELECT json_arrayagg(
-                   (SELECT reo.objectid -- feeobjid
-                      FROM api.registeredexternalobjects reo
-                     WHERE reo.objectdefid =
-                           api.pkg_configquery.objectdefidforname('o_fee')
-                       AND reo.linkvalue = TO_CHAR(a.feeid)))
-          INTO t_body
-          FROM api.fees a
-         WHERE a.paidamount != 0
-           AND a.jobid = j.jobid;
             BEGIN
                 t_applicationid :=
                     api.pkg_columnquery.VALUE(j.jobid, 'LSPId');
                 t_urlinfo :=
                     REPLACE(t_url, '<<applicationId>>', t_applicationid);
 
-                t_element := json_array_t.parse(t_body);
+                t_element := json_array_t.parse(j.body);
 
                 t_results := bizmod_api.utl_licenseinfo.lsplogin;
 
@@ -124,7 +119,7 @@ IS
                         bizmod_api.utl_licenseinfo.calllsp(
                             a_urlinfo   => t_url || t_applicationid,
                             a_method    => t_method,
-                            a_content   => t_element, --t_body,
+                            a_content   => t_element,
                             a_token     => t_token);
                 END IF;
             EXCEPTION
@@ -140,7 +135,7 @@ IS
             END;
 
             t_results_text := t_results.TO_CLOB;
-            t_body_value := t_body;
+            t_body_value := j.body;
 
             IF (t_results.get_number('status') != 200
             AND t_sqlerrm IS NULL)
