@@ -16,8 +16,11 @@ AS
     --   4.0.0   02/05/2025  TJL  BIZ-17356  Added test in newfee to only send update when
     --                                        new fee is only on applications.
     --   5.0.2   04/03/2025  TJL  BIZ-17503  Added common applications procedures
-    --   5.0.3   04/10/2025  TJL  BIZ-17503  Removed updationg company information when 
+    --   5.0.3   04/10/2025  TJL  BIZ-17503  Removed updationg company information when
     --                                         doing legal entity copy
+    --   6.0.0   05/13/2025  TJL  BIZ-18375  Removed looking up existing companies and persons
+    --                                         when company and person information is given in
+    --                                         application packet.
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -784,7 +787,6 @@ AS
                         a_copytoleobjid => a_objectid,
                         a_endpointid => t_endpointid,
                         a_lookup    => FALSE);
-
                 END IF;
             END LOOP;
         END IF;
@@ -1005,16 +1007,19 @@ AS
     IS
         t_relid        api.pkg_definition.udt_id;
         t_entityobjectid api.pkg_definition.udt_id;
-        t_HierarchyLevel    number;
+        t_hierarchylevel NUMBER;
     BEGIN
-            IF (api.pkg_columnquery.VALUE(a_parent, 'ObjectDefName') =
-                'j_Application')
-            THEN
-                t_HierarchyLevel := 1;
-        else
-        t_HierarchyLevel := api.pkg_columnquery.numericVALUE(a_parent, 'HierarchyLevel_Stored') + 1;
-        end if;
-    
+        IF (api.pkg_columnquery.VALUE(a_parent, 'ObjectDefName') =
+            'j_Application')
+        THEN
+            t_hierarchylevel := 1;
+        ELSE
+            t_hierarchylevel :=
+                  api.pkg_columnquery.numericvalue(a_parent,
+                                                   'HierarchyLevel_Stored')
+                + 1;
+        END IF;
+
         t_entityobjectid :=
             api.pkg_objectupdate.new(
                 api.pkg_configquery.objectdefidforname('o_LegalEntity'));
@@ -1026,12 +1031,13 @@ AS
                                            t_entityobjectid);
 
         -- add information to legal entity just created
-        api.pkg_columnupdate.setvalue(
-            t_entityobjectid,
-            'HierarchyLevel_Stored',t_HierarchyLevel);
- 
-            api.pkg_columnupdate.setvalue(t_entityobjectid,
-                                          'dup_HierarchyLevel',t_HierarchyLevel);
+        api.pkg_columnupdate.setvalue(t_entityobjectid,
+                                      'HierarchyLevel_Stored',
+                                      t_hierarchylevel);
+
+        api.pkg_columnupdate.setvalue(t_entityobjectid,
+                                      'dup_HierarchyLevel',
+                                      t_hierarchylevel);
 
         IF (a_percentageofownership IS NOT NULL)
         THEN
@@ -1070,7 +1076,7 @@ AS
                 a_child);
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
-        
+
         RETURN t_entityobjectid;
     END create_legalentity;
 
@@ -1080,8 +1086,6 @@ AS
     IS
         t_objectdefid  api.pkg_definition.udt_id;
         t_objectid     api.pkg_definition.udt_id;
-        t_searchname   VARCHAR2(2000);
-        t_list         api.udt_objectlist;
         t_newentity    api.pkg_definition.udt_id;
     BEGIN
         FOR rec
@@ -1129,123 +1133,54 @@ AS
                                person CLOB FORMAT JSON PATH '$.PERSON')) j)
         LOOP
             -- *****************************************************************
-            -- check if person is already in system
+            -- Create Person object
             -- *****************************************************************
-            t_searchname :=
-                CASE
-                    WHEN rec.firstname IS NULL
-                     AND rec.middlename IS NULL
-                    THEN
-                        rec.lastname
-                    WHEN rec.middlename IS NULL
-                    THEN
-                        rec.lastname || ' ' || rec.firstname
-                    WHEN rec.firstname IS NULL
-                    THEN
-                        rec.lastname || ' ' || rec.middlename
-                    ELSE
-                        rec.lastname
-                        || ' '
-                        || rec.firstname
-                        || ' '
-                        || rec.middlename
-                END
-                || CASE
-                       WHEN rec.suffix IS NULL THEN ''
-                       ELSE ' ' || rec.suffix
-                   END;
+            t_objectdefid :=
+                api.pkg_configquery.objectdefidforname('o_Person');
+            t_objectid := api.pkg_objectupdate.new(t_objectdefid);
 
-            SELECT api.udt_object(objectid)
-              BULK COLLECT INTO t_list
-              FROM TABLE(
-                       CAST(
-                           api.pkg_simplesearch.castableobjectsbyindex(
-                               a_objectdefname => 'o_Person',
-                               a_columnname =>
-                                   'dup_FormattedPersonNameSearch',
-                               a_value     => t_searchname)
-                               AS api.udt_objectlist));
-
-            CASE t_list.COUNT
-                WHEN 0
-                THEN
-                    t_objectid := NULL;
-                ELSE
-                    -- 3.5.1  01/09/2025  TJL  BIZ-17077
-                    t_objectid := NULL;
-
-                    -- 3.5.0  01/08/2025  TJL  BIZ-17077
-                    FOR inx IN 1 .. t_list.COUNT
-                    LOOP
-                        IF (NVL(rec.socialsecuritynumber, '0') =
-                            NVL(
-                                api.pkg_columnquery.VALUE(
-                                    t_list(1).objectid,
-                                    'SocialSecurityNumber'),
-                                '0'))
-                        THEN
-                            t_objectid := t_list(1).objectid;
-                            EXIT;
-                        END IF;
-                    END LOOP;
-            END CASE;
-
-            IF (t_objectid IS NULL)
-            THEN
-                -- *****************************************************************
-                -- create person object for the application legal entity object
-                -- *****************************************************************
-                t_objectdefid :=
-                    api.pkg_configquery.objectdefidforname('o_Person');
-                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
-
-                -- create first and last name from regression run
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'FirstName',
-                                              rec.firstname);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'MiddleName',
-                                              rec.middlename);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'LastName',
-                                              rec.lastname);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'Suffix',
-                                              rec.suffix);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'AliasNames',
-                                              rec.aliasnames);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'SocialSecurityNumber',
-                                              rec.socialsecuritynumber);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'DriversLicenseNumber',
-                                              rec.driverslicensenumber);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'DriversLicenseState',
-                                              rec.driverslicensestate);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'PassportNumber',
-                                              rec.passportnumber);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'Gender',
-                                              rec.gender);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'BirthDate',
-                                              rec.birthdate);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'BirthCity',
-                                              rec.birthcity);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'BirthState',
-                                              rec.birthstate);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'BirthCountry',
-                                              rec.birthcountry);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'MaritalStatus',
-                                              rec.maritalstatus);
-            END IF;
+            -- create first and last name from regression run
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'FirstName',
+                                          rec.firstname);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'MiddleName',
+                                          rec.middlename);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'LastName',
+                                          rec.lastname);
+            api.pkg_columnupdate.setvalue(t_objectid, 'Suffix', rec.suffix);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'AliasNames',
+                                          rec.aliasnames);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'SocialSecurityNumber',
+                                          rec.socialsecuritynumber);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'DriversLicenseNumber',
+                                          rec.driverslicensenumber);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'DriversLicenseState',
+                                          rec.driverslicensestate);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'PassportNumber',
+                                          rec.passportnumber);
+            api.pkg_columnupdate.setvalue(t_objectid, 'Gender', rec.gender);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'BirthDate',
+                                          rec.birthdate);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'BirthCity',
+                                          rec.birthcity);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'BirthState',
+                                          rec.birthstate);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'BirthCountry',
+                                          rec.birthcountry);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'MaritalStatus',
+                                          rec.maritalstatus);
 
             -- check if applicant
             IF (api.pkg_columnquery.VALUE(a_entityobjectid, 'ObjectDefName') =
@@ -1270,12 +1205,12 @@ AS
                         a_percentageofownership => rec.percentageofownership,
                         a_ownertype => rec.ownertype,
                         a_title     => rec.title);
-                        
-                    IF (rec.person IS NOT NULL)
-                    THEN
-                        add_person(a_entityobjectid => t_newentity,
-                                   a_person    => rec.person);
-                    END IF;
+
+                IF (rec.person IS NOT NULL)
+                THEN
+                    add_person(a_entityobjectid => t_newentity,
+                               a_person    => rec.person);
+                END IF;
             ELSE
                 IF (api.pkg_columnquery.VALUE(a_entityobjectid, 'IsAPerson') =
                     'Y')
@@ -1321,7 +1256,7 @@ AS
                         END IF;
                     END IF;
 
-                    IF (LENGTH(nvl(rec.title, '[]')) > 3)
+                    IF (LENGTH(NVL(rec.title, '[]')) > 3)
                     THEN
                         t_newentity :=
                             create_legalentity(
@@ -1331,8 +1266,8 @@ AS
                                     api.pkg_configquery.endpointidforname(
                                         'o_LegalEntity',
                                         'Officer'),
-                                a_percentageofownership => NULL, --rec.percentageofownership,
-                                a_ownertype => NULL, --rec.ownertype,
+                                a_percentageofownership => NULL,
+                                a_ownertype => NULL,
                                 a_title     => rec.title);
 
                         IF (rec.person IS NOT NULL)
@@ -1391,74 +1326,28 @@ AS
                                company CLOB FORMAT JSON PATH '$.COMPANY',
                                person CLOB FORMAT JSON PATH '$.PERSON')))
         LOOP
+            t_objectdefid :=
+                api.pkg_configquery.objectdefidforname('o_Company');
+            t_objectid := api.pkg_objectupdate.new(t_objectdefid);
 
-            -- chech to see if existing company
-            SELECT api.udt_object(objectid)
-              BULK COLLECT INTO t_list
-              FROM TABLE(
-                       CAST(
-                           api.pkg_simplesearch.castableobjectsbyindex(
-                               a_objectdefname => 'o_Company',
-                               a_columnname => 'CompanyName',
-                               a_value     => rec.companyname)
-                               AS api.udt_objectlist));
-
-            CASE t_list.COUNT
-                WHEN 0
-                THEN
-                    t_objectid := NULL;
-                WHEN 1
-                THEN
-                    t_objectid := t_list(1).objectid;
-                ELSE
-                    t_objectid := t_list(1).objectid;
-            END CASE;
-
-            IF (t_objectid IS NULL)
-            THEN
-                -- *****************************************************************
-                -- create company object for the application legal entity object
-                -- *****************************************************************
-                t_objectdefid :=
-                    api.pkg_configquery.objectdefidforname('o_Company');
-                t_objectid := api.pkg_objectupdate.new(t_objectdefid);
-
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'CompanyName',
-                                              rec.companyname);
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'CompanyStructure',
-                                              rec.companystructure);
-            END IF;
-
-            IF (rec.dateofincorporation IS NOT NULL)
-            THEN
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'DateOfIncorporation',
-                                              rec.dateofincorporation);
-            END IF;
-
-            IF (rec.stateofincorporation IS NOT NULL)
-            THEN
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'StateoFinCorporation',
-                                              rec.stateofincorporation);
-            END IF;
-
-            IF (rec.casecretaryofstatenumber IS NOT NULL)
-            THEN
-                api.pkg_columnupdate.setvalue(t_objectid,
-                                              'CaSecretaryOfStateNumber',
-                                              rec.casecretaryofstatenumber);
-            END IF;
-
-            IF (rec.federalemployeridentificationn IS NOT NULL)
-            THEN
-                api.pkg_columnupdate.setvalue(
-                    t_objectid,
-                    'FederalEmployerIdentificationN',
-                    rec.federalemployeridentificationn);
-            END IF;
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'CompanyName',
+                                          rec.companyname);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'CompanyStructure',
+                                          rec.companystructure);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'DateOfIncorporation',
+                                          rec.dateofincorporation);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'StateoFinCorporation',
+                                          rec.stateofincorporation);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'CaSecretaryOfStateNumber',
+                                          rec.casecretaryofstatenumber);
+            api.pkg_columnupdate.setvalue(t_objectid,
+                                          'FederalEmployerIdentificationN',
+                                          rec.federalemployeridentificationn);
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
@@ -1503,7 +1392,8 @@ AS
                             a_percentageofownership =>
                                 rec.percentageofownership,
                             a_ownertype => rec.ownertype,
-                            a_title     => NULL); --rec.title);
+                            a_title     => NULL);
+
                     IF (rec.company IS NOT NULL)
                     THEN
                         add_company(a_entityobjectid => t_newentity,
@@ -1517,7 +1407,7 @@ AS
                     END IF;
                 END IF;
 
-                IF (LENGTH(nvl(rec.title, '[]')) > 3)
+                IF (LENGTH(NVL(rec.title, '[]')) > 3)
                 THEN
                     t_newentity :=
                         create_legalentity(
@@ -1527,9 +1417,10 @@ AS
                                 api.pkg_configquery.endpointidforname(
                                     'o_LegalEntity',
                                     'Officer'),
-                            a_percentageofownership => NULL, --rec.percentageofownership,
-                            a_ownertype => NULL, --rec.ownertype,
+                            a_percentageofownership => NULL,
+                            a_ownertype => NULL,
                             a_title     => rec.title);
+
                     IF (rec.company IS NOT NULL)
                     THEN
                         add_company(a_entityobjectid => t_newentity,
@@ -1543,7 +1434,6 @@ AS
                     END IF;
                 END IF;
             END IF;
-
         END LOOP;
     END add_company;
 END;
