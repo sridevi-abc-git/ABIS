@@ -46,7 +46,7 @@ IS
     --  13.1.0  12/09/2024  TJL  BIZ-16612  Added reseting AWF required flag when fee manually paid
     --  14.0.1  04/22/2025  TJL  BIZ-18056  Added procedure manualpayment to notify LSP when
     --                                         when payments are made
-    --  15.0.0  05/14/2025  TJL  BIZ-18387  Corrected bug in manual payments causing exception
+    --  15.0.1  05/14/2025  TJL  BIZ-18387  Corrected bug in manual payments causing exception
     --                                         being thrown
     -- ****************************************************************************
 
@@ -61,7 +61,6 @@ IS
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
         t_value        CLOB;
-        t_body_value   CLOB;
         t_results      json_object_t;
         t_token        VARCHAR2(1000);
         t_results_text VARCHAR2(32767);
@@ -83,7 +82,8 @@ IS
                  WHERE f.paiddate IS NULL)
         LOOP
             UPDATE bizmod_api.e_fees_t f
-               SET f.paiddate = SYSDATE
+               SET f.paiddate = SYSDATE,
+                   f.manualpayment = 'N'
              WHERE f.feeobjid = fees.feeobjid;
         END LOOP;
 
@@ -117,7 +117,7 @@ IS
 
                     t_results :=
                         bizmod_api.utl_licenseinfo.calllsp(
-                            a_urlinfo   => t_url || t_applicationid,
+                            a_urlinfo   => t_urlinfo,
                             a_method    => t_method,
                             a_content   => t_element,
                             a_token     => t_token);
@@ -135,7 +135,6 @@ IS
             END;
 
             t_results_text := t_results.TO_CLOB;
-            t_body_value := j.body;
 
             IF (t_results.get_number('status') != 200
             AND t_sqlerrm IS NULL)
@@ -183,23 +182,11 @@ IS
             END IF;
 
             -- get the fees that were paid to update fees table
-            FOR rec
-                IN (SELECT f.feeobjid
-                      FROM bizmod_api.e_fees_t  f
-                           JOIN api.fees a
-                               ON (a.feeid =
-                                   api.pkg_columnquery.numericvalue(
-                                       f.feeobjid,
-                                       'FeeId')
-                               AND a.paidamount + a.amount + a.adjustedamount <=
-                                   0)
-                     WHERE f.paiddate IS NULL
-                       AND f.jobid = j.jobid)
-            LOOP
                 UPDATE bizmod_api.e_fees_t f
-                   SET f.paiddate = SYSDATE
-                 WHERE f.feeobjid = rec.feeobjid;
-            END LOOP;
+                   SET f.paiddate = SYSDATE,
+                       f.manualpayment = 'Y'
+                 WHERE f.feeobjid IN (SELECT f.feeobjid
+                      from json_table(j.body, '$[*]' columns(feeobjid path '$')) f);
 
             COMMIT;
         END LOOP;

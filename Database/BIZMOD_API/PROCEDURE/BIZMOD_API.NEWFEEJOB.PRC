@@ -24,6 +24,7 @@ AS
     --   4.2.2  02/14/2025 TJL  BIZ-17356  Change how lsp response for error is handled.
     --   5.0.0  03/05/2025 TJL  BIZ-17503  Corrected bug in logging errors from CALLLSP
     --   6.0.0  04/22/2025 TJL  BIZ-18056  Added saving new fees to e_fees_t table
+    --   7.0.0  05/21/2025 TJL  BIZ-18387  Change Merge for new column added to e_fees_t table
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/';
     t_method      constant varchar2(10) := 'PATCH';
@@ -115,7 +116,7 @@ BEGIN
         UPDATE bizmod_api.license_app_t a
            set a.newfee = null
          where a.jobid = a_objectid;
-         
+
         --   6.0.0  04/22/2025 TJL  BIZ-18056
         MERGE INTO bizmod_api.e_fees_t f
              USING (SELECT f.jobid,
@@ -137,8 +138,9 @@ BEGIN
                            a.feeobjid,
                            a.amount,
                            NULL,
+                           NULL,
                            SYSDATE);
-                 
+
     COMMIT;
 END;
 /
