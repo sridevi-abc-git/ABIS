@@ -419,12 +419,12 @@ IS
 
             -- 06/01/2021 TJL WO 25342 Back out to allow accounting to void payment after transmittal or
             --                          Payment batch have been completed, added test if already deposited.
---            IF (t_paymentstatus IS NULL) THEN
---                IF (t_useraccessgroup LIKE '%HQ Accounting%') THEN
---                    IF (api.pkg_columnquery.datevalue(c.paymentobjectid, 'DepositedDate') IS NOT NULL) THEN
---                        api.pkg_errors.raiseerror(-20000, 'Cannot void a payment that has been deposited');
---                    END IF;
---                ELSE
+            IF (t_paymentstatus IS NULL) THEN
+                IF (t_useraccessgroup LIKE '%HQ Accounting%') THEN
+                    IF (api.pkg_columnquery.datevalue(c.paymentobjectid, 'DepositedDate') IS NOT NULL) THEN
+                        api.pkg_errors.raiseerror(-20000, 'Cannot void a payment that has been deposited');
+                    END IF;
+                ELSE
                     BEGIN
                         -- 04/15/2021 TJL WO 24949  Added checking to see if payment associated to a payment batch
                         SELECT MAX(batchid) batchid
@@ -440,7 +440,7 @@ IS
                         WHEN NO_DATA_FOUND THEN
                             NULL;
                     END;
-              --  END IF;
+                END IF;
 
                 IF t_transjobid IS NOT NULL THEN
                     api.pkg_errors.raiseerror(
@@ -523,9 +523,9 @@ IS
                     WHEN NO_DATA_FOUND THEN
                         NULL;
                 END;
-          --  ELSE
-         --       api.pkg_errors.raiseerror(-20000, 'This Payment has already been earned, and cannot be voided.');
-         --   END IF;
+            ELSE
+                api.pkg_errors.raiseerror(-20000, 'This Payment has already been earned, and cannot be voided.');
+            END IF;
         END LOOP;
     END paymentsvoid;
 
