@@ -87,6 +87,7 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 08/20/2024 TJL BIZ-15444  Added a call to bizmod_api.pkg_abis.newfee in newfee procedure
 -- 12/04/2024 PK             Commented Type 74 code and fixed secondaries not printing in renewal batch issue
 -- 01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
+-- 06/12/2025 PK            made change to application fee calc api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
 
 -------------------------------------------------------------------------------
 
@@ -4062,7 +4063,8 @@ IS
         ELSE
             -- Set t_EstimatedIssueDate to j_Application.EstimatedIssueDate
             t_issuedate   :=  --  08/01/2019 TJL  18697   changed to 'CopiesMailed' from 'EstimatedIssueDate'
-                             api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                            -- api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                             api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate'); -- 06/12/2025 PK 
                              
         -- End If
         END IF;
