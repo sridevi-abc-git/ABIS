@@ -20,7 +20,7 @@ IS
     -- 01/31/2023 PK          Changed copyassigninvefntocondinv,copyconductinvefntocloseinv to resolve problem after Objectid have been moved to new gap
     -- 12/10/2023 PK          Created PROCEDURE generateCreateCatererEventAuthextfilenum
     -- 12/10/2023 PK          Created PROCEDURE copycreatecaterertoIssuecaterer
-    -- 09/03/2024 PK          Created  PROCEDURE copiesmaileddatetoEnterappProcess
+    
     -- **************************************************************************
 
     /*------------------------------------------------------------------------*
@@ -1397,35 +1397,7 @@ IS
         api.pkg_processupdate.setexternalfilenum(t_IssueCatererprocessid,
                                                  t_externalfilenum);
     END copycreatecaterertoIssuecaterer;
-          ------------------------------------------------------------------------------------------------
-    --copiesmaileddatetoEnterappProcess()-- PUBLIC
-    --This procedure copies new /changed copies mailed date to Enterapplication Process
-    
-     PROCEDURE copiesmaileddatetoEnterappProcess(a_objectid      udt_id,
-                                          a_asofdate      DATE,
-                                          a_jobid         udt_id)
-    IS
-        t_changecopiesmdprocessid   NUMBER;
-        t_copiedmailed         VARCHAR(40);
-        t_processtypeid           udt_id;
-    BEGIN
-        t_processtypeid   :=
-            api.pkg_configquery.objectdefidforname('p_IssueCatererEventAuth');
- 
-            SELECT p2.PROCESSID
-             INTO t_changecopiesmdprocessid
-              FROM (SELECT MAX (p.createddate) Maxcreateddate
-                        FROM api.processes p
-                        WHERE jobid = a_jobid AND processtypeid IN t_processtypeid) x
-                        JOIN api.processes p2 ON p2.CREATEDDATE = x.Maxcreateddate
-                        WHERE p2.jobid = a_jobid;
 
-        t_copiedmailed   :=
-            api.pkg_columnquery.VALUE(a_objectid, 'CopiesMailed');
-
-        api.pkg_processupdate.setexternalfilenum(t_changecopiesmdprocessid,
-                                                 t_copiedmailed);
-    END copiesmaileddatetoEnterappProcess;
 END pkg_license;
 /
 
