@@ -17,7 +17,7 @@ IS
     -- 08/16/2018 TJL         Initial Check-in
     -- 12/10/2023 PK          Created PROCEDURE generateCreateCatererEventAuthextfilenum
     -- 12/10/2023 PK          Created PROCEDURE copycreatecaterertoIssuecaterer
-    -- 09/03/2024   PK        Created  PROCEDURE copiesmaileddatetoEnterappProcess
+   
     -- **************************************************************************
 
     /*------------------------------------------------------------------------*
@@ -192,12 +192,8 @@ IS
                                           a_asofdate      DATE,
                                           a_jobid         udt_id);     
   -----------------------------------------------------------------------------------------------------------------------------------------  
-     --copiesmaileddatetoEnterappProcess()-- PUBLIC
-    --This procedure copies new /changed copies mailed date to Enterapplication Process
-    
-    PROCEDURE copiesmaileddatetoEnterappProcess(a_objectid      udt_id,
-                                          a_asofdate      DATE,
-                                          a_jobid         udt_id);     
+
+   
 END pkg_license;
 /
 
