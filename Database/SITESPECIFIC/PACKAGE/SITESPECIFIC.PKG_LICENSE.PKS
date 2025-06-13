@@ -15,6 +15,9 @@ IS
     -----------------------------------------------------------------------------
     --    Date                  Comment
     -- 08/16/2018 TJL         Initial Check-in
+    -- 12/10/2023 PK          Created PROCEDURE generateCreateCatererEventAuthextfilenum
+    -- 12/10/2023 PK          Created PROCEDURE copycreatecaterertoIssuecaterer
+    -- 09/03/2024   PK        Created  PROCEDURE copiesmaileddatetoEnterappProcess
     -- **************************************************************************
 
     /*------------------------------------------------------------------------*
@@ -175,9 +178,30 @@ IS
     --Generate Validation Code in License Job
     --Executed as constructor on License job
     PROCEDURE generatevalidationcode(a_objectid udt_id, a_asofdate DATE);
-      
+ ----------------------------------------------------------------------------------------------------
+    --  GenerateCreateCatererEventAuthextfilenum() -- PUBLIC
+    --  This generates the external file number on the CreatecateretEventAuth process (which is copied to the Issue Caterer auth process).
+    ----------------------------------------------------------------------------------------------------   
+ PROCEDURE generateCreateCatererEventAuthextfilenum(a_objectid udt_id, a_asofdate DATE);
+    
+   ----------------------------------------------------------------------------------------------------
+    --  copycreatecaterertoIssuecaterer() -- PUBLIC
+    --  Copies external file number on the Create Caterer / Event Authorization process to Issue Caterer / Event Authorization process.
+    ---------------------------------------------------------------------------------------------------- 
+    PROCEDURE copycreatecaterertoIssuecaterer(a_objectid      udt_id,
+                                          a_asofdate      DATE,
+                                          a_jobid         udt_id);     
+  -----------------------------------------------------------------------------------------------------------------------------------------  
+     --copiesmaileddatetoEnterappProcess()-- PUBLIC
+    --This procedure copies new /changed copies mailed date to Enterapplication Process
+    
+    PROCEDURE copiesmaileddatetoEnterappProcess(a_objectid      udt_id,
+                                          a_asofdate      DATE,
+                                          a_jobid         udt_id);     
 END pkg_license;
 /
 
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_LICENSE TO BIZMOD_API;
 
 GRANT EXECUTE ON SITESPECIFIC.PKG_LICENSE TO POSSEEXTENSIONS;
