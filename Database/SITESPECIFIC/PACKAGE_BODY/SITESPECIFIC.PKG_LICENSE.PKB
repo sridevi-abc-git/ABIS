@@ -18,6 +18,8 @@ IS
     -- 03/16/2020 TJL  20884  Added check for Membership Transfer in procedure
     --                          "withdrawlicensetypes"
     -- 01/31/2023 PK          Changed copyassigninvefntocondinv,copyconductinvefntocloseinv to resolve problem after Objectid have been moved to new gap
+    -- 12/10/2023 PK          Created PROCEDURE generateCreateCatererEventAuthextfilenum
+    -- 12/10/2023 PK          Created PROCEDURE copycreatecaterertoIssuecaterer
     -- **************************************************************************
 
     /*------------------------------------------------------------------------*
@@ -1338,8 +1340,68 @@ IS
                                              'RunValidationCodeProcedure');
     
     END generatevalidationcode; 
+    ---------------------------------------------------------------------------------------------------------------------------------------
+    --  GenerateCreateCatererEventAuthextfilenum() -- PUBLIC
+    --  This generates the external file number on the CreatecateretEventAuth process (which is copied to the Issue Caterer auth process).
+    
+      PROCEDURE generateCreateCatererEventAuthextfilenum(a_objectid udt_id, a_asofdate DATE)
+    IS
+        t_sequenceid        udt_id;
+        t_externalfilenum   VARCHAR2(40);
+      --  t_lspid             VARCHAR2(20);
+    BEGIN
+        SELECT s.sequenceid
+          INTO t_sequenceid
+          FROM api.sequences s
+         WHERE s.description = 'Caterer Sequence';
+
+ --Get the LSPID
+     --   t_lspid   := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
+            t_externalfilenum   :=
+                api.pkg_utils.generateexternalfilenum('{YYMMDD} -[000]',
+                                                      t_sequenceid); --   || '-'
+         --   || t_lspid;
+
+         api.pkg_processupdate.setexternalfilenum(a_objectid,
+                                                 t_externalfilenum);
+        
+    END generateCreateCatererEventAuthextfilenum;
+    
+    ----------------------------------------------------------------------------------------------------
+    --  copycreatecaterertoIssuecaterer() -- PUBLIC
+    --  Copies external file number on the Create Caterer / Event Authorization process to Issue Caterer / Event Authorization process.
+    ----------------------------------------------------------------------------------------------------       
+ PROCEDURE copycreatecaterertoIssuecaterer(a_objectid      udt_id,
+                                          a_asofdate      DATE,
+                                          a_jobid         udt_id)
+    IS
+        t_IssueCatererprocessid   NUMBER;
+        t_externalfilenum         VARCHAR(40);
+        t_processtypeid           udt_id;
+    BEGIN
+        t_processtypeid   :=
+            api.pkg_configquery.objectdefidforname('p_IssueCatererEventAuth');
+ 
+            SELECT p2.PROCESSID
+             INTO t_IssueCatererprocessid
+              FROM (SELECT MAX (p.createddate) Maxcreateddate
+                        FROM api.processes p
+                        WHERE jobid = a_jobid AND processtypeid IN t_processtypeid) x
+                        JOIN api.processes p2 ON p2.CREATEDDATE = x.Maxcreateddate
+                        WHERE p2.jobid = a_jobid;
+
+        t_externalfilenum   :=
+            api.pkg_columnquery.VALUE(a_objectid, 'ExternalFileNum');
+
+        api.pkg_processupdate.setexternalfilenum(t_IssueCatererprocessid,
+                                                 t_externalfilenum);
+    END copycreatecaterertoIssuecaterer;
+      
 END pkg_license;
+
 /
 
+
+GRANT EXECUTE ON SITESPECIFIC.PKG_LICENSE TO BIZMOD_API;
 
 GRANT EXECUTE ON SITESPECIFIC.PKG_LICENSE TO POSSEEXTENSIONS;
