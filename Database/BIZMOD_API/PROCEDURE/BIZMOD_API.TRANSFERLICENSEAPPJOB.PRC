@@ -11,7 +11,7 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --             Date                         Comment
-    --   1.0.1  06/03/2025  TJL  BIZ-18536  Initial Package Created
+    --   1.0.2  06/03/2025  TJL  BIZ-18536  Initial Package Created
     -- ****************************************************************************
 
     TYPE apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -312,7 +312,7 @@ BEGIN
             IntercountyTransfer         
 */            
 
-
+/*
         IF (t_apprec.transferchangetype IN ('AddPrimaryLicenseType'))
         THEN
             pkg_abis.add_primary_license_types(
@@ -465,6 +465,7 @@ BEGIN
         bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
                                             a_asofdate  => SYSDATE,
                                             a_jobid     => t_jobid);
+*/
     EXCEPTION
         WHEN OTHERS
         THEN
