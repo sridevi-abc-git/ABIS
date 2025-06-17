@@ -21,6 +21,11 @@ AS
     --   6.0.0   05/13/2025  TJL  BIZ-18375  Removed looking up existing companies and persons
     --                                         when company and person information is given in
     --                                         application packet.
+    --   7.0.0   05/29/2025  TJL             add_primary_license_types added section code and
+    --                                         changed numberofmonthslicensed to a VARCHAR2
+    --   8.0.0   06/16/2025  TJL             Added in add_address for priority draw application 
+    --                                         setting priority draw county. removed priority
+    --                                         draw setting from add_primary_license_types
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -215,21 +220,24 @@ AS
                                licensetypecode
                                    VARCHAR2(3)
                                    PATH '$.LICENSETYPECODE',
-                               prioritydrawcounty
-                                   VARCHAR2(100)
-                                   PATH '$.PRIORITYDRAWCOUNTY',
+--                               prioritydrawcounty
+--                                   VARCHAR2(100)
+--                                   PATH '$.PRIORITYDRAWCOUNTY',
                                gallonage NUMBER PATH '$.GALLONAGE',
                                numberofmonthslicensed
-                                   NUMBER
+                                   VARCHAR2(100)
                                    PATH '$.NUMBEROFMONTHSLICENSED',
                                seasonstartmonth
                                    VARCHAR2(100)
-                                   PATH '$.SEASON_START_MONTH',
+                                   PATH '$.SEASONSTARTMONTH',
                                primarycount NUMBER PATH '$.PRIMARYCOUNT',
                                isbranch VARCHAR2(1) PATH '$.ISBRANCH',
                                masterlicense
                                    VARCHAR2(50)
                                    PATH '$.MASTERLICENSE',
+                               sectioncode
+                                   VARCHAR2(50)
+                                   PATH '$.SECTIONCODE',
                                secondarylicensetypes
                                    VARCHAR2(4000)
                                    FORMAT JSON
@@ -305,45 +313,45 @@ AS
             -- The following is for cases that involved primary draw, gallonage, and seasonal to set
             --   the special values for each type
             CASE
-                WHEN rec.licensetypecode IN ('21', '47')
-                THEN
-                    api.pkg_columnupdate.setvalue(
-                        a_jobid,
-                        'PriorityApplicationType',
-                        api.pkg_columnquery.VALUE(a_jobid, 'ApplicationType'));
-
-                    api.pkg_columnupdate.setvalue(
-                        a_jobid,
-                        'CopyLicDetailsToAppProcHasRun',
-                        'Y');
-                    api.pkg_columnupdate.setvalue(a_jobid,
-                                                  'PriorityUpgrade',
-                                                  'No');
-                    api.pkg_columnupdate.setvalue(a_jobid,
-                                                  'IsPriorityApplication',
-                                                  'Y');
-
-                    -- *****************************************************************
-                    -- Add priority Draw County and license type
-                    -- *****************************************************************
-                    -- set priority draw county
-                    t_countyobjectid :=
-                        api.pkg_simplesearch.objectbyindex(
-                            'o_CaCounty',
-                            'CountyName',
-                            rec.prioritydrawcounty);
-
-                    IF (t_countyobjectid IS NOT NULL)
-                    THEN
-                        t_endpointid :=
-                            api.pkg_configquery.endpointidforname(
-                                'j_application',
-                                'PriorityCounty');
-                        t_relid :=
-                            api.pkg_relationshipupdate.new(t_endpointid,
-                                                           a_jobid,
-                                                           t_countyobjectid);
-                    END IF;
+--                WHEN rec.licensetypecode IN ('21', '47')
+--                THEN
+--                    api.pkg_columnupdate.setvalue(
+--                        a_jobid,
+--                        'PriorityApplicationType',
+--                        api.pkg_columnquery.VALUE(a_jobid, 'ApplicationType'));
+--
+--                    api.pkg_columnupdate.setvalue(
+--                        a_jobid,
+--                        'CopyLicDetailsToAppProcHasRun',
+--                        'Y');
+--                    api.pkg_columnupdate.setvalue(a_jobid,
+--                                                  'PriorityUpgrade',
+--                                                  'No');
+--                    api.pkg_columnupdate.setvalue(a_jobid,
+--                                                  'IsPriorityApplication',
+--                                                  'Y');
+--
+--                    -- *****************************************************************
+--                    -- Add priority Draw County and license type
+--                    -- *****************************************************************
+--                    -- set priority draw county
+--                    t_countyobjectid :=
+--                        api.pkg_simplesearch.objectbyindex(
+--                            'o_CaCounty',
+--                            'CountyName',
+--                            rec.prioritydrawcounty);
+--
+--                    IF (t_countyobjectid IS NOT NULL)
+--                    THEN
+--                        t_endpointid :=
+--                            api.pkg_configquery.endpointidforname(
+--                                'j_application',
+--                                'PriorityCounty');
+--                        t_relid :=
+--                            api.pkg_relationshipupdate.new(t_endpointid,
+--                                                           a_jobid,
+--                                                           t_countyobjectid);
+--                    END IF;
                 WHEN rec.licensetypecode IN ('02', '22')
                 THEN
                     -- from gallonage entered figure out codes
@@ -388,14 +396,11 @@ AS
                     api.pkg_columnupdate.setvalue(t_licensetypeobjectid,
                                                   'GallonageRange',
                                                   t_gallonagerange);
-                WHEN rec.licensetypecode IN ('49', '59', '60')
+                WHEN rec.licensetypecode = '99'
                 THEN
                     api.pkg_columnupdate.setvalue(t_licensetypeobjectid,
-                                                  'NumberOfMonthsLicensed',
-                                                  rec.numberofmonthslicensed);
-                    api.pkg_columnupdate.setvalue(t_licensetypeobjectid,
-                                                  'SeasonStartMonth',
-                                                  rec.seasonstartmonth);
+                                                  'SectionCodeList',
+                                                  rec.sectioncode);
                 ELSE
                     NULL;
             END CASE;
@@ -437,6 +442,7 @@ AS
         t_cityrel      api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
         t_addrel       api.pkg_definition.udt_id;
+        t_countyobjectid api.pkg_definition.udt_id;
     BEGIN
         IF (a_address IS NOT NULL)
         THEN
@@ -671,6 +677,34 @@ AS
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
+            
+            -- add priority draw county if application is a priority draw
+            if (api.pkg_columnquery.value (a_jobid, 'IsPriorityApplication') = 'Y'
+            and a_address_type = 'Premises')
+            then
+                    -- *****************************************************************
+                    -- Add priority Draw County 
+                    -- *****************************************************************
+                    -- get county name
+                    
+                    -- set priority draw county
+                    t_countyobjectid := api.pkg_columnquery.numericvalue(t_addressobjectid, 'CountyId');
+
+                    IF (t_countyobjectid IS NOT NULL)
+                    THEN
+                        t_endpointid :=
+                            api.pkg_configquery.endpointidforname(
+                                'j_application',
+                                'PriorityCounty');
+                        t_addrel :=
+                            api.pkg_relationshipupdate.new(t_endpointid,
+                                                           a_jobid,
+                                                           t_countyobjectid);
+                    END IF;
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
+        end if;            
+            
         END IF;
     END add_address;
 
@@ -789,6 +823,10 @@ AS
                         a_lookup    => FALSE);
                 END IF;
             END LOOP;
+            
+                api.pkg_logicaltransactionupdate.endtransaction;
+                COMMIT;
+            
         END IF;
     END copy_legal_entities;
 
@@ -1279,6 +1317,10 @@ AS
                 END IF;
             END IF;
         END LOOP;
+        
+                api.pkg_logicaltransactionupdate.endtransaction;
+                COMMIT;
+        
     END add_person;
 
     PROCEDURE add_company(a_entityobjectid IN api.pkg_definition.udt_id,
@@ -1287,8 +1329,6 @@ AS
         t_objectdefid  api.pkg_definition.udt_id;
         t_objectid     api.pkg_definition.udt_id;
         t_newentity    api.pkg_definition.udt_id;
-
-        t_list         api.udt_objectlist;
     BEGIN
         FOR rec
             IN (SELECT *
@@ -1434,6 +1474,10 @@ AS
                     END IF;
                 END IF;
             END IF;
+
+                api.pkg_logicaltransactionupdate.endtransaction;
+                COMMIT;
+            
         END LOOP;
     END add_company;
 END;

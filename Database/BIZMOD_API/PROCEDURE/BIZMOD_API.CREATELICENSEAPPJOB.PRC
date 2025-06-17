@@ -30,7 +30,10 @@ IS
     --                                        applications to pkg_abis
     --   6.0.0  04/14/2025  TJL  BIZ-17979  Added setting the Alternate Base File Office when
     --                                        Base File Office is HQ
-    --   7.0.0   04/30/2025  TJL  BIZ-18052  Added sorting to legal entity
+    --   7.0.0  04/30/2025  TJL  BIZ-18052  Added sorting to legal entity
+    --   8.0.0  06/05/2025  TJL  BIZ-18536  Added not setting application date for priority draw
+    --                                        removed support for transfer applications since 
+    --                                        that support was moved to a different process
     -- ****************************************************************************
 
     TYPE apprec_t IS RECORD(lspapplicationid VARCHAR2(40),
@@ -43,8 +46,8 @@ IS
                             premiseaddress VARCHAR2(4000),
                             mailingaddress VARCHAR2(4000),
                             istemporarymailingaddress VARCHAR2(3),
-                            attorney CLOB,
-                            escrow CLOB,
+--                            attorney CLOB,
+--                            escrow CLOB,
                             legal_entities CLOB);
 BEGIN
     DECLARE
@@ -55,6 +58,7 @@ BEGIN
         t_jobid        api.pkg_definition.udt_id;
         t_dbanamesobjectid api.pkg_definition.udt_id;
         t_dbaendpointid api.pkg_definition.udt_id;
+    t_primarydraw  VARCHAR2(1);
         t_dba          api.pkg_definition.udt_id;
         t_count        NUMBER;
         t_entity       CLOB;
@@ -87,8 +91,8 @@ BEGIN
                premise_address,
                mailing_address,
                istemporarymailingaddress,
-               attorney,
-               escrow,
+--               attorney,
+--               escrow,
                legal_entities
           INTO t_apprec
           FROM JSON_TABLE(
@@ -120,8 +124,8 @@ BEGIN
                        istemporarymailingaddress
                            VARCHAR2(3)
                            PATH '$.ISTEMPORARYMAILINGADDRESS',
-                       attorney VARCHAR2(4000) FORMAT JSON PATH '$.ATTORNEY',
-                       escrow VARCHAR2(4000) FORMAT JSON PATH '$.ESCROW',
+--                       attorney VARCHAR2(4000) FORMAT JSON PATH '$.ATTORNEY',
+--                       escrow VARCHAR2(4000) FORMAT JSON PATH '$.ESCROW',
                        legal_entities CLOB FORMAT JSON PATH '$.LEGALENTITIES'));
 
         -- Check for duplicate key
@@ -151,6 +155,7 @@ BEGIN
                                       'LSPID',
                                       t_apprec.lspapplicationid);
 
+
         sitespecific.pkg_license.generateappexternalfilenum(t_jobid, SYSDATE);
 
         api.pkg_logicaltransactionupdate.endtransaction;
@@ -168,6 +173,59 @@ BEGIN
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
+        -- check if priority draw application
+    SELECT CASE
+               WHEN (REGEXP_LIKE(
+                         (SELECT json_query(
+                                     eg.packet,
+                                     '$.DATA.PRIMARYLICENSETYPES[*].LICENSETYPECODE'
+                                     WITH WRAPPER)    AS licensetypecodes
+                            FROM bizmod_api.eservices_log_t eg
+                           WHERE eg.seq = a_seq),
+                         '21|47'))
+               THEN
+                   'Y'
+               ELSE
+                   'N'
+           END    a
+      INTO t_primarydraw
+      FROM DUAL;
+
+        if (t_primarydraw = 'Y')
+        then
+        
+                    api.pkg_columnupdate.setvalue(
+                        t_jobid,
+                        'PriorityApplicationType',
+                        api.pkg_columnquery.VALUE(t_jobid, 'ApplicationType'));
+
+                    api.pkg_columnupdate.setvalue(
+                        t_jobid,
+                        'CopyLicDetailsToAppProcHasRun',
+                        'Y');
+                    api.pkg_columnupdate.setvalue(t_jobid,
+                                                  'PriorityUpgrade',
+                                                  'No');
+                    api.pkg_columnupdate.setvalue(t_jobid,
+                                                  'IsPriorityApplication',
+                                                  'Y');
+
+        
+        end if;
+
+        -- api.pkg_columnupdate.setvalue(t_jobid, 'PrimaryDBA', t_apprec.dba);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'UnderConstruction',
+                                      t_apprec.underconstruction);
+        api.pkg_columnupdate.setvalue(t_jobid, 'Felony', t_apprec.felony);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'Violation',
+                                      t_apprec.violation);
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'LicensePurchasePrice',
+                                      t_apprec.licensepurchaseprice);
+
+begin
         IF (t_apprec.dba IS NOT NULL)
         THEN
             t_dbanamesobjectid :=
@@ -189,86 +247,23 @@ BEGIN
                 api.pkg_relationshipupdate.new(t_dbaendpointid,
                                                t_jobid,
                                                t_dbanamesobjectid);
-        END IF;
-
-        -- api.pkg_columnupdate.setvalue(t_jobid, 'PrimaryDBA', t_apprec.dba);
-        api.pkg_columnupdate.setvalue(t_jobid,
-                                      'UnderConstruction',
-                                      t_apprec.underconstruction);
-        api.pkg_columnupdate.setvalue(t_jobid, 'Felony', t_apprec.felony);
-        api.pkg_columnupdate.setvalue(t_jobid,
-                                      'Violation',
-                                      t_apprec.violation);
-        api.pkg_columnupdate.setvalue(t_jobid,
-                                      'LicensePurchasePrice',
-                                      t_apprec.licensepurchaseprice);
-
-        pkg_abis.add_primary_license_types(
-            a_jobid     => t_jobid,
-            a_primarylicensetypes => t_apprec.primarylicensetypes);
-
-        pkg_abis.add_address(a_jobid     => t_jobid,
-                             a_address_type => 'Premises',
-                             a_address   => t_apprec.premiseaddress);
-
-        -- check if base file office is Headquarters
-        IF (api.pkg_columnquery.numericvalue(t_jobid, 'BaseFileOfficeId') =
-            5554)
-        THEN
-            BEGIN
-                -- get office for premise address
-                SELECT co.districtofficeid
-                  INTO t_officeid
-                  FROM api.relationships  r
-                       JOIN api.relationships c
-                           ON (r.toobjectid = c.fromobjectid
-                           AND c.endpointid =
-                               api.pkg_configquery.endpointidforname(
-                                   'o_Address',
-                                   'CACity'))
-                       JOIN bizmod_api.citytooffice_t co
-                           ON (co.cacityid = c.toobjectid)
-                 WHERE r.endpointid =
-                       api.pkg_configquery.endpointidforname('j_Application',
-                                                             'Premises')
-                   AND r.fromobjectid = t_jobid;
-
-                -- set alternate base file office for premise city
-                api.pkg_columnupdate.setvalue(t_jobid,
-                                              'IsAlternateBaseFileOffice',
-                                              'Y');
-
-                -- add new relationship                (endpointid, fromobjectid, toobjectid)
-                t_rel :=
-                    api.pkg_relationshipupdate.new(
-                        api.pkg_configquery.endpointidforname(
-                            'j_Application',
-                            'AlternateBaseFileOffice'),
-                        t_jobid,
-                        t_officeid);
-
+                                               
                 api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
-            EXCEPTION
-                WHEN NO_DATA_FOUND
-                THEN
-                    NULL;
-            END;
         END IF;
+        
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
+            t_trace := SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-        pkg_abis.add_address(a_jobid     => t_jobid,
-                             a_address_type => 'MailingAddress',
-                             a_address   => t_apprec.mailingaddress);
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
 
-        api.pkg_columnupdate.setvalue(t_jobid,
-                                      'IsTemporaryMailingAddress',
-                                      t_apprec.istemporarymailingaddress);
-
-        pkg_abis.add_attorney(a_jobid     => t_jobid,
-                              a_attorney  => t_apprec.attorney);
-
-        pkg_abis.add_escrow(a_jobid => t_jobid, a_escrow => t_apprec.escrow);
-
+    end;
+    
+        begin
         IF (t_apprec.legal_entities IS NOT NULL)
         THEN
             SELECT entity, company, person
@@ -321,15 +316,199 @@ BEGIN
                                               rec.line);
             END LOOP;
         END IF;
+        
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
+            t_trace := SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-        -- "ApplicationCreatedDate" must be set last before save
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
+
+        END;
+
+    begin
+        pkg_abis.add_address(a_jobid     => t_jobid,
+                             a_address_type => 'Premises',
+                             a_address   => t_apprec.premiseaddress);
+
+        -- check if base file office is Headquarters
+        IF (api.pkg_columnquery.numericvalue(t_jobid, 'BaseFileOfficeId') =
+            5554)
+        THEN
+            BEGIN
+                -- get office for premise address
+                SELECT co.districtofficeid
+                  INTO t_officeid
+                  FROM api.relationships  r
+                       JOIN api.relationships c
+                           ON (r.toobjectid = c.fromobjectid
+                           AND c.endpointid =
+                               api.pkg_configquery.endpointidforname(
+                                   'o_Address',
+                                   'CACity'))
+                       JOIN bizmod_api.citytooffice_t co
+                           ON (co.cacityid = c.toobjectid)
+                 WHERE r.endpointid =
+                       api.pkg_configquery.endpointidforname('j_Application',
+                                                             'Premises')
+                   AND r.fromobjectid = t_jobid;
+
+                -- set alternate base file office for premise city
+                api.pkg_columnupdate.setvalue(t_jobid,
+                                              'IsAlternateBaseFileOffice',
+                                              'Y');
+
+                -- add new relationship                (endpointid, fromobjectid, toobjectid)
+                t_rel :=
+                    api.pkg_relationshipupdate.new(
+                        api.pkg_configquery.endpointidforname(
+                            'j_Application',
+                            'AlternateBaseFileOffice'),
+                        t_jobid,
+                        t_officeid);
+
+                api.pkg_logicaltransactionupdate.endtransaction;
+                COMMIT;
+            EXCEPTION
+                WHEN NO_DATA_FOUND
+                THEN
+                    NULL;
+            END;
+        END IF;
+
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
+            t_trace := SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
+
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
+
+    end;
+
+        begin
+        pkg_abis.add_address(a_jobid     => t_jobid,
+                             a_address_type => 'MailingAddress',
+                             a_address   => t_apprec.mailingaddress);
+
         api.pkg_columnupdate.setvalue(t_jobid,
-                                      'ApplicationCreatedDate',
-                                      SYSDATE);
+                                      'IsTemporaryMailingAddress',
+                                      t_apprec.istemporarymailingaddress);
+
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
+            t_trace := SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
+
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
+
+        end;
+        
+        begin
+        pkg_abis.add_primary_license_types(
+            a_jobid     => t_jobid,
+            a_primarylicensetypes => t_apprec.primarylicensetypes);
+
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
+            t_trace := SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
+
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
+
+        end;
+        
+--        begin
+--        pkg_abis.add_attorney(a_jobid     => t_jobid,
+--                              a_attorney  => t_apprec.attorney);
+--        end;
+--        
+--        begin
+--        pkg_abis.add_escrow(a_jobid => t_jobid, a_escrow => t_apprec.escrow);
+--        end;
+--        
+--        IF (t_apprec.legal_entities IS NOT NULL)
+--        THEN
+--            SELECT entity, company, person
+--              INTO t_entity, t_company, t_person
+--              FROM JSON_TABLE(
+--                       t_apprec.legal_entities,
+--                       '$'
+--                       COLUMNS(entity CLOB FORMAT JSON PATH '$.ENTITY',
+--                               company CLOB FORMAT JSON PATH '$.COMPANY',
+--                               person CLOB FORMAT JSON PATH '$.PERSON'));
+--
+--            IF (t_entity IS NOT NULL)
+--            THEN
+--                pkg_abis.copy_legal_entities(a_objectid  => t_jobid,
+--                                             a_legal_entity => t_entity);
+--            END IF;
+--
+--            IF (t_company IS NOT NULL)
+--            THEN
+--                pkg_abis.add_company(a_entityobjectid => t_jobid,
+--                                     a_legal_entity => t_company);
+--            END IF;
+--
+--            IF (t_person IS NOT NULL)
+--            THEN
+--                pkg_abis.add_person(a_entityobjectid => t_jobid,
+--                                    a_person    => t_person);
+--            END IF;
+--
+--            -- 04/30/2025  TJL  BIZ-18052
+--            -- order legal entities by name after being added to application
+--            FOR rec
+--                IN (SELECT l.legalentity, l.formattedname, ROWNUM * 10 line
+--                      FROM (  SELECT r.toobjectid                                  legalentity,
+--                                     api.pkg_columnquery.VALUE(r.toobjectid,
+--                                                               'FormattedName')    formattedname
+--                                FROM api.relationships r
+--                               WHERE r.fromobjectid = t_jobid
+--                                 AND r.endpointid IN
+--                                         (api.pkg_configquery.endpointidforname(
+--                                              'j_Application',
+--                                              'OnSaleManager'),
+--                                          api.pkg_configquery.endpointidforname(
+--                                              'j_Application',
+--                                              'Applicant'))
+--                            ORDER BY formattedname) l)
+--            LOOP
+--                api.pkg_columnupdate.setvalue(rec.legalentity,
+--                                              'SortKey',
+--                                              rec.line);
+--            END LOOP;
+--        END IF;
+--
+        -- "ApplicationCreatedDate" must be set last before save
+        --   except for priority draw applications
+begin
+        IF (api.pkg_columnquery.VALUE(t_jobid, 'IsPriorityApplication') = 'N')
+        THEN
+            api.pkg_columnupdate.setvalue(t_jobid,
+                                          'ApplicationCreatedDate',
+                                          SYSDATE);
+        END IF;
 
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
+            t_trace := SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
+
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
+end;
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
@@ -367,7 +546,8 @@ BEGIN
         -- notify LSP application has completed
         bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
                                             a_asofdate  => SYSDATE,
-                                            a_jobid     => t_jobid);
+                                            a_jobid     => t_jobid,
+                                            a_status    => case when t_sqlerrm is null then null else 'ERRORED' end);
         COMMIT;
     EXCEPTION
         WHEN OTHERS
