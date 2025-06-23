@@ -53,6 +53,8 @@ AS
     --  10.5.1  02/06/2025  TJL  BIZ-17356    Corrected bug when no response text is received to log it
     --  10.5.2  02/07/2025  TJL  BIZ-17356    Code cleanup
     --  11.0.0  05/02/2025  TJL  BIZ-18056    Change prototype parameter on calllsp
+    --  12.0.0  06/18/2025  TJL  BIZ-18689    Added enhanced parsing of error messages being returned for LSP
+    --                                          in calllsp function.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -106,6 +108,7 @@ AS
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
         t_http_request UTL_HTTP.req;
         t_http_response UTL_HTTP.resp;
+        t_object        json_object_t;
         t_http_response_text CLOB;
         t_blob_len     NUMBER;
         t_chunk_size   NUMBER := 32767;
@@ -229,13 +232,34 @@ AS
 
             t_return.put('status', t_http_response.status_code);
 
-            IF (t_http_response_text IS JSON)
-            THEN
-                t_return.put('lspresponse',
-                             json_element_t.parse(t_http_response_text));
+    IF (t_http_response_text IS JSON)
+    THEN
+        t_object := json_object_t(t_http_response_text);
+
+        CASE
+            WHEN t_object.has('message') 
+            then
+                t_return.put(
+                    'lspresponse',
+                             t_object.get_clob('message'));
             ELSE
-                t_return.put('lspresponse', nvl(t_http_response_text, to_char(t_http_response.status_code)));
-            END IF;
+                t_return.put(
+                    'lspresponse',
+                            t_object);
+        END case;
+    ELSE
+        t_text := substr(t_http_response_text, 1, 32767);
+        t_return.put('lspresponse',
+                     NVL(REGEXP_SUBSTR(t_text,
+                                       '<title>(.*)</title>',
+                                       1,
+                                       1,
+                                       NULL,
+                                       1),
+                         t_text));
+        t_http_response_text := '{"lspresponse":"' || t_http_response_text || '"}';
+    END IF;
+
         EXCEPTION
             WHEN UTL_HTTP.request_failed
             THEN
@@ -287,7 +311,7 @@ AS
                                     err)
                  VALUES ('CALLLSP',
                          t_content,
-                         t_responsetext,
+                         t_http_response_text,
                          t_url || '; ' || a_method,
                          a_file,
                          SYSTIMESTAMP,
@@ -299,7 +323,7 @@ AS
         IF (SQL%ROWCOUNT = 0)
         THEN
             INSERT INTO err$_eservices_clob_t(seq, jsondata, filedata)
-                 VALUES (TO_CHAR(SYSTIMESTAMP), t_responsetext, a_file);
+                 VALUES (TO_CHAR(SYSTIMESTAMP), t_http_response_text, a_file);
         END IF;
 
         COMMIT;
