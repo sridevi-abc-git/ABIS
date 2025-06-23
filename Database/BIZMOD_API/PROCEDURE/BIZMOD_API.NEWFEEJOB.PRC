@@ -25,6 +25,7 @@ AS
     --   5.0.0  03/05/2025 TJL  BIZ-17503  Corrected bug in logging errors from CALLLSP
     --   6.0.0  04/22/2025 TJL  BIZ-18056  Added saving new fees to e_fees_t table
     --   7.0.0  05/21/2025 TJL  BIZ-18387  Change Merge for new column added to e_fees_t table
+    --   8.0.0  06/18/2025 TJL  BIZ-18689  Change Merge for new column added to e_fees_t table
     -- ****************************************************************************
     t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/';
     t_method      constant varchar2(10) := 'PATCH';
@@ -81,10 +82,12 @@ BEGIN
     AND t_sqlerrm IS NULL)
     THEN
         t_sqlerrm :=
-            CASE t_results.get_type('lspresponse')
-                WHEN 'OBJECT'
+            CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
                 THEN
                     t_results.get_object('lspresponse').TO_CLOB || CHR(13)
+                WHEN t_results.has('lspresponse') 
+                then
+                     t_results.get_clob('lspresponse')
                 ELSE
                     t_results.TO_CLOB
             END;
@@ -119,7 +122,8 @@ BEGIN
 
         --   6.0.0  04/22/2025 TJL  BIZ-18056
         MERGE INTO bizmod_api.e_fees_t f
-             USING (SELECT f.jobid,
+             USING (SELECT t_applicationid lspid,
+                           f.jobid,
                            f.description,
                            (SELECT reo.objectid
                               FROM api.registeredexternalobjects reo
@@ -133,7 +137,8 @@ BEGIN
                 ON (f.feeobjid = a.feeobjid)
         WHEN NOT MATCHED
         THEN
-            INSERT VALUES (a.jobid,
+            INSERT VALUES (a.lspid,
+                           a.jobid,
                            a.description,
                            a.feeobjid,
                            a.amount,
