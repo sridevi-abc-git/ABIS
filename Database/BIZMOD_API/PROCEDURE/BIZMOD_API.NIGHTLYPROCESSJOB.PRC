@@ -49,6 +49,7 @@ IS
     --  15.0.1  05/14/2025  TJL  BIZ-18387  Corrected bug in manual payments causing exception
     --                                         being thrown.
     --  16.0.0  06/16/2025  TJL  BIZ-18655  Corrected error logging bug in manual payment processing.
+    --  17.0.0  06/18/2025  TJL  BIZ-18689  Corrected formatting of error emails
     -- ****************************************************************************
 
     PROCEDURE manualpayments
@@ -102,13 +103,13 @@ IS
         IF (t_token IS NOT NULL)
         THEN
             FOR j
-                IN (  SELECT f.jobid, json_arrayagg(f.feeobjid) body
+                IN (  SELECT f.lspid, f.jobid, json_arrayagg(f.feeobjid) body
                         FROM bizmod_api.e_fees_t f
                        WHERE f.paiddate IS NULL
                          AND api.pkg_columnquery.VALUE(f.feeobjid,
                                                        'Paidamount') <
                              0
-                    GROUP BY f.jobid)
+                    GROUP BY f.lspid, f.jobid)
             LOOP
                 t_sqlerrm := NULL;
 
@@ -143,6 +144,8 @@ IS
                 THEN
                     t_results_text :=
                         t_results_text
+                        || rpad(j.lspid, 10, ' ')
+                        || chr(9)
                         || j.jobid
                         || CHR(9)
                         || t_results.get_number('status')
@@ -151,6 +154,8 @@ IS
                         || CHR(13);
                     t_errors :=
                         t_errors
+                        || rpad(j.lspid, 10, ' ')
+                        || chr(9)
                         || j.jobid
                         || CHR(9)
                         || t_results.get_number('status')
@@ -161,14 +166,27 @@ IS
                                    t_results.get_object('lspresponse').TO_CLOB
                                    || CHR(13)
                                ELSE
-                                   NULL
+                                   case when t_results.has('lspresponse') 
+                                   then t_results.get_clob('lspresponse')
+                                   else
+                                        t_results.to_clob
+                                   end
+                                   || CHR(13)
                            END;
                 else 
                     t_results_text :=
-                        t_results_text || t_results.TO_CLOB || CHR(13);
-
+                        t_results_text
+                        || rpad(j.lspid, 10, ' ')
+                        || chr(9)
+                        || j.jobid
+                        || CHR(9)
+                        || t_results.get_number('status')
+                        || CHR(9)
+                        || j.body
+                        || CHR(13);
                 
                 END IF;
+                
                 -- get the fees that were paid to update fees table
                 UPDATE bizmod_api.e_fees_t f
                    SET f.paiddate = SYSDATE, f.manualpayment = 'Y'
@@ -1464,7 +1482,3 @@ BEGIN
 END nightlyprocessjob;
 /
 
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO POSSEEXTENSIONS;
