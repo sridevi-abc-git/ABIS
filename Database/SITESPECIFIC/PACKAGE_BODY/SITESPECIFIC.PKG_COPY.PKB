@@ -16,6 +16,7 @@ IS
     --    Date                  Comment
     -- 08/16/2018 TJL         Initial Check-in
     -- 11/08/2019 PK          Made changes to increase performance of priority applications
+    -- 07/02/2025 PK          Made changes to PROCEDURE copyupgraderelationship to include Special Legislation Task5141
     -- **************************************************************************
 
     ----------------------------------------------------------------------------------------------------
@@ -218,7 +219,7 @@ IS
                             || SQLERRM);
                 END;
             ELSIF t_priorityupgrade = 'Yes'
-              AND t_priorityapplicationtype = 'Original' THEN
+              AND t_priorityapplicationtype IN ('Original', 'Special Legislation') THEN
                 BEGIN
                     t_relid   :=
                         api.pkg_relationshipupdate.new(
