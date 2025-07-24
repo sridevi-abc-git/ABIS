@@ -29,6 +29,7 @@ AS
     --   6.3.1  02/13/2026 TJL  BIZ-17356  Limit string length for info value
     --   6.3.2  02/14/2025 TJL  BIZ-17356  Change how lsp response for error is handled.
     --   7.0.0  03/05/2025 TJL  BIZ-17503  Corrected bug in logging errors from CALLLSP
+    --   8.0.0  07/22/2025 TJL  BIZ-18902  Corrected bug in parsing lspresponse
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
                        := '/api/licensing/internal/license-applications/' ;
@@ -93,10 +94,12 @@ BEGIN
     AND t_sqlerrm IS NULL)
     THEN
         t_sqlerrm :=
-            CASE t_results.get_type('lspresponse')
-                WHEN 'OBJECT'
+            CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
                 THEN
                     t_results.get_object('lspresponse').TO_CLOB || CHR(13)
+                WHEN t_results.has('lspresponse')
+                then
+                     t_results.get_clob('lspresponse')
                 ELSE
                     t_results.TO_CLOB
             END;
@@ -125,6 +128,8 @@ BEGIN
                             || 'j_Application: '
                             || a_jobid
                             || CHR(13)
+                            || 'Results: '
+                            || CHR(9)
                             || t_results_text,
                             1,
                             3999),

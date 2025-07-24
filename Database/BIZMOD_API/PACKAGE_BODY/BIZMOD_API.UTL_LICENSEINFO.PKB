@@ -55,6 +55,8 @@ AS
     --  11.0.0  05/02/2025  TJL  BIZ-18056    Change prototype parameter on calllsp
     --  12.0.0  06/18/2025  TJL  BIZ-18689    Added enhanced parsing of error messages being returned for LSP
     --                                          in calllsp function.
+    --  13.0.0  07/03/2025  TJL  BIZ-08799    Added exception handling for no data found in get_application
+    --  14.0.0  07/22/2025  TJL  BIZ-18902    Corrected bug in the parsing of LSP response in CALLLSP.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -85,19 +87,21 @@ AS
 
         -- call get token
         t_return :=
-            bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => '/api/providermgmt/authenticate/login',
-                    a_method    => 'POST',
-                    a_content   => json_object_t.parse(t_loginid));
+            bizmod_api.utl_licenseinfo.calllsp(
+                a_urlinfo   => '/api/providermgmt/authenticate/login',
+                a_method    => 'POST',
+                a_content   => json_object_t.parse(t_loginid));
         RETURN t_return;
     END;
 
-    FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
-                     a_method       IN VARCHAR2,
-                     a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
-                     a_file         IN BLOB DEFAULT NULL,
-                     a_token        IN VARCHAR2 DEFAULT NULL)
+    FUNCTION calllsp(
+        a_urlinfo      IN VARCHAR2,
+        a_method       IN VARCHAR2,
+        a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
+        a_file         IN BLOB DEFAULT NULL,
+        a_token        IN VARCHAR2 DEFAULT NULL)
         RETURN json_object_t
-            IS
+    IS
         t_return       json_object_t := json_object_t();
         t_content      CLOB := a_content.TO_CLOB;
         ----------------------------------------------
@@ -108,7 +112,8 @@ AS
                            := '----WebKitFormBoundary7MA4YWxkTrZu0gW';
         t_http_request UTL_HTTP.req;
         t_http_response UTL_HTTP.resp;
-        t_object        json_object_t;
+        t_object       json_element_t; -- 07/22/2025  TJL  BIZ-18902
+        t_lspresponse  json_object_t;
         t_http_response_text CLOB;
         t_blob_len     NUMBER;
         t_chunk_size   NUMBER := 32767;
@@ -131,6 +136,7 @@ AS
         t_responsetext VARCHAR2(32767);
         t_length       NUMBER;
         t_sqlerrm      VARCHAR2(4000);
+        t_requestdate   TIMESTAMP := SYSTIMESTAMP;
     BEGIN
         BEGIN
             SELECT url || a_urlinfo, wallet
@@ -139,11 +145,9 @@ AS
                       FROM bizmod_api.eservices_config_t c
                      WHERE c.process = 'CALLLSP'
                        AND c.dbname = UPPER(ora_database_name))
-                       PIVOT (
-                             MAX(parametervalue)
+                       PIVOT (MAX(parametervalue)
                              FOR parametername
-                             IN ('URL' url,
-                                'WALLET' wallet));
+                             IN ('URL' url, 'WALLET' wallet));
 
             UTL_HTTP.set_wallet(t_wallet, NULL);
 
@@ -210,14 +214,14 @@ AS
                 UTL_HTTP.write_text(t_http_request, t_body_end);
             END IF;
 
-            -- Get the response
-            t_http_response := UTL_HTTP.get_response(t_http_request);
-
             DBMS_LOB.createtemporary(t_http_response_text,
                                      TRUE,
                                      DBMS_LOB.session);
 
             BEGIN
+                -- Get the response
+                t_http_response := UTL_HTTP.get_response(t_http_request);
+
                 LOOP
                     UTL_HTTP.read_text(t_http_response, t_text, 32766);
                     DBMS_LOB.writeappend(t_http_response_text,
@@ -228,38 +232,86 @@ AS
                 WHEN UTL_HTTP.end_of_body
                 THEN
                     UTL_HTTP.end_response(t_http_response);
+                WHEN UTL_HTTP.transfer_timeout
+                THEN
+                    t_text := 'No Response from LSP';
+                    DBMS_LOB.writeappend(t_http_response_text,
+                                         LENGTH(t_text),
+                                         t_text);
             END;
 
             t_return.put('status', t_http_response.status_code);
 
-    IF (t_http_response_text IS JSON)
-    THEN
-        t_object := json_object_t(t_http_response_text);
+            IF (t_http_response_text IS JSON)
+            THEN
+                t_object := json_element_t.parse(t_http_response_text);
 
-        CASE
-            WHEN t_object.has('message') 
-            then
-                t_return.put(
-                    'lspresponse',
-                             t_object.get_clob('message'));
+                CASE
+                    WHEN (t_object.is_object)
+                    THEN
+                        CASE
+                            WHEN TREAT(t_object AS json_object_t).has('lspresponse')
+                            THEN
+                                t_lspresponse :=
+                                    TREAT(t_object AS json_object_t).get_object(
+                                        'lspresponse');
+
+                                CASE
+                                    WHEN t_lspresponse.has('message')
+                                    THEN
+                                        t_return.put('lspresponse',
+                                                     t_lspresponse.get_clob('message'));
+                                    ELSE
+                                        t_return.put('lspresponse', t_lspresponse);
+                                END CASE;
+                            WHEN TREAT(t_object AS json_object_t).has('message')
+                            THEN
+                                t_return.put(
+                                    'lspresponse',
+                                    TREAT(t_object AS json_object_t).get('message'));
+                            ELSE
+                                t_return.put('lspresponse', t_object);
+                        END CASE;
+                    WHEN t_object.is_array
+                    THEN
+                        t_return.put('lspresponse', TREAT(t_object AS json_array_t));
+                    ELSE
+                        t_return.put('lspresponse', t_object);
+                END CASE;
+--                CASE --07/22/2025  TJL  BIZ-18902
+--                    WHEN (t_object.is_object)
+--                    THEN
+--                        CASE
+--                            WHEN TREAT(t_object AS json_object_t).has(
+--                                     'message')
+--                            THEN
+--                                t_return.put(
+--                                    'lspresponse',
+--                                    TREAT(t_object AS json_object_t).get_clob(
+--                                        'message'));
+--                            ELSE
+--                                t_return.put('lspresponse', t_object);
+--                        END CASE;
+--                    WHEN t_object.is_array
+--                    THEN
+--                        t_return.put('lspresponse',
+--                                     TREAT(t_object AS json_array_t));
+--                    ELSE
+--                        t_return.put('lspresponse', t_object);
+--                END CASE;
             ELSE
-                t_return.put(
-                    'lspresponse',
-                            t_object);
-        END case;
-    ELSE
-        t_text := substr(t_http_response_text, 1, 32767);
-        t_return.put('lspresponse',
-                     NVL(REGEXP_SUBSTR(t_text,
-                                       '<title>(.*)</title>',
-                                       1,
-                                       1,
-                                       NULL,
-                                       1),
-                         t_text));
-        t_http_response_text := '{"lspresponse":"' || t_http_response_text || '"}';
-    END IF;
-
+                t_text := SUBSTR(t_http_response_text, 1, 32767);
+                t_return.put('lspresponse',
+                             NVL(REGEXP_SUBSTR(t_text,
+                                               '<title>(.*)</title>',
+                                               1,
+                                               1,
+                                               NULL,
+                                               1),
+                                 t_text));
+                t_http_response_text :=
+                    '{"lspresponse":"' || t_http_response_text || '"}';
+            END IF;
         EXCEPTION
             WHEN UTL_HTTP.request_failed
             THEN
@@ -281,22 +333,23 @@ AS
         UTL_HTTP.end_response(t_http_response);
         UTL_HTTP.end_request(t_http_request);
 
-        IF (a_content.is_Object) -- 05/02/2025  TJL  BIZ-18056
+        IF (a_content.is_object) -- 05/02/2025  TJL  BIZ-18056
         THEN
-            IF (treat(a_content as json_object_t).has('password'))
+            IF (TREAT(a_content AS json_object_t).has('password'))
             THEN
                 t_content := '{"email":"*****","password":"******"}';
 
                 IF (t_return.get_number('status') = 200)
                 THEN
                     t_responsetext :=
-                        json_object('status' VALUE t_return.get_number('status'));
+                        json_object(
+                            'status' VALUE t_return.get_number('status'));
                 ELSE
                     t_responsetext := t_return.TO_CLOB;
                 END IF;
             ELSE
                 t_responsetext := t_return.TO_CLOB;
-            end if;
+            END IF;
         ELSE
             t_responsetext := t_return.TO_CLOB;
         END IF;
@@ -314,7 +367,7 @@ AS
                          t_http_response_text,
                          t_url || '; ' || a_method,
                          a_file,
-                         SYSTIMESTAMP,
+                         t_requestdate,
                          SYSTIMESTAMP,
                          t_sqlerrm)
                 LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('INSERT')
@@ -471,6 +524,10 @@ AS
          WHERE app.issuedate = app.datecompleted;
 
         RETURN t_applicationjobid;
+    EXCEPTION
+        WHEN NO_DATA_FOUND
+        THEN
+            RETURN t_applicationjobid;
     END;
 
 
@@ -732,7 +789,5 @@ AS
                 'E-Services ' || a_description,
                 1); --serverkey
     END;
-
-
 END;
 /

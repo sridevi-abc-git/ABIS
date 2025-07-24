@@ -26,6 +26,7 @@ AS
     --   8.0.0   06/16/2025  TJL             Added in add_address for priority draw application 
     --                                         setting priority draw county. removed priority
     --                                         draw setting from add_primary_license_types
+    --   9.0.0   07/17/2025  TJL  BIZ-18875  Added Manual Payments procedure
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -118,6 +119,47 @@ AS
                 a_argument2 => SYSDATE,
                 a_argument3 => a_jobid,
                 a_argument4 => a_status);
+        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SQLERRM;
+            t_trace := DBMS_UTILITY.format_error_backtrace;
+
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                     VALUES (
+                                0,
+                                'APPLICATIONSAVE',
+                                'Application Object Id: '
+                                || a_jobid
+                                || CHR(13)
+                                || 'Process Id: '
+                                || a_objectid,
+                                t_sqlerrm,
+                                t_trace);
+    END;
+
+    PROCEDURE manualpayment(a_objectid     IN api.pkg_definition.udt_id,
+                            a_asofdate     IN DATE,
+                            a_jobid        IN api.pkg_definition.udt_id)
+    IS 
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
+    BEGIN
+        IF (api.pkg_columnquery.VALUE(a_jobid, 'LSPId') IS NOT NULL)
+        THEN
+            bizmod_api.utl_licenseinfo.createjob(
+                a_procedure => 'MANUALPAYMENTJOB',
+                a_description =>
+                    'Manual Payment for LSP ID: '
+                    || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
+                a_argument1 => a_objectid,
+                a_argument2 => SYSDATE,
+                a_argument3 => a_jobid);
         END IF;
     EXCEPTION
         WHEN OTHERS

@@ -30,6 +30,7 @@ AS
     --   4.0     08/13/2024 TJL  BIZ-15808  Change call to new calllsp function
     --   5.0.0   02/04/2025 TJL  BIZ-17356    Added handling of the return value from CALLLSP and call
     --                                          to lsplogin
+    --   6.0.0   07/23/2025 TJL  BIZ-18902  Added handling oracl error message from CALLLSP
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
@@ -538,7 +539,15 @@ BEGIN
                 IF (t_results.get_number('status') != 200)
                 THEN
                     t_sqlerrm :=
-                        t_results.get_object('lspresponse').to_string;
+                        CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                            THEN
+                                t_results.get_object('lspresponse').TO_CLOB || CHR(13)
+                            WHEN t_results.has('lspresponse')
+                            then
+                                 t_results.get_clob('lspresponse')
+                            ELSE
+                                t_results.TO_CLOB
+                        END;
                 END IF;
 
                 INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -599,10 +608,25 @@ BEGIN
                     a_file      => t_data,
                     a_token     => t_token);
 
-            IF (t_results.get_number('status') != 200)
+            IF (t_results.get_number('status') != 200
+            AND t_sqlerrm IS NULL)
             THEN
-                t_sqlerrm := t_results.get_object('lspresponse').to_string;
+                t_sqlerrm :=
+                    CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                        THEN
+                            t_results.get_object('lspresponse').TO_CLOB || CHR(13)
+                        WHEN t_results.has('lspresponse')
+                        then
+                             t_results.get_clob('lspresponse')
+                        ELSE
+                            t_results.TO_CLOB
+                    END;
             END IF;
+
+--            IF (t_results.get_number('status') != 200)
+--            THEN
+--                t_sqlerrm := t_results.get_object('lspresponse').to_string;
+--            END IF;
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,

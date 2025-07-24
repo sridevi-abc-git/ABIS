@@ -12,9 +12,9 @@ AS
     -- History:
     -------------------------------------------------------------------------------
     --          Date           Ticket        Comment
-    --   1.3    07/17/2025 TJL  BIZ-  Initial Procedure Created
+    --   1.3    07/17/2025 TJL  BIZ-18875  Initial Procedure Created
     -------------------------------------------------------------------------------
-    
+
         t_url CONSTANT VARCHAR2(1000)
             := '/api/licensing/internal/license-applications/<<applicationId>>/fees' ;
         t_method CONSTANT VARCHAR2(10) := 'PUT';
@@ -38,7 +38,6 @@ AS
             t_token :=
                 t_results.get_object('lspresponse').get_string('token');
         END IF;
-
         -- check for any manual payments made in abis
         -- 05/14/2025  TJL  BIZ-18387
         IF (t_token IS NOT NULL)
@@ -102,19 +101,16 @@ AS
                         || CHR(9)
                         || t_results.get_number('status')
                         || CHR(9)
-                        || CASE t_results.get_type('lspresponse')
-                               WHEN 'OBJECT'
-                               THEN
-                                   t_results.get_object('lspresponse').TO_CLOB
-                                   || CHR(13)
-                               ELSE
-                                   case when t_results.has('lspresponse')
-                                   then t_results.get_clob('lspresponse')
-                                   else
-                                        t_results.to_clob
-                                   end
-                                   || CHR(13)
-                           END;
+                        || CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                                THEN
+                                    t_results.get_object('lspresponse').TO_CLOB
+                                WHEN t_results.has('lspresponse')
+                                then
+                                     t_results.get_clob('lspresponse')
+                                ELSE
+                                    t_results.TO_CLOB
+                                END
+                                   || CHR(13);
                 else
                     t_results_text :=
                         t_results_text
@@ -128,7 +124,6 @@ AS
                         || CHR(13);
 
                 END IF;
-
                 -- get the fees that were paid to update fees table
                 UPDATE bizmod_api.e_fees_t f
                    SET f.paiddate = SYSDATE, f.manualpayment = 'Y'
@@ -144,20 +139,21 @@ AS
             NULL;
         END IF;
 
-        IF (t_errors IS NOT NULL)
-        THEN
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg,
-                                                   bktrace,
-                                                   packet)
-                 VALUES (0,
-                         t_process,
-                         SUBSTR(SUBSTR(t_results_text, 1, 4000), 1, 3999),
-                         SUBSTR(t_errors, 1, 4000),
-                         t_trace,
-                         t_value);
-        END IF;
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace,
+                                               packet)
+             VALUES (0,
+                     t_process,
+                     SUBSTR(SUBSTR(t_results_text, 1, 4000), 1, 3999),
+                     SUBSTR(t_errors, 1, 4000),
+                     t_trace,
+                     t_value);
+        COMMIT;
     END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.MANUALPAYMENTJOB TO POSSEEXTENSIONS;

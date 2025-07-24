@@ -13,6 +13,7 @@ AS
     --                                        License Applications
     --     2.0    09/30/2024 BN   BIZ-16397  ERROR notification to LSP
     --     3.0.1  04/03/2028 TJL  BIZ-17503  Added common applications procedures
+    --     4.0.0  07/17/2025 TJL  BIZ-18875  Added manual payment procedure
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     IN api.pkg_definition.udt_id,
                                 a_asofdate     IN DATE);
@@ -24,6 +25,10 @@ AS
                               a_asofdate     IN DATE,
                               a_jobid        IN api.pkg_definition.udt_id,
                               a_status       IN VARCHAR2 DEFAULT NULL);
+
+    PROCEDURE manualpayment(a_objectid     IN api.pkg_definition.udt_id,
+                            a_asofdate     IN DATE,
+                            a_jobid        IN api.pkg_definition.udt_id);
 
     PROCEDURE add_secondary_license_types(
         a_primary_objectid IN api.pkg_definition.udt_id,
