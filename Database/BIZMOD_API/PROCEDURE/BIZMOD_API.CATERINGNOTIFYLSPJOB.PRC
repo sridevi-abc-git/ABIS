@@ -31,6 +31,7 @@ AS
     --   5.0.0   02/04/2025 TJL  BIZ-17356    Added handling of the return value from CALLLSP and call
     --                                          to lsplogin
     --   6.0.0   07/23/2025 TJL  BIZ-18902  Added handling oracl error message from CALLLSP
+    --   6.0.1   07/28/2025 TJL  BIZ-18902  Corrected parsing bug in LSP Response
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
@@ -389,25 +390,18 @@ BEGIN
         t_data         BLOB;
         t_outcome      VARCHAR2(20);
         t_packet       json_object_t;
-        t_response     CLOB;
-        --        t_results      CLOB;
-        t_json_app     json_object_t;
         t_applicationid VARCHAR2(1000);
         t_licensenumber VARCHAR2(100);
-        t_error        VARCHAR2(4000);
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
-        t_msg          VARCHAR2(4000 BYTE);
         t_completed    VARCHAR2(1);
         t_hashvalue    NUMBER;
         t_currhash     NUMBER;
         t_header       VARCHAR2(4000);
-        --        t_body         json_object_t := json_object_t();
         t_packet_value CLOB;
         t_results      json_object_t;
         t_token        VARCHAR2(1000);
         t_results_text VARCHAR2(32767);
-        t_app_status   VARCHAR2(20) := 'Posted';
         t_text         VARCHAR2(32767);
     BEGIN
         BEGIN
@@ -539,15 +533,21 @@ BEGIN
                 IF (t_results.get_number('status') != 200)
                 THEN
                     t_sqlerrm :=
-                        CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                        CASE
+                            WHEN t_results.get_type('lspresponse') = 'ARRAY'
                             THEN
-                                t_results.get_object('lspresponse').TO_CLOB || CHR(13)
-                            WHEN t_results.has('lspresponse')
-                            then
-                                 t_results.get_clob('lspresponse')
+                                t_results.get_array('lspresponse').to_clob
+
+                            WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                            THEN
+                                t_results.get_object('lspresponse').to_clob
+
+                            WHEN t_results.get_type('lspresponse') = 'SCALAR'
+                            THEN
+                                t_results.get_clob('lspresponse')
                             ELSE
-                                t_results.TO_CLOB
-                        END;
+                                t_results.to_clob
+                        END;                
                 END IF;
 
                 INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -612,21 +612,22 @@ BEGIN
             AND t_sqlerrm IS NULL)
             THEN
                 t_sqlerrm :=
-                    CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                    CASE
+                        WHEN t_results.get_type('lspresponse') = 'ARRAY'
                         THEN
-                            t_results.get_object('lspresponse').TO_CLOB || CHR(13)
-                        WHEN t_results.has('lspresponse')
-                        then
-                             t_results.get_clob('lspresponse')
-                        ELSE
-                            t_results.TO_CLOB
-                    END;
-            END IF;
+                            t_results.get_array('lspresponse').to_clob
 
---            IF (t_results.get_number('status') != 200)
---            THEN
---                t_sqlerrm := t_results.get_object('lspresponse').to_string;
---            END IF;
+                        WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                        THEN
+                            t_results.get_object('lspresponse').to_clob
+
+                        WHEN t_results.get_type('lspresponse') = 'SCALAR'
+                        THEN
+                            t_results.get_clob('lspresponse')
+                        ELSE
+                            t_results.to_clob
+                    END;                
+            END IF;
 
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
