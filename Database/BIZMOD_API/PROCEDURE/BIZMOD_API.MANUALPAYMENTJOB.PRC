@@ -13,6 +13,8 @@ AS
     -------------------------------------------------------------------------------
     --          Date           Ticket        Comment
     --   1.3    07/17/2025 TJL  BIZ-18875  Initial Procedure Created
+    --   2.0.0  08/07/2025 TJL  BIZ-19030  Add check to make sure that LSP Payment
+    --                                       is not sent as a manual payment notification.
     -------------------------------------------------------------------------------
 
         t_url CONSTANT VARCHAR2(1000)
@@ -30,7 +32,6 @@ AS
         t_element      json_element_t;
         t_errors       VARCHAR2(32767);
     BEGIN
-
         t_results := bizmod_api.utl_licenseinfo.lsplogin;
 
         IF (t_results.get_number('status') = 200)
@@ -50,6 +51,11 @@ AS
                          AND api.pkg_columnquery.VALUE(f.feeobjid,
                                                        'Paidamount') <
                              0
+                         -- 08/07/2025 TJL  BIZ-19030
+                         AND NOT EXISTS(select f.feeobjid
+                                          from bizmod_api.e_payments_t p
+                                         where p.feeobjid = f.feeobjid
+                                       )
                     GROUP BY f.lspid, f.jobid)
             LOOP
                 t_sqlerrm := NULL;
@@ -85,6 +91,8 @@ AS
                 THEN
                     t_results_text :=
                         t_results_text
+                        || api.pkg_columnquery.VALUE(j.jobid, 'LicenseNumber')
+                        || chr(9)
                         || rpad(j.lspid, 10, ' ')
                         || chr(9)
                         || j.jobid
@@ -95,6 +103,8 @@ AS
                         || CHR(13);
                     t_errors :=
                         t_errors
+                        || api.pkg_columnquery.VALUE(j.jobid, 'LicenseNumber')
+                        || chr(9)
                         || rpad(j.lspid, 10, ' ')
                         || chr(9)
                         || j.jobid
@@ -139,19 +149,22 @@ AS
             NULL;
         END IF;
 
-        INSERT INTO bizmod_api.e_process_log_t(seq,
-                                               processjob,
-                                               info,
-                                               errmsg,
-                                               bktrace,
-                                               packet)
-             VALUES (0,
-                     t_process,
-                     SUBSTR(SUBSTR(t_results_text, 1, 4000), 1, 3999),
-                     SUBSTR(t_errors, 1, 4000),
-                     t_trace,
-                     t_value);
-        COMMIT;
+        IF (t_results_text IS NOT NULL)
+        THEN
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace,
+                                                   packet)
+                 VALUES (0,
+                         t_process,
+                         SUBSTR(SUBSTR(t_results_text, 1, 4000), 1, 3999),
+                         SUBSTR(t_errors, 1, 4000),
+                         t_trace,
+                         t_value);
+            COMMIT;
+        END IF;
     END;
 /
 

@@ -51,6 +51,7 @@ IS
     --  16.0.0  06/16/2025  TJL  BIZ-18655  Corrected error logging bug in manual payment processing.
     --  17.0.0  06/18/2025  TJL  BIZ-18689  Corrected formatting of error emails
     --  18.0.0  07/17/2025  TJL  BIZ-18875  Removed manualpayments procedure
+    --  19.0.0  08/04/2025  TJL  BIZ-18942  Corrected bug to allow pass due renewals to be submitted.
     -- ****************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
@@ -325,8 +326,6 @@ IS
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
-        t_feeobjid     NUMBER;
-        t_feeid        NUMBER;
         t_msgno        NUMBER;
     BEGIN
         SELECT lt.applicationjobid
@@ -470,8 +469,6 @@ IS
         DECLARE
             t_msgno        NUMBER;
             t_feeobjid     NUMBER;
-            t_feeid        NUMBER;
-            t_old          NUMBER;
             t_cnt          NUMBER;
             t_fiscalstart  DATE
                 := TO_DATE(
@@ -595,7 +592,8 @@ IS
                    lt.awfflag = NULL
              WHERE t_fiscalstart = TRUNC(SYSDATE)
                AND NVL(lt.awfflag, 'Y') != 'NA'
-               AND lt.licensetypeexpirationdate = t_fiscalend;
+               AND (lt.licensetypeexpirationdate = t_fiscalend
+                     or lt.awfflag = 'N'); -- 08/04/2025  TJL  BIZ-18942
 
             -- update awfflag for non 02 and 22 and update 02 and 22 that are not active
             UPDATE bizmod_api.licensetype_t lt
@@ -745,10 +743,6 @@ IS
 BEGIN
     DECLARE
         t_refunded     VARCHAR2(1);
-        t_feetransfer  NUMBER;
-        t_paymenttransfer NUMBER;
-        t_awfbatch     NUMBER;
-
         t_body         VARCHAR2(32000);
         t_rowcount     NUMBER;
 
@@ -759,6 +753,10 @@ BEGIN
         t_paymentbatch NUMBER;
         t_seq          NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
         t_errorcnt     NUMBER := 0;
+        t_fiscalstart  DATE
+                := TO_DATE(
+                       '01-JUL-'
+                       || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)));
     BEGIN
         -- ********************************************************************
         t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
@@ -1026,8 +1024,12 @@ BEGIN
                        (SELECT 1
                           FROM bizmod_api.awf_t a
                          WHERE a.licensetypejobid = lt.licensetypejobid
-                           AND a.submitteddate >
+                           AND ((a.submitteddate >
                                ADD_MONTHS(lt.licensetypeexpirationdate, -12)
+                                  and lt.licensetypeexpirationdate >= t_fiscalstart)
+                               or (a.submitteddate > lt.licensetypeexpirationdate -- 08/04/2025  TJL  BIZ-18942
+                                  and lt.licensetypeexpirationdate < t_fiscalstart)
+                               )
                            AND a.awffeeid IS NOT NULL);
 
             COMMIT;
