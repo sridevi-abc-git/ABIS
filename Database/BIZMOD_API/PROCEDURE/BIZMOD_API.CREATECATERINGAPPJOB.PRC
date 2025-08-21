@@ -1,5 +1,6 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.createcateringappjob(a_seq          IN NUMBER,
-                                                 a_asofdate     IN DATE)
+CREATE OR REPLACE PROCEDURE BIZMOD_API.createcateringappjob(
+    a_seq          IN NUMBER,
+    a_asofdate     IN DATE)
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.CREATECATERINGAPPJOB.PRC
@@ -31,7 +32,7 @@ IS
     --   7.1     08/13/2024 TJL  BIZ-15808    Change call to new calllsp function
     --   7.2.0   02/04/2025 TJL  BIZ-17356    Added handling of the return value from CALLLSP and call
     --                                          to lsplogin
-    --                                          
+    --   8.0.0   07/22/2025 TJL  BIZ-18902    Added exception handling and handling LSP responses
     -- ****************************************************************************
     --************************
     --Object Id
@@ -113,509 +114,529 @@ IS
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000);
---    t_results      CLOB;
+    --    t_results      CLOB;
     t_response     CLOB;
     t_output       CLOB;
     t_count        NUMBER;
     t_json_app     json_object_t;
     t_parameternames json_object_t;
     t_replacementvalues json_object_t;
-    
+
     t_body         json_object_t := json_object_t();
     t_body_value   CLOB;
     t_results      json_object_t;
     t_token        VARCHAR2(1000);
     t_results_text VARCHAR2(32767);
-    t_app_status   varchar2(20) := 'Posted';    
-    
+    t_app_status   VARCHAR2(20) := 'Posted';
 BEGIN
     BEGIN
-    --*****************
-    --Clear any error
-    --*****************
-    api.pkg_logicaltransactionupdate.resettransaction;
-    ROLLBACK;
+        --*****************
+        --Clear any error
+        --*****************
+        api.pkg_logicaltransactionupdate.resettransaction;
+        ROLLBACK;
 
-    --***************
-    --Get data packet
-    --***************
-    SELECT packet
-      INTO t_packet
-      FROM bizmod_api.eservices_log_t
-     WHERE seq = a_seq;
+        --***************
+        --Get data packet
+        --***************
+        SELECT packet
+          INTO t_packet
+          FROM bizmod_api.eservices_log_t
+         WHERE seq = a_seq;
 
-    t_applicationid :=
-        json_value(t_packet, '$.DATA.APPLICATION.APPLICATIONID');
-    t_lsppaymentid := json_value(t_packet, '$.DATA.APPLICATION.LSPPAYMENTID');
+        t_applicationid :=
+            json_value(t_packet, '$.DATA.APPLICATION.APPLICATIONID');
+        t_lsppaymentid :=
+            json_value(t_packet, '$.DATA.APPLICATION.LSPPAYMENTID');
 
-    --**********************
-    --Extract data from JSON
-    --**********************
+        --**********************
+        --Extract data from JSON
+        --**********************
 
-    t_licensenumber :=
-        json_value(t_packet, '$.DATA.APPLICATION.LICENSENUMBER');
-    t_dateofeventfrom :=
-        TO_TIMESTAMP(
-            json_value(t_packet, '$.DATA.APPLICATION.EVENTSTARTDATE'),
-            'YYYY-MM-DD"T"HH24:MI:SS.ff3');
-    t_dateofeventto :=
-        TO_TIMESTAMP(json_value(t_packet, '$.DATA.APPLICATION.EVENTENDDATE'),
-                     'YYYY-MM-DD"T"HH24:MI:SS.ff3');
-    t_eventstarttime :=
-        TO_CHAR(
+        t_licensenumber :=
+            json_value(t_packet, '$.DATA.APPLICATION.LICENSENUMBER');
+        t_dateofeventfrom :=
             TO_TIMESTAMP(
-                json_value(t_packet, '$.DATA.APPLICATION.EVENTSTARTTIME'),
-                'HH24:MI'),
-            'HH12MI');
-    t_beginservingalcoholampmtime :=
-        TO_CHAR(
+                json_value(t_packet, '$.DATA.APPLICATION.EVENTSTARTDATE'),
+                'YYYY-MM-DD"T"HH24:MI:SS.ff3');
+        t_dateofeventto :=
             TO_TIMESTAMP(
-                json_value(t_packet, '$.DATA.APPLICATION.EVENTSTARTTIME'),
-                'HH24:MI'),
-            'AM');
-    t_eventendtime :=
-        TO_CHAR(
-            TO_TIMESTAMP(
-                json_value(t_packet, '$.DATA.APPLICATION.EVENTENDTIME'),
-                'HH24:MI'),
-            'HH12MI');
-    t_stopservingalcoholampmtime :=
-        TO_CHAR(
-            TO_TIMESTAMP(
-                json_value(t_packet, '$.DATA.APPLICATION.EVENTENDTIME'),
-                'HH24:MI'),
-            'AM');
-    t_estimatedattendance :=
-        json_value(t_packet, '$.DATA.APPLICATION.EXPECTEDATTENDANCE');
-    t_publicevent := json_value(t_packet, '$.DATA.APPLICATION.PUBLICEVENT');
-    t_withincitytimits :=
-        json_value(t_packet, '$.DATA.APPLICATION.WITHINCITYLIMITS');
-    t_eventtype := json_value(t_packet, '$.DATA.APPLICATION.EVENTTYPE');
-    t_sponsoringorganization :=
-        json_value(t_packet, '$.DATA.APPLICATION.SPONSORINGORGANIZATION');
-    t_sponsoringorganizationaddress1 :=
-        json_value(t_packet,
-                   '$.DATA.APPLICATION.SPONSORINGORGANIZATIONADDRESS1');
-    t_sponsoringorganizationaddress2 :=
-        json_value(t_packet,
-                   '$.DATA.APPLICATION.SPONSORINGORGANIZATIONADDRESS2');
-    t_sponsoringorganizationcity :=
-        json_value(t_packet, '$.DATA.APPLICATION.SPONSORINGORGANIZATIONCITY');
-    t_sponsoringorganizationstate :=
-        json_value(t_packet,
-                   '$.DATA.APPLICATION.SPONSORINGORGANIZATIONSTATE');
-    t_sponsoringorganizationzip :=
-        json_value(t_packet, '$.DATA.APPLICATION.SPONSORINGORGANIZATIONZIP');
-    t_personinchargeofevent :=
-        json_value(t_packet, '$.DATA.APPLICATION.PERSONINCHARGEOFEVENT');
-    t_personinchargephonenumber :=
-        REGEXP_REPLACE(
+                json_value(t_packet, '$.DATA.APPLICATION.EVENTENDDATE'),
+                'YYYY-MM-DD"T"HH24:MI:SS.ff3');
+        t_eventstarttime :=
+            TO_CHAR(
+                TO_TIMESTAMP(
+                    json_value(t_packet, '$.DATA.APPLICATION.EVENTSTARTTIME'),
+                    'HH24:MI'),
+                'HH12MI');
+        t_beginservingalcoholampmtime :=
+            TO_CHAR(
+                TO_TIMESTAMP(
+                    json_value(t_packet, '$.DATA.APPLICATION.EVENTSTARTTIME'),
+                    'HH24:MI'),
+                'AM');
+        t_eventendtime :=
+            TO_CHAR(
+                TO_TIMESTAMP(
+                    json_value(t_packet, '$.DATA.APPLICATION.EVENTENDTIME'),
+                    'HH24:MI'),
+                'HH12MI');
+        t_stopservingalcoholampmtime :=
+            TO_CHAR(
+                TO_TIMESTAMP(
+                    json_value(t_packet, '$.DATA.APPLICATION.EVENTENDTIME'),
+                    'HH24:MI'),
+                'AM');
+        t_estimatedattendance :=
+            json_value(t_packet, '$.DATA.APPLICATION.EXPECTEDATTENDANCE');
+        t_publicevent :=
+            json_value(t_packet, '$.DATA.APPLICATION.PUBLICEVENT');
+        t_withincitytimits :=
+            json_value(t_packet, '$.DATA.APPLICATION.WITHINCITYLIMITS');
+        t_eventtype := json_value(t_packet, '$.DATA.APPLICATION.EVENTTYPE');
+        t_sponsoringorganization :=
+            json_value(t_packet, '$.DATA.APPLICATION.SPONSORINGORGANIZATION');
+        t_sponsoringorganizationaddress1 :=
             json_value(t_packet,
-                       '$.DATA.APPLICATION.PERSONINCHARGEPHONENUMBER'),
-            '\D');
-    t_eventlocationaddressline1 :=
-        json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONADDRESS1');
-    t_eventlocationaddressline2 :=
-        json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONADDRESS2');
-    t_eventlocationcity :=
-        json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONCITY');
-    t_eventlocationzip :=
-        json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONZIP');
-    t_specificlocation :=
-        json_value(t_packet, '$.DATA.APPLICATION.SPECIFICLOCATION');
-    t_submitteddate :=
-          TO_TIMESTAMP(
-              json_value(t_packet, '$.DATA.APPLICATION.SUBMITTEDDATE'),
-              'YYYY-MM-DD"T"HH24:MI:SS.ff3"Z"')
-        - INTERVAL '8' HOUR;
-    t_quantity :=
-        json_value(t_packet, '$.DATA.APPLICATION.ANNUALEVENTSCOUNT');
-    t_contactname := json_value(t_packet, '$.DATA.APPLICATION.CONTACTNAME');
-    t_contactphonenumber :=
-        REGEXP_REPLACE(
-            json_value(t_packet, '$.DATA.APPLICATION.CONTACTPHONE'),
-            '\D');
-    t_contactemail := json_value(t_packet, '$.DATA.APPLICATION.CONTACTEMAIL');
-    t_outsideevent := json_value(t_packet, '$.DATA.APPLICATION.OUTSIDEEVENT');
+                       '$.DATA.APPLICATION.SPONSORINGORGANIZATIONADDRESS1');
+        t_sponsoringorganizationaddress2 :=
+            json_value(t_packet,
+                       '$.DATA.APPLICATION.SPONSORINGORGANIZATIONADDRESS2');
+        t_sponsoringorganizationcity :=
+            json_value(t_packet,
+                       '$.DATA.APPLICATION.SPONSORINGORGANIZATIONCITY');
+        t_sponsoringorganizationstate :=
+            json_value(t_packet,
+                       '$.DATA.APPLICATION.SPONSORINGORGANIZATIONSTATE');
+        t_sponsoringorganizationzip :=
+            json_value(t_packet,
+                       '$.DATA.APPLICATION.SPONSORINGORGANIZATIONZIP');
+        t_personinchargeofevent :=
+            json_value(t_packet, '$.DATA.APPLICATION.PERSONINCHARGEOFEVENT');
+        t_personinchargephonenumber :=
+            REGEXP_REPLACE(
+                json_value(t_packet,
+                           '$.DATA.APPLICATION.PERSONINCHARGEPHONENUMBER'),
+                '\D');
+        t_eventlocationaddressline1 :=
+            json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONADDRESS1');
+        t_eventlocationaddressline2 :=
+            json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONADDRESS2');
+        t_eventlocationcity :=
+            json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONCITY');
+        t_eventlocationzip :=
+            json_value(t_packet, '$.DATA.APPLICATION.EVENTLOCATIONZIP');
+        t_specificlocation :=
+            json_value(t_packet, '$.DATA.APPLICATION.SPECIFICLOCATION');
+        t_submitteddate :=
+              TO_TIMESTAMP(
+                  json_value(t_packet, '$.DATA.APPLICATION.SUBMITTEDDATE'),
+                  'YYYY-MM-DD"T"HH24:MI:SS.ff3"Z"')
+            - INTERVAL '8' HOUR;
+        t_quantity :=
+            json_value(t_packet, '$.DATA.APPLICATION.ANNUALEVENTSCOUNT');
+        t_contactname :=
+            json_value(t_packet, '$.DATA.APPLICATION.CONTACTNAME');
+        t_contactphonenumber :=
+            REGEXP_REPLACE(
+                json_value(t_packet, '$.DATA.APPLICATION.CONTACTPHONE'),
+                '\D');
+        t_contactemail :=
+            json_value(t_packet, '$.DATA.APPLICATION.CONTACTEMAIL');
+        t_outsideevent :=
+            json_value(t_packet, '$.DATA.APPLICATION.OUTSIDEEVENT');
 
-    --*************************
-    --Format Sponsoring Addres
-    --*************************
-    IF (t_sponsoringorganizationaddress1 IS NULL)
-    THEN
-        t_sponsoringorganizationmailing := NULL;
-    ELSE
-        -- 01/02/2024 TJL BIZ-14058
-        t_sponsoringorganizationmailing :=
-            t_sponsoringorganizationaddress1
-            || CASE
-                   WHEN t_sponsoringorganizationaddress2 IS NOT NULL
-                   THEN
-                       ', ' || t_sponsoringorganizationaddress2
-                   ELSE
-                       NULL
-               END
-            || CASE
-                   WHEN t_sponsoringorganizationcity IS NOT NULL
-                   THEN
-                       ', ' || t_sponsoringorganizationcity
-                   ELSE
-                       NULL
-               END
-            || CASE
-                   WHEN t_sponsoringorganizationstate IS NOT NULL
-                   THEN
-                       ', ' || t_sponsoringorganizationstate
-                   ELSE
-                       NULL
-               END
-            || ' '
-            || t_sponsoringorganizationzip;
-    END IF;
+        --*************************
+        --Format Sponsoring Addres
+        --*************************
+        IF (t_sponsoringorganizationaddress1 IS NULL)
+        THEN
+            t_sponsoringorganizationmailing := NULL;
+        ELSE
+            -- 01/02/2024 TJL BIZ-14058
+            t_sponsoringorganizationmailing :=
+                t_sponsoringorganizationaddress1
+                || CASE
+                       WHEN t_sponsoringorganizationaddress2 IS NOT NULL
+                       THEN
+                           ', ' || t_sponsoringorganizationaddress2
+                       ELSE
+                           NULL
+                   END
+                || CASE
+                       WHEN t_sponsoringorganizationcity IS NOT NULL
+                       THEN
+                           ', ' || t_sponsoringorganizationcity
+                       ELSE
+                           NULL
+                   END
+                || CASE
+                       WHEN t_sponsoringorganizationstate IS NOT NULL
+                       THEN
+                           ', ' || t_sponsoringorganizationstate
+                       ELSE
+                           NULL
+                   END
+                || ' '
+                || t_sponsoringorganizationzip;
+        END IF;
 
-    --*****************************
-    --Check for existing event type
-    --*****************************
-    SELECT COUNT(attributevalue)
-      INTO t_count
-      FROM api.domainlistofvalues
-     WHERE domainid = 305110
-       AND attributevalue = t_eventtype;
+        --*****************************
+        --Check for existing event type
+        --*****************************
+        SELECT COUNT(attributevalue)
+          INTO t_count
+          FROM api.domainlistofvalues
+         WHERE domainid = 305110
+           AND attributevalue = t_eventtype;
 
-    IF (t_count = 0)
-    THEN
-        t_othereventtype := t_eventtype;
-        t_eventtype := 'OTHER EVENT';
-    END IF;
+        IF (t_count = 0)
+        THEN
+            t_othereventtype := t_eventtype;
+            t_eventtype := 'OTHER EVENT';
+        END IF;
 
-    --*********************
-    --Get or create address
-    --*********************
-    BEGIN
-        --**************************
-        --Check for existing addres
-        --**************************
-        -- 02/07/2024 APD  BIZ-14339
-        FOR rec
-            IN (SELECT objectid
+        --*********************
+        --Get or create address
+        --*********************
+        BEGIN
+            --**************************
+            --Check for existing addres
+            --**************************
+            -- 02/07/2024 APD  BIZ-14339
+            FOR rec
+                IN (SELECT objectid
+                      FROM TABLE(
+                               CAST(
+                                   api.pkg_simplesearch.castableobjectsbyindex(
+                                       a_objectdefname => 'o_Address',
+                                       a_columnname => 'dup_UniqueAddress',
+                                       a_value     =>
+                                           t_eventlocationaddressline1
+                                           || '%'
+                                           || t_eventlocationaddressline2
+                                           || '%'
+                                           || t_eventlocationcity
+                                           || '%')
+                                       AS api.udt_objectlist)))
+            LOOP
+                IF (UPPER(t_eventlocationaddressline1) =
+                    UPPER(
+                        api.pkg_columnquery.VALUE(rec.objectid,
+                                                  'addressline1'))
+                AND UPPER(NVL(t_eventlocationaddressline2, 'X')) =
+                    UPPER(
+                        NVL(
+                            api.pkg_columnquery.VALUE(rec.objectid,
+                                                      'addressline2'),
+                            'X'))
+                AND UPPER(t_eventlocationcity) =
+                    UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'CACity')))
+                THEN
+                    t_addressobjectid := rec.objectid;
+                    EXIT WHEN t_addressobjectid IS NOT NULL;
+                END IF;
+            END LOOP;
+
+            IF (t_addressobjectid IS NULL)
+            THEN
+                --******************
+                --Get city object id
+                --******************
+                SELECT o.objectid
+                  INTO t_cityobjectid
                   FROM TABLE(
                            CAST(
                                api.pkg_simplesearch.castableobjectsbyindex(
-                                   a_objectdefname => 'o_Address',
-                                   a_columnname => 'dup_UniqueAddress',
-                                   a_value     =>
-                                       t_eventlocationaddressline1
-                                       || '%'
-                                       || t_eventlocationaddressline2
-                                       || '%'
-                                       || t_eventlocationcity
-                                       || '%') AS api.udt_objectlist)))
-        LOOP
-            IF (UPPER(t_eventlocationaddressline1) =
-                UPPER(
-                    api.pkg_columnquery.VALUE(rec.objectid, 'addressline1'))
-            AND UPPER(NVL(t_eventlocationaddressline2, 'X')) =
-                UPPER(
-                    NVL(
-                        api.pkg_columnquery.VALUE(rec.objectid,
-                                                  'addressline2'),
-                        'X'))
-            AND UPPER(t_eventlocationcity) =
-                UPPER(api.pkg_columnquery.VALUE(rec.objectid, 'CACity')))
-            THEN
-                t_addressobjectid := rec.objectid;
-                EXIT WHEN t_addressobjectid IS NOT NULL;
-            END IF;
-        END LOOP;
+                                   a_objectdefname => 'o_CaCity',
+                                   a_columnname => 'CityName',
+                                   a_value     => t_eventlocationcity)
+                                   AS api.udt_objectlist)) o;
 
-        IF (t_addressobjectid IS NULL)
-        THEN
-            --******************
-            --Get city object id
-            --******************
-            SELECT o.objectid
-              INTO t_cityobjectid
-              FROM TABLE(
-                       CAST(
-                           api.pkg_simplesearch.castableobjectsbyindex(
-                               a_objectdefname => 'o_CaCity',
-                               a_columnname => 'CityName',
-                               a_value     => t_eventlocationcity)
-                               AS api.udt_objectlist)) o;
+                t_cityendpointid :=
+                    api.pkg_configquery.endpointidforname('o_Address',
+                                                          'CACity');
 
-            t_cityendpointid :=
-                api.pkg_configquery.endpointidforname('o_Address', 'CACity');
+                --******************
+                --Create new addres
+                --******************
+                t_addressobjectid :=
+                    api.pkg_objectupdate.new(
+                        api.pkg_configquery.objectdefidforname('o_Address'));
 
-            --******************
-            --Create new addres
-            --******************
-            t_addressobjectid :=
-                api.pkg_objectupdate.new(
-                    api.pkg_configquery.objectdefidforname('o_Address'));
-
-            --****************
-            --Add address data
-            --****************
-            api.pkg_columnupdate.setvalue(t_addressobjectid,
-                                          'AddressLine1',
-                                          t_eventlocationaddressline1);
-            api.pkg_columnupdate.setvalue(t_addressobjectid,
-                                          'AddressLine2',
-                                          t_eventlocationaddressline2);
-            api.pkg_columnupdate.setvalue(t_addressobjectid,
-                                          'AddressLocation',
-                                          'In California');
-            api.pkg_columnupdate.setvalue(t_addressobjectid,
-                                          'ZipCode',
-                                          t_eventlocationzip);
-
-            --***************************************************
-            --Create relationship between address and city object
-            --***************************************************
-            t_cityrel :=
-                api.pkg_relationshipupdate.new(
-                    a_endpoint  => t_cityendpointid,
-                    a_fromobject => t_addressobjectid,
-                    a_toobject  => t_cityobjectid);
-
-            --*********
-            --Save Data
-            --*********
-            api.pkg_logicaltransactionupdate.endtransaction;
-            COMMIT;
-        ELSE
-            IF (api.pkg_columnquery.VALUE(t_addressobjectid, 'ZipCode')
-                    IS NULL)
-            THEN
-                -- use zip code provided when zip code missing from address object.
-                --   missing zip code will cause exception to be thrown
+                --****************
+                --Add address data
+                --****************
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'AddressLine1',
+                                              t_eventlocationaddressline1);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'AddressLine2',
+                                              t_eventlocationaddressline2);
+                api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                              'AddressLocation',
+                                              'In California');
                 api.pkg_columnupdate.setvalue(t_addressobjectid,
                                               'ZipCode',
                                               t_eventlocationzip);
 
+                --***************************************************
+                --Create relationship between address and city object
+                --***************************************************
+                t_cityrel :=
+                    api.pkg_relationshipupdate.new(
+                        a_endpoint  => t_cityendpointid,
+                        a_fromobject => t_addressobjectid,
+                        a_toobject  => t_cityobjectid);
+
+                --*********
+                --Save Data
+                --*********
                 api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
+            ELSE
+                IF (api.pkg_columnquery.VALUE(t_addressobjectid, 'ZipCode')
+                        IS NULL)
+                THEN
+                    -- use zip code provided when zip code missing from address object.
+                    --   missing zip code will cause exception to be thrown
+                    api.pkg_columnupdate.setvalue(t_addressobjectid,
+                                                  'ZipCode',
+                                                  t_eventlocationzip);
+
+                    api.pkg_logicaltransactionupdate.endtransaction;
+                    COMMIT;
+                END IF;
             END IF;
-        END IF;
+        END;
+
+        --************************
+        --Get object id of license
+        --************************
+
+        SELECT objectid
+          INTO t_licobjid
+          FROM (SELECT o.objectid,
+                       api.pkg_columnquery.VALUE(o.objectid, 'StatusName')
+                           status,
+                       api.pkg_columnquery.VALUE(o.objectid,
+                                                 'SecondaryLTCodeWithCount')
+                           lictypes
+                  FROM TABLE(
+                           CAST(
+                               api.pkg_simplesearch.castableobjectsbyindex(
+                                   a_objectdefname => 'j_LicenseType',
+                                   a_columnname =>
+                                       'dup_LicenseExternalFileNum',
+                                   a_value     => t_licensenumber)
+                                   AS api.udt_objectlist)) o)
+         WHERE status = 'ACTIVE'
+           AND lictypes LIKE '%58 (ACTIVE)%';
+
+        --**********************************
+        --Get id of p_CreateCatererEventAuth
+        --**********************************
+        t_processdefid :=
+            api.pkg_configquery.objectdefidforname(
+                'p_CreateCatererEventAuth');
+
+        --*********************************
+        --Create new CreateCatererEventAuth
+        --*********************************
+        t_processid :=
+            api.pkg_processupdate.new(
+                a_job       => t_licobjid,
+                a_processtype => t_processdefid,
+                a_description => 'Create Caterer Event Auth',
+                a_scheduledstartdate => t_submitteddate,
+                a_scheduledenddate => t_dateofeventfrom,
+                a_actualstartdate => t_dateofeventfrom);
+
+        --*************************************
+        --Add data to to CreateCatererEventAuth
+        --*************************************
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'CateringOrEvent',
+                                      t_cateringorevent);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'DateOfEventFrom',
+                                      t_dateofeventfrom);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'DateOfEventTo',
+                                      t_dateofeventto);
+        api.pkg_columnupdate.setvalue(t_processid, 'Quantity', t_quantity);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'PublicEvent',
+                                      t_publicevent);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'EstimatedAttendance',
+                                      t_estimatedattendance);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'Description',
+                                      t_description);
+        api.pkg_columnupdate.setvalue(t_processid, 'EventType', t_eventtype);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'OtherEventType',
+                                      t_othereventtype);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'SponsoringOrganization',
+                                      t_sponsoringorganization);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'SponsoringOrganizationMailing',
+                                      t_sponsoringorganizationmailing);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'PersonInChargeOfEvent',
+                                      t_personinchargeofevent);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'PersonInChargePhoneNumber',
+                                      t_personinchargephonenumber);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'SpecificLocation',
+                                      t_specificlocation);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'ScheduledStartDate',
+                                      t_submitteddate);
+        api.pkg_columnupdate.setvalue(t_processid, 'LSPId', t_applicationid);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'WithinCityLimits',
+                                      t_withincitytimits);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'Timeyouwillbeginservingalcohol',
+                                      t_eventstarttime);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'TimeYouWillStopServingAlcohol',
+                                      t_eventendtime);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'BeginServingAlcoholAMPMTime',
+                                      t_beginservingalcoholampmtime);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'StopServingAlcoholAMPMTime',
+                                      t_stopservingalcoholampmtime);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'ContactName',
+                                      t_contactname);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'ContactPhoneNumber',
+                                      t_contactphonenumber);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'ContactEmail',
+                                      t_contactemail);
+        api.pkg_columnupdate.setvalue(t_processid,
+                                      'OutsideEvent',
+                                      t_outsideevent);
+
+        --***************************
+        --Create address relationship
+        --***************************
+        SELECT endpointid
+          INTO t_addressrelationship
+          FROM api.columndefs
+         WHERE objectdefname = 'p_CreateCatererEventAuth'
+           AND name = 'EventLocationAddress4Lines';
+
+        t_addrel :=
+            api.pkg_relationshipupdate.new(
+                a_endpoint  => t_addressrelationship,
+                a_fromobject => t_processid,
+                a_toobject  => t_addressobjectid);
+
+        --*********
+        --Save Data
+        --*********
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+
+        --*************
+        --Complete form
+        --*************
+        DBMS_SESSION.sleep(3);
+        api.pkg_columnupdate.setvalue(t_processid, 'Outcome', t_outcome);
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+
+        --*************************
+        --Retrieve fee information
+        --*************************
+        SELECT feeid
+          INTO t_feeid
+          FROM api.fees  o
+               JOIN api.processes p
+                   ON p.logicaltransactionid = o.logicaltransactionid
+         WHERE p.processid = t_processid;
+
+        SELECT o.objectid
+          INTO t_feeobjid
+          FROM TABLE(
+                   CAST(
+                       api.pkg_simplesearch.castableobjectsbyindex(
+                           a_objectdefname => 'o_fee',
+                           a_columnname => 'feeid',
+                           a_value     => t_feeid)
+                           AS api.udt_objectlist)) o;
+
+        SELECT o.objectid
+          INTO t_isscatobjid
+          FROM TABLE(
+                   CAST(
+                       api.pkg_simplesearch.castableobjectsbyindex(
+                           a_objectdefname => 'p_IssueCatererEventAuth',
+                           a_columnname => 'LSPId',
+                           a_value     => t_applicationid)
+                           AS api.udt_objectlist)) o
+         WHERE ROWNUM = 1;
+    --**************
+    --Error Handling
+    --**************
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlcode := SQLCODE;
+            t_sqlerrm := SQLERRM;
+            t_trace := DBMS_UTILITY.format_error_backtrace;
+            --                    t_results.put('status', SQLCODE);
+            --                    t_results.put(
+            --                        'ora-error',
+            --                        SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
+            t_app_status := 'Errored';
+            --*****************
+            --Clear any error
+            --*****************
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
     END;
 
-    --************************
-    --Get object id of license
-    --************************
-
-    SELECT objectid
-      INTO t_licobjid
-      FROM (SELECT o.objectid,
-                   api.pkg_columnquery.VALUE(o.objectid, 'StatusName')
-                       status,
-                   api.pkg_columnquery.VALUE(o.objectid,
-                                             'SecondaryLTCodeWithCount')
-                       lictypes
-              FROM TABLE(
-                       CAST(
-                           api.pkg_simplesearch.castableobjectsbyindex(
-                               a_objectdefname => 'j_LicenseType',
-                               a_columnname => 'dup_LicenseExternalFileNum',
-                               a_value     => t_licensenumber)
-                               AS api.udt_objectlist)) o)
-     WHERE status = 'ACTIVE'
-       AND lictypes LIKE '%58 (ACTIVE)%';
-
-    --**********************************
-    --Get id of p_CreateCatererEventAuth
-    --**********************************
-    t_processdefid :=
-        api.pkg_configquery.objectdefidforname('p_CreateCatererEventAuth');
-
-    --*********************************
-    --Create new CreateCatererEventAuth
-    --*********************************
-    t_processid :=
-        api.pkg_processupdate.new(
-            a_job       => t_licobjid,
-            a_processtype => t_processdefid,
-            a_description => 'Create Caterer Event Auth',
-            a_scheduledstartdate => t_submitteddate,
-            a_scheduledenddate => t_dateofeventfrom,
-            a_actualstartdate => t_dateofeventfrom);
-
-    --*************************************
-    --Add data to to CreateCatererEventAuth
-    --*************************************
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'CateringOrEvent',
-                                  t_cateringorevent);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'DateOfEventFrom',
-                                  t_dateofeventfrom);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'DateOfEventTo',
-                                  t_dateofeventto);
-    api.pkg_columnupdate.setvalue(t_processid, 'Quantity', t_quantity);
-    api.pkg_columnupdate.setvalue(t_processid, 'PublicEvent', t_publicevent);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'EstimatedAttendance',
-                                  t_estimatedattendance);
-    api.pkg_columnupdate.setvalue(t_processid, 'Description', t_description);
-    api.pkg_columnupdate.setvalue(t_processid, 'EventType', t_eventtype);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'OtherEventType',
-                                  t_othereventtype);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'SponsoringOrganization',
-                                  t_sponsoringorganization);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'SponsoringOrganizationMailing',
-                                  t_sponsoringorganizationmailing);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'PersonInChargeOfEvent',
-                                  t_personinchargeofevent);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'PersonInChargePhoneNumber',
-                                  t_personinchargephonenumber);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'SpecificLocation',
-                                  t_specificlocation);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'ScheduledStartDate',
-                                  t_submitteddate);
-    api.pkg_columnupdate.setvalue(t_processid, 'LSPId', t_applicationid);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'WithinCityLimits',
-                                  t_withincitytimits);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'Timeyouwillbeginservingalcohol',
-                                  t_eventstarttime);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'TimeYouWillStopServingAlcohol',
-                                  t_eventendtime);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'BeginServingAlcoholAMPMTime',
-                                  t_beginservingalcoholampmtime);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'StopServingAlcoholAMPMTime',
-                                  t_stopservingalcoholampmtime);
-    api.pkg_columnupdate.setvalue(t_processid, 'ContactName', t_contactname);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'ContactPhoneNumber',
-                                  t_contactphonenumber);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'ContactEmail',
-                                  t_contactemail);
-    api.pkg_columnupdate.setvalue(t_processid,
-                                  'OutsideEvent',
-                                  t_outsideevent);
-
-    --***************************
-    --Create address relationship
-    --***************************
-    SELECT endpointid
-      INTO t_addressrelationship
-      FROM api.columndefs
-     WHERE objectdefname = 'p_CreateCatererEventAuth'
-       AND name = 'EventLocationAddress4Lines';
-
-    t_addrel :=
-        api.pkg_relationshipupdate.new(a_endpoint  => t_addressrelationship,
-                                       a_fromobject => t_processid,
-                                       a_toobject  => t_addressobjectid);
-
-    --*********
-    --Save Data
-    --*********
-    api.pkg_logicaltransactionupdate.endtransaction;
-    COMMIT;
-
-    --*************
-    --Complete form
-    --*************
-    DBMS_SESSION.sleep(3);
-    api.pkg_columnupdate.setvalue(t_processid, 'Outcome', t_outcome);
-    api.pkg_logicaltransactionupdate.endtransaction;
-    COMMIT;
-
-    --*************************
-    --Retrieve fee information
-    --*************************
-    SELECT feeid
-      INTO t_feeid
-      FROM api.fees  o
-           JOIN api.processes p
-               ON p.logicaltransactionid = o.logicaltransactionid
-     WHERE p.processid = t_processid;
-
-    SELECT o.objectid
-      INTO t_feeobjid
-      FROM TABLE(
-               CAST(
-                   api.pkg_simplesearch.castableobjectsbyindex(
-                       a_objectdefname => 'o_fee',
-                       a_columnname => 'feeid',
-                       a_value     => t_feeid) AS api.udt_objectlist)) o;
-
-    SELECT o.objectid
-      INTO t_isscatobjid
-      FROM TABLE(
-               CAST(
-                   api.pkg_simplesearch.castableobjectsbyindex(
-                       a_objectdefname => 'p_IssueCatererEventAuth',
-                       a_columnname => 'LSPId',
-                       a_value     => t_applicationid) AS api.udt_objectlist))
-           o
-     WHERE ROWNUM = 1;
-
-        --**************
-        --Error Handling
-        --**************
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                    t_sqlcode := SQLCODE;
-                    t_sqlerrm := SQLERRM;
-                    t_trace := DBMS_UTILITY.format_error_backtrace;
---                    t_results.put('status', SQLCODE);
---                    t_results.put(
---                        'ora-error',
---                        SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
-            t_app_status := 'Errored';
-                --*****************
-                --Clear any error
-                --*****************
-                api.pkg_logicaltransactionupdate.resettransaction;
-                ROLLBACK;
-        end;
-
--- *****************************************************************
---  Notify LSP of application is completed
+    -- *****************************************************************
+    --  Notify LSP of application is completed
 
     t_results := bizmod_api.utl_licenseinfo.lsplogin;
+
     IF (t_results.get_number('status') = 200)
     THEN
-        t_token :=
-            t_results.get_object('lspresponse').get_string('token');
+        t_token := t_results.get_object('lspresponse').get_string('token');
 
         t_urlinfo :=
-            REPLACE(REPLACE(t_url_status, '<<applicationId>>', t_applicationid),
-                    '<<status>>',
-                    t_app_status);
+            REPLACE(
+                REPLACE(t_url_status, '<<applicationId>>', t_applicationid),
+                '<<status>>',
+                t_app_status);
 
-            t_results :=
-                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
-                                                   a_method    => t_method,
-                                                   a_token     => t_token);
-    end if;
+        t_results :=
+            bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
+                                               a_method    => t_method,
+                                               a_token     => t_token);
+    END IF;
 
     -- if status is error then update result packet with the error information
-    IF (t_results.get_number('status') = 200 and t_app_status = 'Posted')
+    IF (t_results.get_number('status') = 200
+    AND t_app_status = 'Posted')
     THEN
-        t_urlinfo :=
-            REPLACE(t_url_fees, '<<lsppaymentid>>', t_lsppaymentid);
+        t_urlinfo := REPLACE(t_url_fees, '<<lsppaymentid>>', t_lsppaymentid);
 
         --**********************************
         --Format data packet and use CallLSP
         --**********************************
         t_body.put('feeObjectId', t_feeobjid);
-        
+
         t_results :=
             bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
                                                a_method    => t_method,
@@ -623,35 +644,24 @@ BEGIN
                                                a_token     => t_token);
     END IF;
 
-----**************
-----Error Handling
-----**************
---EXCEPTION
---    WHEN OTHERS
---    THEN
---            t_sqlerrm := SQLERRM;
---            t_trace := DBMS_UTILITY.format_error_backtrace;
---            t_results.put('status', SQLCODE);
---            t_results.put(
---                'ora-error',
---                SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
---
---        --*****************
---        --Clear any error
---        --*****************
---        api.pkg_logicaltransactionupdate.resettransaction;
---        ROLLBACK;
---end;
-
     t_results_text := t_results.TO_CLOB;
     t_body_value := t_body.TO_CLOB;
 
     IF (t_results.get_number('status') != 200
     AND t_sqlerrm IS NULL)
     THEN
-        t_sqlerrm := t_results.get_object('lspresponse').to_string;
+        t_sqlerrm :=
+            CASE
+                WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                THEN
+                    t_results.get_object('lspresponse').TO_CLOB || CHR(13)
+                WHEN t_results.has('lspresponse')
+                THEN
+                    t_results.get_clob('lspresponse')
+                ELSE
+                    t_results.TO_CLOB
+            END;
     END IF;
-
 
     -- 12/06/2023 TJL add log update
     INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -661,20 +671,20 @@ BEGIN
                                            bktrace,
                                            packet)
              VALUES (
-                 a_seq,
-                 t_process,
-                 'Application Id: '
-                 || t_applicationid
-                 || CHR(13)
-                 || 'License Number: '
-                 || t_licensenumber
-                 || CHR(13)
-                 || 'p_IssueCatererEventAuth: '
-                 || t_isscatobjid
-                 || CHR(13),
-                 t_sqlerrm,
-                 t_trace,
-                 t_results_text);
+                        a_seq,
+                        t_process,
+                        'Application Id: '
+                        || t_applicationid
+                        || CHR(13)
+                        || 'License Number: '
+                        || t_licensenumber
+                        || CHR(13)
+                        || 'p_IssueCatererEventAuth: '
+                        || t_isscatobjid
+                        || CHR(13),
+                        t_sqlerrm,
+                        t_trace,
+                        t_results_text);
 
     --********************
     --Update eServices Log
@@ -684,61 +694,45 @@ BEGIN
      WHERE seq = a_seq;
 
     COMMIT;
-    
 --**************
 --Error Handling
 --**************
---EXCEPTION
---    WHEN OTHERS
---    THEN
---        t_sqlerrm := SQLERRM;
---        t_trace := DBMS_UTILITY.format_error_backtrace;
---
---        --*****************
---        --Clear any error
---        --*****************
---        api.pkg_logicaltransactionupdate.resettransaction;
---        ROLLBACK;
---
---        INSERT INTO bizmod_api.e_process_log_t(seq,
---                                               processjob,
---                                               info,
---                                               errmsg,
---                                               bktrace)
---                 VALUES (
---                     a_seq,
---                     'CREATECATERINGAPPJOB',
---                     'Application Id: '
---                     || t_applicationid
---                     || CHR(13)
---                     || 'License Number: '
---                     || t_licensenumber
---                     || CHR(13)
---                     || 'p_IssueCatererEventAuth: '
---                     || t_isscatobjid,
---                     t_sqlerrm,
---                     t_trace);
---
---        UPDATE bizmod_api.eservices_log_t
---           SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
---         WHERE seq = a_seq;
---
---        COMMIT;
---
---        BEGIN
---            -- update LSP of any changes to application data
---            t_urlinfo :=
---                REPLACE(
---                    REPLACE(t_url_status,
---                            '<<applicationId>>',
---                            t_applicationid),
---                    '<<status>>',
---                    'Errored');
---
---            t_response :=
---                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
---                                                   a_method    => t_method);
---        END;
+EXCEPTION
+    WHEN OTHERS
+    THEN
+        t_sqlerrm := SQLERRM;
+        t_trace := DBMS_UTILITY.format_error_backtrace;
+
+        --*****************
+        --Clear any error
+        --*****************
+        api.pkg_logicaltransactionupdate.resettransaction;
+        ROLLBACK;
+
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace)
+                 VALUES (
+                            a_seq,
+                            'CREATECATERINGAPPJOB',
+                            'Application Id: '
+                            || t_applicationid
+                            || CHR(13)
+                            || 'License Number: '
+                            || t_licensenumber
+                            || CHR(13)
+                            || 'p_IssueCatererEventAuth: '
+                            || t_isscatobjid,
+                            t_sqlerrm,
+                            t_trace);
+
+        UPDATE bizmod_api.eservices_log_t
+           SET err = SUBSTR(t_sqlerrm || ' :: ' || t_trace, 1, 3990)
+         WHERE seq = a_seq;
+
+        COMMIT;
 END;
 /
 

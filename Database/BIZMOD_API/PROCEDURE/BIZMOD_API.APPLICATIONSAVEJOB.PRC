@@ -26,9 +26,13 @@ AS
     --   6.2.1  01/29/2025
     --   6.3.0  02/03/2025 TJL  BIZ-17356  Added handling of the return value from CALLLSP and call
     --                                       to lsplogin
+    --   6.3.1  02/13/2026 TJL  BIZ-17356  Limit string length for info value
+    --   6.3.2  02/14/2025 TJL  BIZ-17356  Change how lsp response for error is handled.
+    --   7.0.0  03/05/2025 TJL  BIZ-17503  Corrected bug in logging errors from CALLLSP
+    --   8.0.0  07/22/2025 TJL  BIZ-18902  Corrected bug in parsing lspresponse
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
-        := '/api/licensing/internal/license-applications/' ;
+                       := '/api/licensing/internal/license-applications/' ;
     t_method CONSTANT VARCHAR2(10) := 'PATCH';
     t_body         json_object_t := json_object_t();
     t_applicationid VARCHAR2(40);
@@ -67,10 +71,11 @@ BEGIN
                 t_results.get_object('lspresponse').get_string('token');
 
             t_results :=
-                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_url || t_applicationid,
-                                                   a_method    => t_method,
-                                                   a_content   => t_body,
-                                                   a_token     => t_token);
+                bizmod_api.utl_licenseinfo.calllsp(
+                    a_urlinfo   => t_url || t_applicationid,
+                    a_method    => t_method,
+                    a_content   => t_body,
+                    a_token     => t_token);
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -88,7 +93,16 @@ BEGIN
     IF (t_results.get_number('status') != 200
     AND t_sqlerrm IS NULL)
     THEN
-        t_sqlerrm := t_results.get_object('lspresponse').to_string;
+        t_sqlerrm :=
+            CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                THEN
+                    t_results.get_object('lspresponse').TO_CLOB || CHR(13)
+                WHEN t_results.has('lspresponse')
+                then
+                     t_results.get_clob('lspresponse')
+                ELSE
+                    t_results.TO_CLOB
+            END;
     END IF;
 
     INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -100,20 +114,25 @@ BEGIN
              VALUES (
                         0,
                         t_process,
-                        'Application Id: '
-                        || t_applicationid
-                        || CHR(13)
-                        || 'Status: '
-                        || t_status
-                        || CHR(13)
-                        || 'License Number: '
-                        || api.pkg_columnquery.VALUE(a_jobid,
-                                                     'LICENSENUMBER')
-                        || CHR(13)
-                        || 'j_Application: '
-                        || a_jobid
-                        || CHR(13)
-                        || t_results_text,
+                        SUBSTR(
+                            'Application Id: '
+                            || t_applicationid
+                            || CHR(13)
+                            || 'Status: '
+                            || t_status
+                            || CHR(13)
+                            || 'License Number: '
+                            || api.pkg_columnquery.VALUE(a_jobid,
+                                                         'LICENSENUMBER')
+                            || CHR(13)
+                            || 'j_Application: '
+                            || a_jobid
+                            || CHR(13)
+                            || 'Results: '
+                            || CHR(9)
+                            || t_results_text,
+                            1,
+                            3999),
                         SUBSTR(t_sqlerrm, 1, 4000),
                         t_trace,
                         t_body_value);

@@ -32,6 +32,7 @@ AS
     --  12.4.0  01/28/2025  TJL  BIZ-17289    Added recursive call to CALLLSP to get JWT token
     --  12.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function
     --  12.5.2  02/07/2025  TJL  BIZ-17356    Code cleanup
+    --  13.0.0  05/02/2025  TJL  BIZ-18056    Change prototype for calllsp.
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -82,10 +83,10 @@ AS
 
     FUNCTION lsplogin
         RETURN json_object_t;
-        
+
     FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
                      a_method       IN VARCHAR2,
-                     a_content      IN json_object_t DEFAULT json_object_t(),
+                     a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
                      a_file         IN BLOB DEFAULT NULL,
                      a_token        IN VARCHAR2 DEFAULT NULL)
         RETURN json_object_t;

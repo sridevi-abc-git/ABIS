@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION requestvalidation(a_packet       IN CLOB,
+CREATE OR REPLACE FUNCTION BIZMOD_API.requestvalidation(a_packet       IN CLOB,
                                              a_seq          IN NUMBER)
     RETURN CLOB
 IS
@@ -8,13 +8,15 @@ IS
     --
     -- History:
     -------------------------------------------------------------------------------
-    --    Date              Comment
-    --  01/17/2023 TJL  Rewrite of original requestvalidation function to use the
-    --                  Oracle json_object to create JSON string
+    --            Date              Comment
+    --         01/17/2023 TJL             Rewrite of original requestvalidation function 
+    --                                      to use the Oracle json_object to create 
+    --                                      JSON string
+    --  2.0.0  03/10/2025 TJL  BIZ-17672  Increased buffer length to 4000
     -- ****************************************************************************
     t_objectid     NUMBER;
-    t_licensenumber VARCHAR2(10);
-    t_validationcode VARCHAR2(10);
+    t_licensenumber VARCHAR2(4000);
+    t_validationcode VARCHAR2(4000);
     t_cnt          NUMBER;
     t_json         CLOB;
 BEGIN

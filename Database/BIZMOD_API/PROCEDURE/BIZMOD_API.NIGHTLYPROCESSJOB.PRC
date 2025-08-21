@@ -44,11 +44,16 @@ IS
     --  13.0.0  11/26/2024  TJL  BIZ-16612  Add checking for AWF fees manually being paid
     --  13.0.1  12/05/2024  BN   BIZ-16805  Change how application object id is retrieved
     --  13.1.0  12/09/2024  TJL  BIZ-16612  Added reseting AWF required flag when fee manually paid
+    --  14.0.1  04/22/2025  TJL  BIZ-18056  Added procedure manualpayment to notify LSP when
+    --                                         when payments are made
+    --  15.0.1  05/14/2025  TJL  BIZ-18387  Corrected bug in manual payments causing exception
+    --                                         being thrown.
+    --  16.0.0  06/16/2025  TJL  BIZ-18655  Corrected error logging bug in manual payment processing.
+    --  17.0.0  06/18/2025  TJL  BIZ-18689  Corrected formatting of error emails
+    --  18.0.0  07/17/2025  TJL  BIZ-18875  Removed manualpayments procedure
+    --  19.0.0  08/04/2025  TJL  BIZ-18942  Corrected bug to allow pass due renewals to be submitted.
     -- ****************************************************************************
 
-    -- ****************************************************************************
-    --  a_fiscalstart - 3 months and a_fiscalend dates should be for the previous fiscal year
-    -- ****************************************************************************
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
                             a_fiscalend       DATE,
                             a_jobid           NUMBER)
@@ -70,8 +75,9 @@ IS
 
         IF (t_application IS NULL)
         THEN
+            t_application :=
+                bizmod_api.utl_licenseinfo.get_application(a_jobid, '02|22');
 
-            t_application := bizmod_api.utl_licenseinfo.get_application(a_jobid, '02|22');
             UPDATE bizmod_api.licensetype_t lt
                SET lt.applicationjobid = t_application
              WHERE lt.licensetypejobid = a_jobid;
@@ -320,8 +326,6 @@ IS
         t_application  NUMBER;
         t_applicationtype VARCHAR2(20);
         t_transferfromobjectid NUMBER;
-        t_feeobjid     NUMBER;
-        t_feeid        NUMBER;
         t_msgno        NUMBER;
     BEGIN
         SELECT lt.applicationjobid
@@ -465,8 +469,6 @@ IS
         DECLARE
             t_msgno        NUMBER;
             t_feeobjid     NUMBER;
-            t_feeid        NUMBER;
-            t_old          NUMBER;
             t_cnt          NUMBER;
             t_fiscalstart  DATE
                 := TO_DATE(
@@ -590,7 +592,8 @@ IS
                    lt.awfflag = NULL
              WHERE t_fiscalstart = TRUNC(SYSDATE)
                AND NVL(lt.awfflag, 'Y') != 'NA'
-               AND lt.licensetypeexpirationdate = t_fiscalend;
+               AND (lt.licensetypeexpirationdate = t_fiscalend
+                     or lt.awfflag = 'N'); -- 08/04/2025  TJL  BIZ-18942
 
             -- update awfflag for non 02 and 22 and update 02 and 22 that are not active
             UPDATE bizmod_api.licensetype_t lt
@@ -740,10 +743,6 @@ IS
 BEGIN
     DECLARE
         t_refunded     VARCHAR2(1);
-        t_feetransfer  NUMBER;
-        t_paymenttransfer NUMBER;
-        t_awfbatch     NUMBER;
-
         t_body         VARCHAR2(32000);
         t_rowcount     NUMBER;
 
@@ -754,6 +753,10 @@ BEGIN
         t_paymentbatch NUMBER;
         t_seq          NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
         t_errorcnt     NUMBER := 0;
+        t_fiscalstart  DATE
+                := TO_DATE(
+                       '01-JUL-'
+                       || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)));
     BEGIN
         -- ********************************************************************
         t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
@@ -944,6 +947,29 @@ BEGIN
             END IF;
 
             -- ************************************************************
+            -- update eservices fee table for fees paid on line
+            -- ************************************************************
+            FOR fees
+                IN (SELECT f.feeobjid
+                      FROM bizmod_api.e_fees_t  f
+                           JOIN api.fees a
+                               ON (a.feeid =
+                                   api.pkg_columnquery.numericvalue(f.feeobjid,
+                                                                    'FeeId')
+                               AND (a.paidamount + a.amount + a.adjustedamount) <=
+                                   0)
+                           JOIN bizmod_api.e_payments_t p
+                               ON (p.feeobjid = f.feeobjid)
+                     WHERE f.paiddate IS NULL)
+            LOOP
+                UPDATE bizmod_api.e_fees_t f
+                   SET f.paiddate = SYSDATE, f.manualpayment = 'N'
+                 WHERE f.feeobjid = fees.feeobjid;
+            END LOOP;
+
+            COMMIT;
+
+            -- ************************************************************
             -- Update license and AWF info
             -- ************************************************************
             updateinfo;
@@ -998,8 +1024,12 @@ BEGIN
                        (SELECT 1
                           FROM bizmod_api.awf_t a
                          WHERE a.licensetypejobid = lt.licensetypejobid
-                           AND a.submitteddate >
+                           AND ((a.submitteddate >
                                ADD_MONTHS(lt.licensetypeexpirationdate, -12)
+                                  and lt.licensetypeexpirationdate >= t_fiscalstart)
+                               or (a.submitteddate > lt.licensetypeexpirationdate -- 08/04/2025  TJL  BIZ-18942
+                                  and lt.licensetypeexpirationdate < t_fiscalstart)
+                               )
                            AND a.awffeeid IS NOT NULL);
 
             COMMIT;
@@ -1143,7 +1173,7 @@ BEGIN
                                         api.pkg_columnquery.VALUE(
                                             b.paymentobjectid,
                                             'BatchId'))    paymentbatch,
-                                        b.licensetypejobid
+                                    b.licensetypejobid
                                FROM (SELECT a.ROWID
                                                 id,
                                             api.pkg_columnquery.VALUE(
@@ -1185,8 +1215,9 @@ BEGIN
                            p.awffeeid,
                            p.paymentbatch,
                            api.pkg_columnquery.datevalue(p.paymentbatch,
-                                                         'CompletedDate')    paymentbatchdate,
-                           p.licensetypejobid                              
+                                                         'CompletedDate')
+                               paymentbatchdate,
+                           p.licensetypejobid
                       FROM p)
             LOOP
                 -- update awf record with payment information
@@ -1196,11 +1227,10 @@ BEGIN
                        a.paymentbatchdate = rec.paymentbatchdate,
                        a.completed = 'Y'
                  WHERE ROWID = rec.id;
-                 
+
                 UPDATE bizmod_api.licensetype_t lic
                    SET lic.awfflag = 'N'
                  WHERE lic.licensetypejobid = rec.licensetypejobid;
-                 
             END LOOP;
 
             -- ********************************************************************
