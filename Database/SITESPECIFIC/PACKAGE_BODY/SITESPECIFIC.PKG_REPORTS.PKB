@@ -39,6 +39,8 @@ IS
   -- 04/28/2023 PK     WO31613 - Additional Condition Code Request Condition E - COND E (Section 24072.3 - type 75 exchange to 47)
   -- 06/14/2023 NZA    CX 030043 - Changed accountinghistoryreport for maxobjectid issue
   -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
+  -- 08/25/2025 PK     WO-6094 Added printing of SplLegSectionCodeList at end of conditions 
+  -- 09/04/2025 PK     change the Conditions order in the printed license.
   -- **************************************************************************
   /**************************************************************************
   * Global variables declared
@@ -2729,8 +2731,22 @@ IS
       li.licenseenames owner,
       TRIM ( ','
     FROM TRIM ( ' '
-    FROM DECODE (lt.conda, 'Y', 'A', NULL)
-      || CHR (13)
+    FROM  DECODE ( lt.cond2, 'Y', '2'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE ( lt.cond5, 'Y', '5'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE (lt.cond7, 'Y', '7'
+      || CHR (13), NULL)
+      || DECODE (lt.cond8, 'Y', '8'
+      || CHR (13), NULL)
+      || DECODE (lt.cond9, 'Y', '9'
+      || CHR (13), NULL)
+      ||DECODE (lt.conda, 'Y', 'A'
+      || CHR (13), NULL)
       || DECODE (lt.condd, 'Y', 'D'
       || CHR (13), NULL)
       || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
@@ -2744,24 +2760,12 @@ IS
       || DECODE (lt.condm, 'Y', 'M'
       || CHR (13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
       || DECODE (lt.conds, 'Y', 'S' 
-      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
+      || NVL2 ( lt.SplLegSectionCodeList , ' '
+      || lt.SplLegSectionCodeList , ' ')
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority  -- 08/20/2025 PK     WO-6094 Added printing of SplLegSectionCodeList at end of conditions
       || DECODE (lt.cond1c, 'Y', '1C'
       || CHR (13), NULL)
-      || DECODE (lt.cond7, 'Y', '7'
-      || CHR (13), NULL)
-      || DECODE ( lt.cond2, 'Y', '2'
-      || NVL2 ( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR (13), NULL)
-      || DECODE ( lt.cond5, 'Y', '5'
-      || NVL2 ( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR (13), NULL)
-      || DECODE (lt.cond8, 'Y', '8'
-      || CHR (13), NULL)
-      || DECODE (lt.cond9, 'Y', '9'
-      || CHR (13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023
+	  || lt.sectioncodelist --12/10/2019 TJL  20023    
 	   )) condi,
       lb.runid,
       lb.batchtype,
@@ -2897,8 +2901,22 @@ IS
       li.licenseenames owner,
       TRIM ( ','
     FROM TRIM ( ' '
-    FROM DECODE (lt.conda, 'Y', 'A', NULL)
-      || CHR (13)
+    FROM  DECODE ( lt.cond2, 'Y', '2'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE ( lt.cond5, 'Y', '5'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE (lt.cond7, 'Y', '7'
+      || CHR (13), NULL)
+      || DECODE (lt.cond8, 'Y', '8'
+      || CHR (13), NULL)
+      || DECODE (lt.cond9, 'Y', '9'
+      || CHR (13), NULL)
+      ||DECODE (lt.conda, 'Y', 'A'
+      || CHR (13), NULL)
       || DECODE (lt.condd, 'Y', 'D'
       || CHR (13), NULL)
       || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
@@ -2912,24 +2930,12 @@ IS
       || DECODE (lt.condm, 'Y', 'M'
       || CHR (13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
       || DECODE (lt.conds, 'Y', 'S' 
-      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
+      || NVL2 ( lt.SplLegSectionCodeList , ' '
+      || lt.SplLegSectionCodeList , ' ')
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority  -- 08/20/2025 PK     WO-6094 Added printing of SplLegSectionCodeList at end of conditions
       || DECODE (lt.cond1c, 'Y', '1C'
       || CHR (13), NULL)
-      || DECODE (lt.cond7, 'Y', '7'
-      || CHR (13), NULL)
-      || DECODE ( lt.cond2, 'Y', '2'
-      || NVL2 ( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR (13), NULL)
-      || DECODE ( lt.cond5, 'Y', '5'
-      || NVL2 ( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR (13), NULL)
-      || DECODE (lt.cond8, 'Y', '8'
-      || CHR (13), NULL)
-      || DECODE (lt.cond9, 'Y', '9'
-      || CHR (13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023
+	  || lt.sectioncodelist --12/10/2019 TJL  20023    
 	   )) condi,
       lb.runid,
       lb.batchtype,
@@ -3160,39 +3166,41 @@ end if;
       li.licenseenames owner,
       TRIM( ','
     FROM TRIM( ' '
-    FROM DECODE(lt.conda, 'Y', 'A', NULL)
-      || CHR(13)
-      || DECODE(lt.condd, 'Y', 'D'
-      || CHR(13), NULL)
+       FROM  DECODE ( lt.cond2, 'Y', '2'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE ( lt.cond5, 'Y', '5'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE (lt.cond7, 'Y', '7'
+      || CHR (13), NULL)
+      || DECODE (lt.cond8, 'Y', '8'
+      || CHR (13), NULL)
+      || DECODE (lt.cond9, 'Y', '9'
+      || CHR (13), NULL)
+      ||DECODE (lt.conda, 'Y', 'A'
+      || CHR (13), NULL)
+      || DECODE (lt.condd, 'Y', 'D'
+      || CHR (13), NULL)
       || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
       || CHR (13), NULL)
-      || DECODE(lt.condg, 'Y', 'G'
-      || CHR(13), NULL) --  WO16291 Update License to print New condition G Pawan
-      || DECODE(lt.condi, 'Y', 'I'
-      || CHR(13), NULL)
-      || DECODE(lt.condr, 'Y', 'R'
-      || CHR(13), NULL)
-      || DECODE(lt.condm, 'Y', 'M'
-      || CHR(13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
+      || DECODE (lt.condg, 'Y', 'G'
+      || CHR (13), NULL) --  WO16291 Update License to print New condition G Pawan
+      || DECODE (lt.condi, 'Y', 'I'
+      || CHR (13), NULL)
+      || DECODE (lt.condr, 'Y', 'R'
+      || CHR (13), NULL)
+      || DECODE (lt.condm, 'Y', 'M'
+      || CHR (13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
       || DECODE (lt.conds, 'Y', 'S' 
-      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
-      || DECODE(lt.cond1c, 'Y', '1C'
-      || CHR(13), NULL)
-      || DECODE(lt.cond7, 'Y', '7'
-      || CHR(13), NULL)
-      || DECODE( lt.cond2, 'Y', '2'
-      || NVL2( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR(13), NULL)
-      || DECODE( lt.cond5, 'Y', '5'
-      || NVL2( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR(13), NULL)
-      || DECODE(lt.cond8, 'Y', '8'
-      || CHR(13), NULL)
-      || DECODE(lt.cond9, 'Y', '9'
-      || CHR(13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023
+      || NVL2 ( lt.SplLegSectionCodeList , ' '
+      || lt.SplLegSectionCodeList , ' ')
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority  -- 08/20/2025 PK     WO-6094 Added printing of SplLegSectionCodeList at end of conditions
+      || DECODE (lt.cond1c, 'Y', '1C'
+      || CHR (13), NULL)
+	  || lt.sectioncodelist --12/10/2019 TJL  20023    
 	   )) condi,
       NULL runid,
       NULL batchtype,
@@ -3243,40 +3251,42 @@ end if;
       li.licenseenames owner,
       TRIM( ','
     FROM TRIM( ' '
-    FROM DECODE(lt.conda, 'Y', 'A', NULL)
-      || CHR(13)
-      || DECODE(lt.condd, 'Y', 'D'
-      || CHR(13), NULL)
+        FROM  DECODE ( lt.cond2, 'Y', '2'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE ( lt.cond5, 'Y', '5'
+      || NVL2 ( lt.conditionenddate, ' '
+      || lt.conditionenddate, ' ')
+      || CHR (13), NULL)
+      || DECODE (lt.cond7, 'Y', '7'
+      || CHR (13), NULL)
+      || DECODE (lt.cond8, 'Y', '8'
+      || CHR (13), NULL)
+      || DECODE (lt.cond9, 'Y', '9'
+      || CHR (13), NULL)
+      ||DECODE (lt.conda, 'Y', 'A'
+      || CHR (13), NULL)
+      || DECODE (lt.condd, 'Y', 'D'
+      || CHR (13), NULL)
       || DECODE(lt.conde, 'Y', 'E' --WO31613 Update License to print New condition E Pawan 4/28/2023
       || CHR (13), NULL)
-      || DECODE(lt.condg, 'Y', 'G'
-      || CHR(13), NULL) --  WO16291 Update License to print New condition G Pawan
-      || DECODE(lt.condi, 'Y', 'I'
-      || CHR(13), NULL)
-      || DECODE(lt.condr, 'Y', 'R'
-      || CHR(13), NULL)
-      || DECODE(lt.condm, 'Y', 'M'
-      || CHR(13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
+      || DECODE (lt.condg, 'Y', 'G'
+      || CHR (13), NULL) --  WO16291 Update License to print New condition G Pawan
+      || DECODE (lt.condi, 'Y', 'I'
+      || CHR (13), NULL)
+      || DECODE (lt.condr, 'Y', 'R'
+      || CHR (13), NULL)
+      || DECODE (lt.condm, 'Y', 'M'
+      || CHR (13), NULL) --  1/14/19 Sheik WO17107 Cond M  Update License to print New condition M
       || DECODE (lt.conds, 'Y', 'S' 
-      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority
-      || DECODE(lt.cond1c, 'Y', '1C'
-      || CHR(13), NULL)
-      || DECODE(lt.cond7, 'Y', '7'
-      || CHR(13), NULL)
-      || DECODE( lt.cond2, 'Y', '2'
-      || NVL2( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR(13), NULL)
-      || DECODE( lt.cond5, 'Y', '5'
-      || NVL2( lt.conditionenddate, ' '
-      || lt.conditionenddate, '')
-      || CHR(13), NULL)
-      || DECODE(lt.cond8, 'Y', '8'
-      || CHR(13), NULL)
-      || DECODE(lt.cond9, 'Y', '9'
-      || CHR(13), NULL)
-	  || lt.sectioncodelist --12/10/2019 TJL  20023
-	  )) condi,
+      || NVL2 ( lt.SplLegSectionCodeList , ' '
+      || lt.SplLegSectionCodeList , ' ')
+      || CHR (13), NULL) -- 11/02/2023 PK     WO-25963 Create new Condition S on ABIS for priority  -- 08/20/2025 PK     WO-6094 Added printing of SplLegSectionCodeList at end of conditions
+      || DECODE (lt.cond1c, 'Y', '1C'
+      || CHR (13), NULL)
+	  || lt.sectioncodelist --12/10/2019 TJL  20023    
+	   )) condi,
       NULL runid,
       NULL batchtype,
       /*ltltcs.TypeofIssuance*/
