@@ -57,6 +57,7 @@ AS
     --                                          in calllsp function.
     --  13.0.0  07/03/2025  TJL  BIZ-08799    Added exception handling for no data found in get_application
     --  14.0.0  07/22/2025  TJL  BIZ-18902    Corrected bug in the parsing of LSP response in CALLLSP.
+    --  15.0.0  09/10/2025  BN   BIZ-19069    Added method to generate hashvalue for an application.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -789,5 +790,24 @@ AS
                 'E-Services ' || a_description,
                 1); --serverkey
     END;
+
+    FUNCTION getHashValueForApplication(a_jobid IN NUMBER)
+     RETURN NUMBER
+    IS
+        t_hashvalue  NUMBER;
+        t_text         VARCHAR2(32767);
+    BEGIN
+
+        t_text  := 'APPLICANTNAME : '|| api.pkg_columnquery.VALUE(a_jobid, 'APPLICANTNAMES');
+        t_text := t_text || ' DBA : ' || api.pkg_columnquery.VALUE(a_jobid, 'PRIMARYDBA');
+        t_text := t_text || ' PREMISESADDRESS : '|| api.pkg_columnquery.VALUE(a_jobid, 'PREMADDRESS1LINEDISPLAY');
+        t_text := t_text || ' SECONDARYLICENSETYPES'|| api.pkg_columnquery.VALUE(a_jobid, 'SECONDARYLTCODEWITHCOUNT');
+
+         -- t_text := t_json_app.to_string;
+        SELECT ORA_HASH(t_text) INTO t_hashvalue FROM DUAL;
+
+        RETURN t_hashvalue;
+    END;
+
 END;
 /

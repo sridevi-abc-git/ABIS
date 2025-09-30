@@ -33,6 +33,8 @@ AS
     --  12.5.0  02/03/2025  TJL  BIZ-17356    Added lsplogin function
     --  12.5.2  02/07/2025  TJL  BIZ-17356    Code cleanup
     --  13.0.0  05/02/2025  TJL  BIZ-18056    Change prototype for calllsp.
+    --  15.0.0  09/10/2025  BN   BIZ-19069    Added method to generate hashvalue for an application.
+    --  16.0.0  09/30/2025  TJL  BIZ-19339    Add retry to call LSP on timeout
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -88,7 +90,8 @@ AS
                      a_method       IN VARCHAR2,
                      a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
                      a_file         IN BLOB DEFAULT NULL,
-                     a_token        IN VARCHAR2 DEFAULT NULL)
+                     a_token        IN VARCHAR2 DEFAULT NULL,
+                     a_retry        IN BOOLEAN DEFAULT FALSE)
         RETURN json_object_t;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
@@ -119,6 +122,8 @@ AS
                         a_argument2    IN DATE DEFAULT SYSDATE,
                         a_argument3    IN VARCHAR2 DEFAULT NULL,
                         a_argument4    IN VARCHAR2 DEFAULT NULL);
+    FUNCTION getHashvalueForApplication(a_jobid IN NUMBER)
+        RETURN NUMBER;
 
 END;
 /
