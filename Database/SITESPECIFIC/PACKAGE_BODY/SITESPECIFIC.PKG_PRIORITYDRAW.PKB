@@ -385,8 +385,6 @@ AS
 
         api.pkg_relationshipupdate.remove(t_relationshipid, SYSDATE);
        
-exception when no_data_found then
-  null;
     END managedeleterel;
 
     /*********************************************************************************************************
