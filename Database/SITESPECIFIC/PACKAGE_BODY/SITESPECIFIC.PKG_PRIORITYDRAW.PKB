@@ -521,7 +521,7 @@ AS
             t_filterboolean   := 'IntercountyOffSaleGeneral';
             t_countname       := 'IntercountyOffSaleGeneralCount';
         ELSE
-            t_filterboolean   := 'SpecialLegislationOnSaleGenera';
+            t_filterboolean   := 'SpecialLegislationOnSale';
             t_countname       := 'SpecialLegislationOnSaleCount';
         END IF;
 
