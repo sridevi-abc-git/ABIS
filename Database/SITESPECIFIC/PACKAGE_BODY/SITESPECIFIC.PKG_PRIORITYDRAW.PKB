@@ -509,8 +509,8 @@ AS
         t_jobid   := api.pkg_columnquery.VALUE(a_processid, 'JobId');
 
         IF t_prioritydrawcatagory = 'On Sale Original' THEN
-            t_filterboolean   := 'OriginalOnSaleGeneral';
-            t_countname       := 'OriginalOnSaleGeneralCount';
+            t_filterboolean   := 'OriginalOnSaleGeneral';  -- t_filterboolean coming from application job
+            t_countname       := 'OriginalOnSaleGeneralCount'; -- t_countname coming from manage priority job.
         ELSIF t_prioritydrawcatagory = 'Off Sale Original' THEN
             t_filterboolean   := 'OriginalOffSaleGeneral';
             t_countname       := 'OriginalOffSaleGeneralCount';
@@ -522,7 +522,7 @@ AS
             t_countname       := 'IntercountyOffSaleGeneralCount';
         ELSE
             t_filterboolean   := 'SpecialLegislationOnSale';
-            t_countname       := 'SpecialLegislationOnSaleCount';
+            t_countname       := 'SpecialLegislationOnSaleGenera';
         END IF;
 
         t_relationshipcount   :=
