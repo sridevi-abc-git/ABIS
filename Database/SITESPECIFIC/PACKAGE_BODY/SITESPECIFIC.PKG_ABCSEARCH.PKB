@@ -31,6 +31,7 @@ IS
     --8/18/2021   PK   WO 25997 Add secondary type 58 to master type 75 undoing the changes done by Tim for WO 20483 for only type 58.
     -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransactions so it can be used by the new StaffUI system.\
     -- 04/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
+    -- 10/10/2025 PK   6681    Changes social secutiry to varchar to fix SSN Person Search in le search
  
     -- **************************************************************************
 
@@ -2481,7 +2482,7 @@ IS
                               a_zipcode                    NUMBER,
                               a_relatedjoblicno            VARCHAR2,
                               a_hierarchylevel             VARCHAR2,
-                              a_socialsecurityno           NUMBER,
+                              a_socialsecurityno           VARCHAR2,
                               a_objects         OUT NOCOPY api.udt_objectlist)
     IS
         t_unfilteredobjects      api.udt_objectlist;
