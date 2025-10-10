@@ -31,6 +31,7 @@ CREATE OR REPLACE PROCEDURE SITESPECIFIC.createappfee(
 --                           changed 'CreatedDate' to 'ApplicationCreatedDate' for online application changes
 --  06/12/2025  PK           Changed Created date logic for priority job
 --  07/02/2025 PK           Addeded code to create App fee for Special Legislation type
+--  10/10/2025 PK           Added code to create app fee for change application when change type is Add Primary License Type
 
 -------------------------------------------------------------------------------
 IS
@@ -459,6 +460,15 @@ BEGIN
                             t_tier;
                         t_feeactivity(t_feeactivity.COUNT).gl            := 'APP';
                     END IF;
+                    
+                     IF (api.pkg_columnquery.value(rec.toobjectid, 'AddPrimaryLicenseType') = 'Y'  -- 10/10/2025 Added by Pawan to create app fee on add primary LT for change applications
+                       AND t_lttype != 'B') THEN
+                        t_feeactivity.EXTEND;
+                        t_feeactivity(t_feeactivity.COUNT).feeactivity   := 'APP';
+                        t_feeactivity(t_feeactivity.COUNT).tier          :=
+                            t_tier;
+                        t_feeactivity(t_feeactivity.COUNT).gl            := 'APP';
+                    END IF; --- End of code
 
                     IF (api.pkg_columnquery.VALUE(a_jobid, 'StockTransfer') = 'Y') THEN -- (STK, STM)
                         t_feeactivity.EXTEND;
