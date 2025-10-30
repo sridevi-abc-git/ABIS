@@ -27,7 +27,9 @@ IS
     --   6.1.1   05/24/2024  TJL BIZ-15485  Changed email function called and when called
     --   7.0.3   06/18/2024  TJL BIZ-15691  Fixed bug in selecting records.
     --   7.1.0   07/09/2024  TJL BIZ-15691  Made change to email message.
-    --   8.0     09/03/3034  TJL BIZ-16191  Add filter to the selection of AWF record to pay
+    --   8.0     09/03/2024  TJL BIZ-16191  Add filter to the selection of AWF record to pay
+    --   9.0.0   10/16/2025  TJL BIZ-19361  Change how info is retrieved because of changes
+    --                                        made to first data upload table.
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -46,8 +48,6 @@ IS
     t_batchpaymententrydefid api.pkg_definition.udt_id;
     t_batchpaymententryobjectid api.pkg_definition.udt_id;
     t_batchpaymentverifyobjectid api.pkg_definition.udt_id;
-    t_additionalitemdefid api.pkg_definition.udt_id;
-    t_additionalitemobjectid api.pkg_definition.udt_id;
     t_endpointid   api.pkg_definition.udt_id;
     t_relid        api.pkg_definition.udt_id;
 
@@ -56,16 +56,12 @@ IS
     t_receiptnumber api.pkg_definition.udt_sequencevalue;
     t_receiptlast  api.pkg_definition.udt_sequencevalue;
     t_batchid      VARCHAR2(30);
-    t_licensetypecode VARCHAR2(3);
-    t_licensenumber VARCHAR2(10);
     t_info         VARCHAR2(4000 BYTE);
     t_paymenttype  VARCHAR2(25)
         := CASE a_seq WHEN 0 THEN 'Check' ELSE 'Credit Card' END;
     t_sqlerrm      VARCHAR2(4000);
     t_backtrace    VARCHAR2(4000);
     t_filename     VARCHAR2(512);
-    t_fd_paymentamount NUMBER := 0;
-    t_fd_payment_count NUMBER := 0;
 BEGIN
     api.pkg_logicaltransactionupdate.resettransaction;
     ROLLBACK;
@@ -73,49 +69,39 @@ BEGIN
     BEGIN --   6.0     05/21/2024  TJL
         IF (a_seq > 0)
         THEN
-            WITH --  06/18/2024  TJL BIZ-15691
-                fd
-                AS
-                    (SELECT fd.filename,
-                            CASE fd.paymentmedium
-                                WHEN 'Credit Card' THEN fd.paymentmedium
-                                ELSE 'ECheck'
-                            END    paymentmedium,
-                            fd.paymentamount
-                       FROM bizmod_api.first_data_t fd
-                      WHERE fd.logseq = a_seq
-                        AND fd.abispayment = 'Y'
-                        AND fd.feeactivity LIKE '%AWF%')
-              SELECT fd.filename,
-                     fd.paymentmedium,
-                     SUM(fd.paymentamount),
-                     COUNT(1)
-                INTO t_filename,
-                     t_paymenttype,
-                     t_fd_paymentamount,
-                     t_fd_payment_count
-                FROM fd
-            GROUP BY fd.filename, fd.paymentmedium;
+            SELECT fd.filename,
+                   (SELECT CASE p.paymentmethod
+                               WHEN 'Credit Card' THEN 'Credit Card'
+                               ELSE 'ECheck'
+                           END    paymentmethod
+                      FROM bizmod_api.e_payments_t p
+                     WHERE p.confirmationid = fd.confirmationnumber
+                       AND rownum = 1)    paymentmedium
+              INTO t_filename, t_paymenttype
+              FROM bizmod_api.first_data_t fd
+             WHERE fd.logseq = a_seq
+             FETCH FIRST ROW ONLY;
 
-            SELECT p.seq,
+            SELECT a_seq                     seq,
                    a.licensenumber,
                    a.licensetypecode,
-                   NVL(fd.paymentamount, 0)     paymentamount,
-                   a.gallonage261               gallonage,
-                   fd.confirmationnumber        confirmationnumber,
-                   a.ROWID                      rowkey
+                   p.amountpaid              paymentamount,
+                   a.gallonage261            gallonage,
+                   fd.confirmationnumber     confirmationnumber,
+                   a.ROWID                   rowkey
               BULK COLLECT INTO t_awf
               FROM bizmod_api.first_data_t  fd
                    JOIN bizmod_api.e_payments_t p
                        ON (fd.confirmationnumber = p.confirmationid)
                    JOIN bizmod_api.awf_t a
                        ON (a.licensenumber = p.licensenumber
-                       AND a.licensetypecode = p.licensetypecode) -- 04/23/2024  TJL BIZ-15138
-             WHERE a.paymentbatch IS NULL
-               AND a.submitteddate IS NOT NULL  -- 8.0     09/03/3034  TJL BIZ-16191
-               AND fd.abispayment = 'Y'
-               AND fd.feeactivity LIKE '%AWF%'
-               AND fd.logseq = a_seq;
+                       AND a.licensetypecode = p.licensetypecode -- 04/23/2024  TJL BIZ-15138
+                       AND a.submitteddate IS NOT NULL) -- 04/23/2024  TJL BIZ-15138
+             WHERE TRUNC(a.submitteddate) >
+                   TO_DATE(
+                       '30-jun-' || TO_CHAR(ADD_MONTHS(SYSDATE, -6), 'yyyy'))
+               AND fd.logseq = a_seq
+               AND fd.paymentobjectid IS NULL;
         ELSE
             -- 02/06/2024  TJL BIZ-14393
             SELECT NULL               seq,
@@ -129,8 +115,6 @@ BEGIN
               FROM bizmod_api.awf_t a
              WHERE a.awffeeamount <= 0
                AND a.paymentbatch IS NULL;
-
-            t_fd_payment_count := t_awf.COUNT;
         END IF;
 
         IF (t_awf.COUNT > 0)
@@ -181,6 +165,8 @@ BEGIN
             LOOP
                 t_totalfees := t_totalfees + t_awf(inx).paymentamount; --t_feeamount;
                 t_checkcount := t_checkcount + 1;
+                --                     t_fd_paymentamount,
+                --                     t_fd_payment_count
 
                 -- *****************************************************************
                 -- Build batch payment entry record
@@ -435,17 +421,9 @@ BEGIN
                 || CHR(13)
                 || 'Number of Payments: '
                 || LPAD(t_checkcount, 5, ' ')
-                || CHR(9)
-                || '(Expected: '
-                || t_fd_payment_count
-                || ')'
                 || CHR(13)
                 || 'Total Payment Amount: '
                 || TO_CHAR(t_totalfees, 'fm9G999G990D00')
-                || CHR(9)
-                || '(Expected: '
-                || TO_CHAR(t_fd_paymentamount, 'fm9G999G990D00')
-                || ')'
                 || CASE
                        WHEN t_sqlerrm IS NOT NULL
                        THEN
