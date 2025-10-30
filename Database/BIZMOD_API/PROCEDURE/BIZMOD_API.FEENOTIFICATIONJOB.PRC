@@ -18,7 +18,7 @@ AS
     t_method      constant varchar2(10) := 'PATCH';
     t_process     constant VARCHAR2(32) := 'FEENOTIFICATIONJOB';
     t_body         json_object_t := json_object_t();
-    t_status      constant VARCHAR2(50);
+    t_status       VARCHAR2(50);
     t_applicationid NUMBER;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
@@ -29,12 +29,12 @@ AS
     t_results_text VARCHAR2(32767);
 BEGIN
     BEGIN
-        t_applicationid := api.pkg_columnquery.VALUE(a_objectid, 'LSPId');
-        t_status := UPPER(nvl(api.pkg_columnquery.value(p.processid, 'ModifyType'), 'FEES_DUE'));
+        t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
+        t_status := UPPER(nvl(api.pkg_columnquery.value(a_objectid, 'ModifyType'), 'FEES_DUE'));
         
         t_body.put('status', t_status);
-        t_body.put('objectId', a_objectid);
-        t_body.put('licenseNumber', api.pkg_columnquery.value(a_objectid, 'LICENSENUMBER'));
+        t_body.put('objectId', a_jobid);
+        t_body.put('licenseNumber', api.pkg_columnquery.value(a_jobid, 'LICENSENUMBER'));
 
         t_results := bizmod_api.utl_licenseinfo.lsplogin;
 
@@ -91,11 +91,14 @@ BEGIN
                  || t_applicationid
                  || CHR(13)
                  || 'License Number: '
-                 || api.pkg_columnquery.VALUE(a_objectid, 'LICENSENUMBER')
+                 || api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER')
                  || CHR(13)
                  || 'j_Application: '
-                 || a_objectid
+                 || a_jobid
                  || CHR(13)
+                 || 'Notification Type: '
+                 || t_status
+                 || chr(13)
                  || t_results_text, 1, 3999),
                  substr(t_sqlerrm,1,4000),
                  t_trace,
@@ -104,3 +107,5 @@ BEGIN
     COMMIT;
 END;
 /
+
+GRANT EXECUTE ON BIZMOD_API.FEENOTIFICATIONJOB TO POSSEEXTENSIONS;

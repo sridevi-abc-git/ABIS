@@ -52,7 +52,9 @@ IS
     --  17.0.0  06/18/2025  TJL  BIZ-18689  Corrected formatting of error emails
     --  18.0.0  07/17/2025  TJL  BIZ-18875  Removed manualpayments procedure
     --  19.0.0  08/04/2025  TJL  BIZ-18942  Corrected bug to allow pass due renewals to be submitted.
-    -- ****************************************************************************
+    --  20.0.0  09/12/2025  BN   BIZ-19069  Application update notification procedure inclusion
+    --  20.0.1  09/16/2025  TJL  BIZ-19262  Removed code that referenced E_FEES_T table
+    -- ************************************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
                             a_fiscalend       DATE,
@@ -734,6 +736,43 @@ IS
             COMMIT;
         END;
     END;
+
+    /*
+        Procedure to get the list of jobIds for which application have been updated and the  APPUPDATENOTIFICATIONJOB is triggered.
+    */
+
+    PROCEDURE sendAppUpdateNotification
+    AS
+    BEGIN
+
+        DECLARE
+            t_jobids       VARCHAR2(32000);
+        BEGIN
+            SELECT json_arrayagg(app.jobid)
+              INTO t_jobids
+              FROM bizmod_api.license_app_t app
+              WHERE NVL(app.hashvalue, 0) != bizmod_api.utl_licenseinfo.getHashValueForApplication(app.jobid)
+              AND app.statusname IN ('PEND', 'POSTED');
+
+            DBMS_OUTPUT.put_line(
+                'arr: ' || t_jobids || CHR(13) || '  length: ' || LENGTH(t_jobids));
+
+            IF (t_jobids IS NOT NULL)
+            THEN
+                -- schedule notify function
+                bizmod_api.utl_licenseinfo.createjob(
+                    a_procedure => 'APPUPDATENOTIFICATIONJOB',
+                    a_description => 'Application Update Notification',
+                    a_argument1 => t_jobids);
+                COMMIT;
+            END IF;
+
+            ROLLBACK;
+        END;
+
+    END;
+
+
 -- ****************************************************************************
 -- ****************************************************************************
 --   Main Process
@@ -947,34 +986,15 @@ BEGIN
             END IF;
 
             -- ************************************************************
-            -- update eservices fee table for fees paid on line
-            -- ************************************************************
-            FOR fees
-                IN (SELECT f.feeobjid
-                      FROM bizmod_api.e_fees_t  f
-                           JOIN api.fees a
-                               ON (a.feeid =
-                                   api.pkg_columnquery.numericvalue(f.feeobjid,
-                                                                    'FeeId')
-                               AND (a.paidamount + a.amount + a.adjustedamount) <=
-                                   0)
-                           JOIN bizmod_api.e_payments_t p
-                               ON (p.feeobjid = f.feeobjid)
-                     WHERE f.paiddate IS NULL)
-            LOOP
-                UPDATE bizmod_api.e_fees_t f
-                   SET f.paiddate = SYSDATE, f.manualpayment = 'N'
-                 WHERE f.feeobjid = fees.feeobjid;
-            END LOOP;
-
-            COMMIT;
-
-            -- ************************************************************
             -- Update license and AWF info
             -- ************************************************************
             updateinfo;
 
-            -- ********************************************************************
+            -- ************************************************************
+            -- Application update notification procedure invocation
+            -- ************************************************************
+--            sendAppUpdateNotification;
+
             -- ********************************************************************
             --  Update awf fee id and fee object id after payments have been completed
             -- ********************************************************************
@@ -1335,8 +1355,3 @@ BEGIN
     END;
 END nightlyprocessjob;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO POSSEEXTENSIONS;

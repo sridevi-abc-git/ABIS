@@ -58,6 +58,7 @@ AS
     --  13.0.0  07/03/2025  TJL  BIZ-08799    Added exception handling for no data found in get_application
     --  14.0.0  07/22/2025  TJL  BIZ-18902    Corrected bug in the parsing of LSP response in CALLLSP.
     --  15.0.0  09/10/2025  BN   BIZ-19069    Added method to generate hashvalue for an application.
+    --  16.0.0  09/30/2025  TJL  BIZ-19339    Add retry to call LSP on timeout
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -100,7 +101,8 @@ AS
         a_method       IN VARCHAR2,
         a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
         a_file         IN BLOB DEFAULT NULL,
-        a_token        IN VARCHAR2 DEFAULT NULL)
+        a_token        IN VARCHAR2 DEFAULT NULL,
+        a_allow_retry  IN BOOLEAN DEFAULT TRUE)
         RETURN json_object_t
     IS
         t_return       json_object_t := json_object_t();
@@ -138,6 +140,7 @@ AS
         t_length       NUMBER;
         t_sqlerrm      VARCHAR2(4000);
         t_requestdate   TIMESTAMP := SYSTIMESTAMP;
+        t_retry         BOOLEAN := FALSE;
     BEGIN
         BEGIN
             SELECT url || a_urlinfo, wallet
@@ -279,27 +282,6 @@ AS
                     ELSE
                         t_return.put('lspresponse', t_object);
                 END CASE;
---                CASE --07/22/2025  TJL  BIZ-18902
---                    WHEN (t_object.is_object)
---                    THEN
---                        CASE
---                            WHEN TREAT(t_object AS json_object_t).has(
---                                     'message')
---                            THEN
---                                t_return.put(
---                                    'lspresponse',
---                                    TREAT(t_object AS json_object_t).get_clob(
---                                        'message'));
---                            ELSE
---                                t_return.put('lspresponse', t_object);
---                        END CASE;
---                    WHEN t_object.is_array
---                    THEN
---                        t_return.put('lspresponse',
---                                     TREAT(t_object AS json_array_t));
---                    ELSE
---                        t_return.put('lspresponse', t_object);
---                END CASE;
             ELSE
                 t_text := SUBSTR(t_http_response_text, 1, 32767);
                 t_return.put('lspresponse',
@@ -322,6 +304,10 @@ AS
                     UTL_HTTP.get_detailed_sqlerrm
                     || CHR(10)
                     || DBMS_UTILITY.format_error_backtrace);
+
+                t_retry := TRUE;
+                t_sqlerrm := UTL_HTTP.get_detailed_sqlerrm;
+                t_http_response_text := t_return.to_clob;
             WHEN OTHERS
             THEN
                 t_return.put('status', SQLCODE);
@@ -373,7 +359,7 @@ AS
                          t_sqlerrm)
                 LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('INSERT')
                         REJECT LIMIT UNLIMITED;
-
+ 
         IF (SQL%ROWCOUNT = 0)
         THEN
             INSERT INTO err$_eservices_clob_t(seq, jsondata, filedata)
@@ -381,7 +367,17 @@ AS
         END IF;
 
         COMMIT;
-
+    
+        IF (a_allow_retry and t_retry)
+        then
+            t_return := calllsp(
+                a_urlinfo => a_urlinfo,
+                a_method  => a_method,
+                a_content => a_content,
+                a_file    => a_file,
+                a_token   => a_token,
+                a_allow_retry => FALSE);
+        end if;
         RETURN t_return;
     END;
 

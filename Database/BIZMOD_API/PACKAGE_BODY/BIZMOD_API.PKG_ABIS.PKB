@@ -1,4 +1,5 @@
-CREATE OR REPLACE PACKAGE BODY BIZMOD_API.pkg_abis
+/* Formatted on 9/25/2025 8:45:27 AM (QP5 v5.404) */
+CREATE OR REPLACE PACKAGE BODY bizmod_api.pkg_abis
 AS
     -- **************************************************************************
     -- File:        BIZMOD_API.PKG_ABIS.PKB
@@ -23,10 +24,14 @@ AS
     --                                         application packet.
     --   7.0.0   05/29/2025  TJL             add_primary_license_types added section code and
     --                                         changed numberofmonthslicensed to a VARCHAR2
-    --   8.0.0   06/16/2025  TJL             Added in add_address for priority draw application 
+    --   8.0.0   06/16/2025  TJL             Added in add_address for priority draw application
     --                                         setting priority draw county. removed priority
     --                                         draw setting from add_primary_license_types
     --   9.0.0   07/17/2025  TJL  BIZ-18875  Added Manual Payments procedure
+    --  10.0.0   08/19/2025  TJL  BIZ-19133  Added common procedures used by Change and Transfer
+    --                                          Applications
+    --  10.1.0   09/15/2025  TJL  BIZ-19212  Added fee_notification procedure.
+    --  10.2.0   09/22/2025  BN   BIZ-19170  Gallonage value not getting set issue.
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
@@ -41,8 +46,8 @@ AS
         THEN
             a_scheduleddate :=
                 CASE api.pkg_columnquery.VALUE(a_objectid, 'OutCome')
-                    WHEN 'Approved' THEN -- add 2 minute delay to when job is to run to allow abc-218 to be generated
-                                         SYSDATE + ((1 / 24 / 60) * 2)
+                    -- add 2 minute delay to when job is to run to allow abc-218 to be generated
+                    WHEN 'Approved' THEN SYSDATE + ((1 / 24 / 60) * 2)
                     ELSE SYSDATE
                 END;
 
@@ -89,14 +94,9 @@ AS
                      a_asofdate        DATE)
     IS
     BEGIN
-        IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPID') IS NOT NULL
-        AND api.pkg_columnquery.VALUE(a_objectid, 'ObjectDefName') =
-            'j_Application')
-        THEN
-            UPDATE bizmod_api.license_app_t
-               SET newfee = 'Y'
-             WHERE jobid = a_objectid;
-        END IF;
+        fee_notification(a_objectid  => a_objectid,
+                         a_asofdate  => a_asofdate,
+                         a_jobid     => a_objectid);
     END;
 
 
@@ -113,7 +113,7 @@ AS
             bizmod_api.utl_licenseinfo.createjob(
                 a_procedure => 'APPLICATIONSAVEJOB',
                 a_description =>
-                    'Application Saved Notify LSP ID '
+                    'Application Saved Notify LSP ID: '
                     || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
                 a_argument1 => a_objectid,
                 a_argument2 => SYSDATE,
@@ -146,20 +146,87 @@ AS
     PROCEDURE manualpayment(a_objectid     IN api.pkg_definition.udt_id,
                             a_asofdate     IN DATE,
                             a_jobid        IN api.pkg_definition.udt_id)
-    IS 
+    IS
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
+        t_schedule_time DATE;
+        t_lspid        NUMBER;
+        t_count        NUMBER;
     BEGIN
-        IF (api.pkg_columnquery.VALUE(a_jobid, 'LSPId') IS NOT NULL)
+        t_lspid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
+
+        IF (t_lspid IS NOT NULL
+        AND api.pkg_columnquery.VALUE(a_jobid, 'ObjectDefName') =
+            'j_Application')
         THEN
-            bizmod_api.utl_licenseinfo.createjob(
-                a_procedure => 'MANUALPAYMENTJOB',
-                a_description =>
-                    'Manual Payment for LSP ID: '
-                    || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
-                a_argument1 => a_objectid,
-                a_argument2 => SYSDATE,
-                a_argument3 => a_jobid);
+            -- check if payment made thru LSP
+            SELECT COUNT(f.feeid)     cnt
+              INTO t_count
+          FROM api.relationships  p
+               JOIN api.paymenttransactions pt
+                   ON (pt.paymentid =
+                       api.pkg_columnquery.numericvalue(p.toobjectid,
+                                                        'PaymentId'))
+               JOIN api.feetransactions f
+                   ON (f.transactionid = pt.transactionid) -- in (10971819,10971820))
+               JOIN api.registeredexternalobjects reo
+                   ON (reo.objectdefid =
+                       api.pkg_configquery.objectdefidforname('o_fee')
+                   AND reo.linkvalue = TO_CHAR(f.feeid))
+         WHERE (p.endpointid =
+                api.pkg_configquery.endpointidforname('p_ReceiptPayments',
+                                                      'Payment')
+            AND p.fromobjectid = a_objectid
+            -- 08/07/2025 TJL  BIZ-19030
+            AND NOT EXISTS
+                    (SELECT p.feeobjid
+                       FROM bizmod_api.e_payments_t p
+                      WHERE p.feeobjid = reo.objectid));
+              
+--              FROM api.fees  f
+--                   JOIN api.registeredexternalobjects reo
+--                       ON (reo.objectdefid =
+--                           api.pkg_configquery.objectdefidforname('o_fee')
+--                       AND reo.linkvalue = TO_CHAR(f.feeid))
+--             WHERE api.pkg_columnquery.VALUE(f.jobid, 'ObjectDefName') =
+--                   'j_Application'
+--               AND NOT EXISTS
+--                       (SELECT p.feeobjid
+--                          FROM bizmod_api.e_payments_t p
+--                         WHERE p.feeobjid = reo.objectid)
+--               AND f.jobid = a_jobid
+--               AND f.paidamount != 0;
+
+            IF (t_count > 0)
+            THEN
+                -- check to see if there is a fee pending notification
+                BEGIN
+                      SELECT s.scheduledate + (5 / (24 * 60 * 60))
+                        INTO t_schedule_time
+                        FROM scheduler.sysschedule s
+                       WHERE UPPER(s.description) LIKE
+                                 UPPER(
+                                     'E-Services Fee Notification %ID: '
+                                     || t_lspid
+                                     || '%')
+                         AND s.status = 1
+                    ORDER BY s.schedulekey DESC
+                       FETCH FIRST ROWS ONLY;
+                EXCEPTION
+                    WHEN NO_DATA_FOUND
+                    THEN
+                        t_schedule_time := SYSDATE;
+                END;
+
+                bizmod_api.utl_licenseinfo.createjob(
+                    a_procedure => 'MANUALPAYMENTJOB',
+                    a_description =>
+                        'Manual Payment for LSP ID: '
+                        || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
+                    a_argument1 => a_objectid,
+                    a_argument2 => t_schedule_time,
+                    a_argument3 => a_jobid);
+            END IF;
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -174,7 +241,7 @@ AS
                                                    bktrace)
                      VALUES (
                                 0,
-                                'APPLICATIONSAVE',
+                                'MANUALPAYMENT',
                                 'Application Object Id: '
                                 || a_jobid
                                 || CHR(13)
@@ -183,6 +250,70 @@ AS
                                 t_sqlerrm,
                                 t_trace);
     END;
+
+    --09/15/2025  TJL  BIZ-19212
+    PROCEDURE fee_notification(a_objectid     IN api.pkg_definition.udt_id,
+                               a_asofdate     IN DATE,
+                               a_jobid        IN api.pkg_definition.udt_id)
+    IS
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
+        t_notify_type  VARCHAR2(100);
+        t_description  VARCHAR2(100);
+        t_exists       VARCHAR2(1);
+    BEGIN
+        IF (api.pkg_columnquery.VALUE(a_jobid, 'LSPId') IS NOT NULL)
+        THEN
+            -- find out type of notification
+            t_notify_type :=
+                NVL(api.pkg_columnquery.VALUE(a_objectid, 'ModifyType'),
+                    'New Fee');
+            t_description :=
+                'Fee Notification for LSP ID: '
+                || api.pkg_columnquery.VALUE(a_jobid, 'LSPId')
+                || ' ('
+                || t_notify_type
+                || ')';
+
+            -- check to see if fee notification job has already been created for this LSP Id
+            SELECT NVL2(MAX(s.schedulekey), 'Y', 'N')
+              INTO t_exists
+              FROM scheduler.sysschedule s
+             WHERE status IN (1)
+               AND s.description LIKE '%' || t_description || '%';
+
+            IF (t_exists = 'N')
+            THEN
+                bizmod_api.utl_licenseinfo.createjob(
+                    a_procedure => 'FEENOTIFICATIONJOB',
+                    a_description => t_description, -- || ' (' || t_notify_type || ')',
+                    a_argument1 => a_objectid,
+                    a_argument2 => SYSDATE + (5 / (24 * 60 * 60)), -- five second delay
+                    a_argument3 => a_jobid);
+            END IF;
+        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlerrm := SQLERRM;
+            t_trace := DBMS_UTILITY.format_error_backtrace;
+
+            INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                   processjob,
+                                                   info,
+                                                   errmsg,
+                                                   bktrace)
+                     VALUES (
+                                0,
+                                'FEENOTIFICATION',
+                                'Application Object Id: '
+                                || a_jobid
+                                || CHR(13)
+                                || 'a_objectid: '
+                                || a_objectid,
+                                t_sqlerrm,
+                                t_trace);
+    END fee_notification;
 
     PROCEDURE add_secondary_license_types(
         a_primary_objectid IN api.pkg_definition.udt_id,
@@ -262,10 +393,13 @@ AS
                                licensetypecode
                                    VARCHAR2(3)
                                    PATH '$.LICENSETYPECODE',
---                               prioritydrawcounty
---                                   VARCHAR2(100)
---                                   PATH '$.PRIORITYDRAWCOUNTY',
-                               gallonage NUMBER PATH '$.GALLONAGE',
+                               --                               prioritydrawcounty
+                               --                                   VARCHAR2(100)
+                               --                                   PATH '$.PRIORITYDRAWCOUNTY',
+                               gallonage VARCHAR2(30) PATH '$.GALLONAGERANGE',
+                               additionalgallonage
+                                   NUMBER
+                                   PATH '$.ADDITIONALGALLONAGE',
                                numberofmonthslicensed
                                    VARCHAR2(100)
                                    PATH '$.NUMBEROFMONTHSLICENSED',
@@ -277,9 +411,7 @@ AS
                                masterlicense
                                    VARCHAR2(50)
                                    PATH '$.MASTERLICENSE',
-                               sectioncode
-                                   VARCHAR2(50)
-                                   PATH '$.SECTIONCODE',
+                               sectioncode VARCHAR2(50) PATH '$.SECTIONCODE',
                                secondarylicensetypes
                                    VARCHAR2(4000)
                                    FORMAT JSON
@@ -355,80 +487,60 @@ AS
             -- The following is for cases that involved primary draw, gallonage, and seasonal to set
             --   the special values for each type
             CASE
---                WHEN rec.licensetypecode IN ('21', '47')
---                THEN
---                    api.pkg_columnupdate.setvalue(
---                        a_jobid,
---                        'PriorityApplicationType',
---                        api.pkg_columnquery.VALUE(a_jobid, 'ApplicationType'));
---
---                    api.pkg_columnupdate.setvalue(
---                        a_jobid,
---                        'CopyLicDetailsToAppProcHasRun',
---                        'Y');
---                    api.pkg_columnupdate.setvalue(a_jobid,
---                                                  'PriorityUpgrade',
---                                                  'No');
---                    api.pkg_columnupdate.setvalue(a_jobid,
---                                                  'IsPriorityApplication',
---                                                  'Y');
---
---                    -- *****************************************************************
---                    -- Add priority Draw County and license type
---                    -- *****************************************************************
---                    -- set priority draw county
---                    t_countyobjectid :=
---                        api.pkg_simplesearch.objectbyindex(
---                            'o_CaCounty',
---                            'CountyName',
---                            rec.prioritydrawcounty);
---
---                    IF (t_countyobjectid IS NOT NULL)
---                    THEN
---                        t_endpointid :=
---                            api.pkg_configquery.endpointidforname(
---                                'j_application',
---                                'PriorityCounty');
---                        t_relid :=
---                            api.pkg_relationshipupdate.new(t_endpointid,
---                                                           a_jobid,
---                                                           t_countyobjectid);
---                    END IF;
+                --                WHEN rec.licensetypecode IN ('21', '47')
+                --                THEN
+                --                    api.pkg_columnupdate.setvalue(
+                --                        a_jobid,
+                --                        'PriorityApplicationType',
+                --                        api.pkg_columnquery.VALUE(a_jobid, 'ApplicationType'));
+                --
+                --                    api.pkg_columnupdate.setvalue(
+                --                        a_jobid,
+                --                        'CopyLicDetailsToAppProcHasRun',
+                --                        'Y');
+                --                    api.pkg_columnupdate.setvalue(a_jobid,
+                --                                                  'PriorityUpgrade',
+                --                                                  'No');
+                --                    api.pkg_columnupdate.setvalue(a_jobid,
+                --                                                  'IsPriorityApplication',
+                --                                                  'Y');
+                --
+                --                    -- *****************************************************************
+                --                    -- Add priority Draw County and license type
+                --                    -- *****************************************************************
+                --                    -- set priority draw county
+                --                    t_countyobjectid :=
+                --                        api.pkg_simplesearch.objectbyindex(
+                --                            'o_CaCounty',
+                --                            'CountyName',
+                --                            rec.prioritydrawcounty);
+                --
+                --                    IF (t_countyobjectid IS NOT NULL)
+                --                    THEN
+                --                        t_endpointid :=
+                --                            api.pkg_configquery.endpointidforname(
+                --                                'j_application',
+                --                                'PriorityCounty');
+                --                        t_relid :=
+                --                            api.pkg_relationshipupdate.new(t_endpointid,
+                --                                                           a_jobid,
+                --                                                           t_countyobjectid);
+                --                    END IF;
                 WHEN rec.licensetypecode IN ('02', '22')
                 THEN
-                    -- from gallonage entered figure out codes
-                    t_gallonagerange :=
-                        CASE
-                            WHEN rec.gallonage BETWEEN 0 AND 5000
-                            THEN
-                                '0 TO 5K'
-                            WHEN rec.gallonage BETWEEN 5001 AND 20000
-                            THEN
-                                '5K TO 20K'
-                            WHEN rec.gallonage BETWEEN 20001 AND 100000
-                            THEN
-                                '20K TO 100K'
-                            WHEN rec.gallonage BETWEEN 100001 AND 200000
-                            THEN
-                                '100K TO 200K'
-                            ELSE
-                                '200K TO 1M'
-                        END;
-                    t_additionalmilliongallons :=
-                        CASE
-                            WHEN rec.gallonage > 0
-                            THEN
-                                FLOOR((rec.gallonage - 1) / 1000000)
-                            ELSE
-                                0
-                        END;
+                    IF (rec.gallonage IS NOT NULL)
+                    THEN
+                        t_gallonagerange := rec.gallonage;
+                    ELSE
+                        t_gallonagerange := '200K TO 1M';
+                    END IF;
 
-                    IF (t_additionalmilliongallons > 0)
+                    IF (rec.additionalgallonage > 0)
                     THEN
                         api.pkg_columnupdate.setvalue(
                             t_licensetypeobjectid,
                             'AdditionalMillionGallons',
-                            t_additionalmilliongallons);
+                            rec.additionalgallonage);
                     ELSE
                         api.pkg_columnupdate.removevalue(
                             t_licensetypeobjectid,
@@ -472,6 +584,7 @@ AS
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
     END add_primary_license_types;
+
 
     PROCEDURE add_address(a_jobid        IN api.pkg_definition.udt_id,
                           a_address_type IN VARCHAR2,
@@ -719,34 +832,37 @@ AS
 
             api.pkg_logicaltransactionupdate.endtransaction;
             COMMIT;
-            
-            -- add priority draw county if application is a priority draw
-            if (api.pkg_columnquery.value (a_jobid, 'IsPriorityApplication') = 'Y'
-            and a_address_type = 'Premises')
-            then
-                    -- *****************************************************************
-                    -- Add priority Draw County 
-                    -- *****************************************************************
-                    -- get county name
-                    
-                    -- set priority draw county
-                    t_countyobjectid := api.pkg_columnquery.numericvalue(t_addressobjectid, 'CountyId');
 
-                    IF (t_countyobjectid IS NOT NULL)
-                    THEN
-                        t_endpointid :=
-                            api.pkg_configquery.endpointidforname(
-                                'j_application',
-                                'PriorityCounty');
-                        t_addrel :=
-                            api.pkg_relationshipupdate.new(t_endpointid,
-                                                           a_jobid,
-                                                           t_countyobjectid);
-                    END IF;
-            api.pkg_logicaltransactionupdate.endtransaction;
-            COMMIT;
-        end if;            
-            
+            -- add priority draw county if application is a priority draw
+            IF (api.pkg_columnquery.VALUE(a_jobid, 'IsPriorityApplication') =
+                'Y'
+            AND a_address_type = 'Premises')
+            THEN
+                -- *****************************************************************
+                -- Add priority Draw County
+                -- *****************************************************************
+                -- get county name
+
+                -- set priority draw county
+                t_countyobjectid :=
+                    api.pkg_columnquery.numericvalue(t_addressobjectid,
+                                                     'CountyId');
+
+                IF (t_countyobjectid IS NOT NULL)
+                THEN
+                    t_endpointid :=
+                        api.pkg_configquery.endpointidforname(
+                            'j_application',
+                            'PriorityCounty');
+                    t_addrel :=
+                        api.pkg_relationshipupdate.new(t_endpointid,
+                                                       a_jobid,
+                                                       t_countyobjectid);
+                END IF;
+
+                api.pkg_logicaltransactionupdate.endtransaction;
+                COMMIT;
+            END IF;
         END IF;
     END add_address;
 
@@ -865,10 +981,9 @@ AS
                         a_lookup    => FALSE);
                 END IF;
             END LOOP;
-            
-                api.pkg_logicaltransactionupdate.endtransaction;
-                COMMIT;
-            
+
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
         END IF;
     END copy_legal_entities;
 
@@ -1359,10 +1474,9 @@ AS
                 END IF;
             END IF;
         END LOOP;
-        
-                api.pkg_logicaltransactionupdate.endtransaction;
-                COMMIT;
-        
+
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
     END add_person;
 
     PROCEDURE add_company(a_entityobjectid IN api.pkg_definition.udt_id,
@@ -1517,10 +1631,565 @@ AS
                 END IF;
             END IF;
 
-                api.pkg_logicaltransactionupdate.endtransaction;
-                COMMIT;
-            
+            api.pkg_logicaltransactionupdate.endtransaction;
+            COMMIT;
         END LOOP;
     END add_company;
+
+    PROCEDURE copy_legal_entities(
+        a_objectid     IN api.pkg_definition.udt_id,
+        a_legalentityobjectid IN api.pkg_definition.udt_id)
+    IS
+        t_relid        api.pkg_definition.udt_id;
+        t_endpointid   api.pkg_definition.udt_id;
+        t_objectid     api.pkg_definition.udt_id;
+    BEGIN
+        IF (api.pkg_columnquery.VALUE(a_legalentityobjectid, 'P12Status') =
+            'Y')
+        THEN
+            t_endpointid :=
+                api.pkg_configquery.endpointidforname('j_Application',
+                                                      'P12Applicant');
+
+            t_relid :=
+                api.pkg_relationshipupdate.new(t_endpointid,
+                                               a_objectid,
+                                               a_legalentityobjectid);
+        ELSE
+            CASE
+                WHEN api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                               'LEStructureRel') =
+                     'Y'
+                THEN
+                    t_endpointid :=
+                        api.pkg_configquery.endpointidforname(
+                            'j_application',
+                            'OnSaleManager');
+                WHEN api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                               'IsPerson') =
+                     'Y'
+                THEN
+                    t_endpointid :=
+                        api.pkg_configquery.endpointidforname(
+                            'j_application',
+                            'Applicant');
+                WHEN api.pkg_columnquery.VALUE(a_legalentityobjectid,
+                                               'IsCompany') =
+                     'Y'
+                THEN
+                    t_endpointid :=
+                        api.pkg_configquery.endpointidforname(
+                            'j_application',
+                            'Applicant');
+                ELSE
+                    NULL;
+            END CASE;
+
+            t_endpointid :=
+                api.pkg_configquery.endpointidforname('j_Application',
+                                                      'Applicant');
+
+            sitespecific.pkg_legalentity.lecopy(
+                a_relationshipid => NULL,
+                a_copyleobjid => a_legalentityobjectid,
+                a_copytoleobjid => a_objectid,
+                a_endpointid => t_endpointid,
+                a_lookup    => FALSE);
+
+            -- case if company
+            IF (api.pkg_columnquery.VALUE(a_legalentityobjectid, 'IsCompany') =
+                'Y')
+            THEN
+                -- get company info to update
+                SELECT r.toobjectid
+                  INTO t_objectid
+                  FROM api.relationships r
+                 WHERE r.endpointid IN
+                           (api.pkg_configquery.endpointidforname(
+                                'o_LegalEntity',
+                                'Company'))
+                   AND r.fromobjectid = a_legalentityobjectid;
+            END IF;
+        END IF;
+    END copy_legal_entities;
+
+    PROCEDURE make_former_legalentity(
+        a_applicationobjectid IN api.pkg_definition.udt_id,
+        a_personcompanyobjectid IN api.pkg_definition.udt_id) -- o_legalentity
+    AS
+        t_endpoint     api.pkg_definition.udt_id
+            := api.pkg_configquery.endpointidforname('o_LegalEntity',
+                                                     'Title');
+        t_rel          api.pkg_definition.udt_id;
+        t_titleobjectid api.pkg_definition.udt_id;
+    BEGIN
+        FOR rec
+            IN (SELECT r.toobjectid
+                           legalentityobjectid,
+                       api.pkg_columnquery.VALUE(r.toobjectid, 'OwnerType')
+                           ownertype,
+                       api.pkg_columnquery.VALUE(r.toobjectid,
+                                                 'OfficerTitles')
+                           officertitles,
+                       api.pkg_columnquery.VALUE(r.toobjectid,
+                                                 'LEStructureRel')
+                           lestructurerel
+                  FROM api.relationships r
+                 WHERE r.fromobjectid =
+                       (SELECT r.toobjectid
+                          FROM api.relationships r
+                         WHERE r.endpointid IN
+                                   (api.pkg_configquery.endpointidforname(
+                                        'o_legalEntity',
+                                        'Company'),
+                                    api.pkg_configquery.endpointidforname(
+                                        'o_legalEntity',
+                                        'Person'))
+                           AND r.fromobjectid = a_personcompanyobjectid)
+                   AND api.pkg_columnquery.VALUE(r.toobjectid,
+                                                 'ApplicationJobId') =
+                       a_applicationobjectid
+                   AND api.pkg_columnquery.VALUE(r.toobjectid,
+                                                 'LEStructureRel') IN
+                           ('Stockholder', 'Officer'))
+        LOOP
+            IF (rec.lestructurerel = 'Stockholder')
+            THEN
+                api.pkg_columnupdate.setvalue(
+                    rec.legalentityobjectid,
+                    'OwnerType',
+                    CASE rec.ownertype
+                        WHEN 'MEMBER' THEN 'FORMER MEMBER'
+                        ELSE 'FORMER STOCKHOLDER'
+                    END);
+            ELSE
+                FOR rectitle
+                    IN (SELECT r.relationshipid,
+                               api.pkg_columnquery.VALUE(r.toobjectid,
+                                                         'description')
+                          FROM api.relationships r
+                         WHERE r.endpointid = t_endpoint
+                           AND r.fromobjectid = rec.legalentityobjectid)
+                LOOP
+                    SELECT objectid
+                      INTO t_titleobjectid
+                      FROM query.o_title t
+                     WHERE description =
+                           CASE rec.officertitles
+                               WHEN 'GENERAL PARTNER'
+                               THEN
+                                   'FORMER GENERAL PARTNER'
+                               WHEN 'LIMITED PARTNER'
+                               THEN
+                                   'FORMER LIMITED PARTNER'
+                               WHEN 'MANAGER'
+                               THEN
+                                   'FORMER MANAGER'
+                               WHEN 'MEMBER'
+                               THEN
+                                   'FORMER MEMBER'
+                               WHEN 'NAME'
+                               THEN
+                                   'FORMER NAME'
+                               WHEN 'OFFICER'
+                               THEN
+                                   'FORMER OFFICER'
+                               WHEN 'STOCKHOLDER'
+                               THEN
+                                   'FORMER STOCKHOLDER'
+                               WHEN 'TRUSTEE'
+                               THEN
+                                   'FORMER TRUSTEE'
+                               ELSE
+                                   'FORMER OFFICER'
+                           END;
+
+                    -- create relationship to former title
+                    t_rel :=
+                        api.pkg_relationshipupdate.new(
+                            a_endpoint  => t_endpoint,
+                            a_fromobject => rec.legalentityobjectid,
+                            a_toobject  => t_titleobjectid);
+
+                    -- remove current relationship
+                    api.pkg_relationshipupdate.remove(
+                        rectitle.relationshipid);
+                END LOOP;
+            END IF;
+        END LOOP;
+
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+    END;
+
+    PROCEDURE membership_stock_transfers(
+        a_jobid        IN api.pkg_definition.udt_id,
+        a_legal_entities IN CLOB)
+    IS
+        t_item         api.pkg_definition.udt_id;
+        t_entity       CLOB;
+        t_company      CLOB;
+        t_person       CLOB;
+        t_parent       api.pkg_definition.udt_id;
+    BEGIN
+        SELECT entity, company, person
+          INTO t_entity, t_company, t_person
+          FROM JSON_TABLE(
+                   a_legal_entities,
+                   '$'
+                   COLUMNS(entity CLOB FORMAT JSON PATH '$.ENTITY',
+                           company CLOB FORMAT JSON PATH '$.COMPANY',
+                           person CLOB FORMAT JSON PATH '$.PERSON'));
+
+        SELECT r.toobjectid
+          INTO t_item
+          FROM api.relationships r
+         WHERE r.endpointid IN
+                   (api.pkg_configquery.endpointidforname('o_legalEntity',
+                                                          'Company'),
+                    api.pkg_configquery.endpointidforname('o_legalEntity',
+                                                          'Person'))
+           AND r.fromobjectid =
+               (SELECT MIN(tbl.removelegalentityobjectid)    removelegalentityobjectid
+                  FROM JSON_TABLE(
+                           t_entity,
+                           '$[*]'
+                           COLUMNS(
+                               objectid NUMBER PATH '$.LEGALENTITYOBJECTID',
+                               removelegalentityobjectid
+                                   NUMBER
+                                   PATH '$.REMOVELEGALENTITYOBJECTID')) tbl
+                 WHERE tbl.removelegalentityobjectid IS NOT NULL);
+
+        SELECT DISTINCT (SELECT r2.toobjectid
+                           FROM api.relationships r2
+                          WHERE (r2.endpointid =
+                                 api.pkg_configquery.endpointidforname(
+                                     'o_legalEntity',
+                                     'OfficerParentEntity')
+                              OR r2.endpointid =
+                                 api.pkg_configquery.endpointidforname(
+                                     'o_legalEntity',
+                                     'StockholderParentEntity'))
+                            AND r2.fromobjectid = r.toobjectid)    legalentityparentobjectid
+          INTO t_parent
+          FROM api.relationships r
+         WHERE r.fromobjectid = t_item
+           AND api.pkg_columnquery.VALUE(r.toobjectid, 'ApplicationJobId') =
+               a_jobid
+           AND api.pkg_columnquery.VALUE(r.toobjectid, 'LEStructureRel') IN
+                   ('Stockholder', 'Officer');
+
+        IF (t_company IS NOT NULL)
+        THEN
+            pkg_abis.add_company(a_entityobjectid => t_parent,
+                                 a_legal_entity => t_company);
+        END IF;
+
+        IF (t_person IS NOT NULL)
+        THEN
+            pkg_abis.add_person(a_entityobjectid => t_parent,
+                                a_person    => t_person);
+        END IF;
+
+        IF (t_entity IS NOT NULL)
+        THEN
+            FOR entity
+                IN (SELECT *
+                      FROM JSON_TABLE(
+                               t_entity,
+                               '$[*]'
+                               COLUMNS(
+                                   objectid
+                                       NUMBER
+                                       PATH '$.LEGALENTITYOBJECTID',
+                                   removelegalentityobjectid
+                                       NUMBER
+                                       PATH '$.REMOVELEGALENTITYOBJECTID')))
+            LOOP
+                IF (entity.objectid IS NOT NULL)
+                THEN
+                    copy_legal_entities(
+                        a_objectid  => a_jobid,
+                        a_legalentityobjectid => entity.objectid);
+                END IF;
+
+                IF (entity.removelegalentityobjectid IS NOT NULL)
+                THEN
+                    make_former_legalentity(
+                        a_applicationobjectid => a_jobid,
+                        a_personcompanyobjectid =>
+                            entity.removelegalentityobjectid);
+                END IF;
+            END LOOP;
+        END IF;
+
+        -- "ApplicationCreatedDate" must be set last before save
+        api.pkg_columnupdate.setvalue(a_jobid,
+                                      'ApplicationCreatedDate',
+                                      SYSDATE);
+
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+    END;
+
+    PROCEDURE exchange_primary_license_types(
+        a_jobid        IN api.pkg_definition.udt_id,
+        a_primarylicensetypes IN CLOB)
+    IS
+        t_endpointid   api.pkg_definition.udt_id;
+        t_relid        api.pkg_definition.udt_id;
+        t_relid_sec    api.pkg_definition.udt_id;
+        t_licensetypedefid api.pkg_definition.udt_id;
+        t_licensetypecodeobjectid api.pkg_definition.udt_id;
+        t_licensetypeobjectid api.pkg_definition.udt_id;
+        t_primarylicensetype api.pkg_definition.udt_id;
+        t_populationapplies VARCHAR2(1);
+        t_secondarytypeobjectid api.pkg_definition.udt_id;
+        t_feeid        NUMBER;
+        t_amount       NUMBER;
+        t_description  VARCHAR2(100);
+        t_glaccountid  NUMBER;
+        t_feeobjid     NUMBER;
+        t_feeschedule  api.pkg_definition.udt_id;
+        t_secondaries  VARCHAR2(4000);
+    BEGIN
+        FOR rec
+            IN (SELECT *
+                  FROM JSON_TABLE(
+                           a_primarylicensetypes,
+                           '$[*]'
+                           COLUMNS(
+                               licensetypecode
+                                   VARCHAR2(3)
+                                   PATH '$.LICENSETYPECODE',
+                               exchangelicensetypecode
+                                   VARCHAR2(3)
+                                   PATH '$.EXCHANGELICENSETYPECODE',
+                               gallonage NUMBER PATH '$.GALLONAGE',
+                               numberofmonthslicensed
+                                   NUMBER
+                                   PATH '$.NUMBEROFMONTHSLICENSED',
+                               seasonstartmonth
+                                   VARCHAR2(100)
+                                   PATH '$.SEASON_START_MONTH',
+                               primarycount NUMBER PATH '$.PRIMARYCOUNT',
+                               isbranch VARCHAR2(1) PATH '$.ISBRANCH',
+                               secondarylicensetypes
+                                   VARCHAR2(4000)
+                                   FORMAT JSON
+                                   PATH '$.SECONDARYLICENSETYPES')))
+        LOOP
+            SELECT ltc.objectid,
+                   ltc.secondarylicensetypecodes,
+                   ltc.populationapplies
+              INTO t_licensetypecodeobjectid,
+                   t_secondaries,
+                   t_populationapplies
+              FROM query.o_licensetypecategory ltc
+             WHERE ltc.licensetypecode = rec.licensetypecode;
+
+            -- create primary licene type
+            t_licensetypedefid :=
+                api.pkg_configquery.objectdefidforname(
+                    'o_PrimaryLicenseType');
+            t_licensetypeobjectid :=
+                api.pkg_objectupdate.new(t_licensetypedefid);
+
+            -- create relationship from primary license type to license type catagory
+            t_endpointid :=
+                api.pkg_configquery.endpointidforname('o_PrimaryLicenseType',
+                                                      'LicTypeCatPrimary');
+            t_relid :=
+                api.pkg_relationshipupdate.new(t_endpointid,
+                                               t_licensetypeobjectid,
+                                               t_licensetypecodeobjectid);
+
+            -- get relationship between application and license type being exchanged
+            SELECT r.relationshipid, r.toobjectid
+              INTO t_relid, t_primarylicensetype
+              FROM api.relationships r
+             WHERE r.fromobjectid = a_jobid
+               AND r.endpointid =
+                   api.pkg_configquery.endpointidforname(
+                       'j_Application',
+                       'PrimaryLicenseType')
+               AND api.pkg_columnquery.VALUE(r.toobjectid, 'LicenseTypeCode') =
+                   rec.exchangelicensetypecode;
+
+            -- check if primary has secondary license types
+            FOR sec
+                IN (SELECT r.*
+                      FROM api.relationships r
+                     WHERE r.fromobjectid = t_primarylicensetype
+                       AND r.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'o_PrimaryLicenseType',
+                               'LicTypeCatSecondary'))
+            LOOP
+                -- move secondary to new secondary
+                t_endpointid :=
+                    api.pkg_configquery.endpointidforname(
+                        'o_PrimaryLicenseType',
+                        'LicTypeCatSecondary');
+                t_relid_sec :=
+                    api.pkg_relationshipupdate.new(t_endpointid,
+                                                   t_licensetypeobjectid,
+                                                   sec.toobjectid);
+                api.pkg_columnupdate.setvalue(
+                    t_relid_sec,
+                    'NewCount',
+                    api.pkg_columnquery.numericvalue(sec.relationshipid,
+                                                     'NewCount'));
+
+                api.pkg_relationshipupdate.remove(sec.relationshipid);
+            END LOOP;
+
+            -- check to see if adding secondary license not moving.
+            FOR sec
+                IN (SELECT *
+                      FROM JSON_TABLE(
+                               rec.secondarylicensetypes,
+                               '$[*]'
+                               COLUMNS(
+                                   licensetypecode
+                                       VARCHAR2(3)
+                                       PATH '$.LICENSETYPECODE',
+                                   primarycount NUMBER PATH '$.PRIMARYCOUNT'))
+                           j
+                     WHERE NOT EXISTS
+                               (SELECT r.toobjectid
+                                  FROM api.relationships r
+                                 WHERE r.fromobjectid = t_primarylicensetype
+                                   AND r.endpointid =
+                                       api.pkg_configquery.endpointidforname(
+                                           'o_PrimaryLicenseType',
+                                           'LicTypeCatSecondary')
+                                   AND api.pkg_columnquery.VALUE(
+                                           r.toobjectid,
+                                           'LicenseTypeCode') =
+                                       j.licensetypecode))
+            LOOP
+                SELECT c.objectid
+                  INTO t_secondarytypeobjectid
+                  FROM query.o_licensetypecategory c
+                 WHERE c.licensetypecode = sec.licensetypecode;
+
+                -- check if valid secondary for license type
+                IF (INSTR(t_secondaries, sec.licensetypecode) > 0)
+                THEN
+                    -- create releationship between primary license type and license type catagory
+                    t_endpointid :=
+                        api.pkg_configquery.endpointidforname(
+                            'o_PrimaryLicenseType',
+                            'LicTypeCatSecondary');
+                    t_relid_sec :=
+                        api.pkg_relationshipupdate.new(
+                            t_endpointid,
+                            t_licensetypeobjectid,
+                            t_secondarytypeobjectid);
+
+                    api.pkg_columnupdate.setvalue(t_relid_sec,
+                                                  'NewCount',
+                                                  NVL(sec.primarycount, 1));
+
+                    -- create manual fee
+                    SELECT DISTINCT
+                           fs.description,
+                           (  fs.secondaryamount
+                            * NVL(sec.primarycount, 1))
+                               secondaryamount,
+                           (SELECT g.glaccountid
+                              FROM api.glaccounts g
+                             WHERE g.glaccount = fs.feeactivity)
+                               glaccountid,
+                           fs.objectid
+                      INTO t_description,
+                           t_amount,
+                           t_glaccountid,
+                           t_feeschedule
+                      FROM sitespecific.feeschedule_t  fs
+                           JOIN sitespecific.feeschedule_t fs2
+                               ON (NVL(fs.licensetypecode, 'x') =
+                                   NVL(fs2.licensetypecode, 'x')
+                               AND NVL(fs.otherfeecode, 'x') =
+                                   NVL(fs2.otherfeecode, 'x')
+                               AND NVL(fs.gallonagerange, 'x') =
+                                   NVL(fs2.gallonagerange, 'x')
+                               AND NVL(fs.populationrange, 'x') =
+                                   NVL(fs2.populationrange, 'x')
+                               AND NVL(fs.numberofmonthslicensed, 'x') =
+                                   NVL(fs2.numberofmonthslicensed, 'x')
+                               AND NVL(fs.feetier, 'x') =
+                                   NVL(fs2.feetier, 'x'))
+                     WHERE fs.feeactivity = 'DOR'
+                       AND fs.licensetypecode = sec.licensetypecode
+                       AND NVL(fs.populationrange, 'x') =
+                           NVL(
+                               (SELECT api.pkg_columnquery.VALUE(
+                                           r.toobjectid,
+                                           'PopulationRange')
+                                  FROM api.relationships r
+                                 WHERE r.fromobjectid = a_jobid
+                                   AND r.endpointid =
+                                       api.pkg_configquery.endpointidforname(
+                                           'j_Application',
+                                           'Premises')
+                                   AND t_populationapplies = 'Y'),
+                               'x')
+                       AND fs.effectivedate =
+                           (SELECT MAX(fs2.effectivedate)
+                              FROM sitespecific.feeschedule_t fs2
+                             WHERE NVL(fs2.licensetypecode, '0') =
+                                   NVL(fs.licensetypecode, '0')
+                               AND fs2.feeactivity = fs.feeactivity
+                               AND NVL(fs2.gallonagerange, 'x') =
+                                   NVL(fs.gallonagerange, 'x')
+                               AND NVL(fs2.populationrange, 'x') =
+                                   NVL(fs.populationrange, 'x')
+                               AND NVL(fs2.numberofmonthslicensed, 'x') =
+                                   NVL(fs.numberofmonthslicensed, 'x')
+                               AND NVL(fs2.feetier, 'x') =
+                                   NVL(fs.feetier, 'x')
+                               AND NVL(fs2.otherfeecode, 'x') =
+                                   NVL(fs.otherfeecode, 'x')
+                               AND fs2.effectivedate <= TRUNC(SYSDATE));
+
+
+                    sitespecific.pkg_fees.newfee(
+                        a_feeid     => t_feeid,
+                        a_amount    => t_amount,
+                        a_description => t_description,
+                        a_glaccountid => t_glaccountid,
+                        a_jobid     => a_jobid,
+                        a_taxrateid => NULL,
+                        a_feeobjid  => t_feeobjid);
+
+                    t_relid_sec :=
+                        api.pkg_relationshipupdate.new(
+                            api.pkg_configquery.endpointidforname(
+                                'o_Fee',
+                                'LicenseFeeSchedule'),
+                            t_feeobjid,
+                            t_feeschedule);
+                END IF;
+            END LOOP;
+
+            -- remove current primary license type
+            api.pkg_relationshipupdate.remove(t_relid);
+
+            -- create relationship from primary license type to application
+            t_endpointid :=
+                api.pkg_configquery.endpointidforname('j_application',
+                                                      'PrimaryLicenseType');
+            t_relid :=
+                api.pkg_relationshipupdate.new(t_endpointid,
+                                               a_jobid,
+                                               t_licensetypeobjectid);
+        END LOOP;
+
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+    END exchange_primary_license_types;
 END;
 /

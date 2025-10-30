@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.changelicenseappjob(
+CREATE OR REPLACE PROCEDURE bizmod_api.changelicenseappjob(
     a_seq          IN NUMBER,
     a_asofdate     IN DATE)
 IS
@@ -12,10 +12,12 @@ IS
     -------------------------------------------------------------------------------
     --             Date                         Comment
     --   1.0.1  04/03/2025  TJL  BIZ-17503  Initial Package Created
+    --   2.0.0  10/02/2025  TJL             Corrected bugs found in regression testing.
     -- ****************************************************************************
 
     TYPE apprec_t IS RECORD(applicationtype VARCHAR2(50),
-                            transferchangetype VARCHAR2(100),
+                            --                            changetypelist VARCHAR2(1000),
+                            changetypes VARCHAR2(1000),
                             changelicensenumber VARCHAR2(50),
                             multiplestockmembershiptrans VARCHAR2(1),
                             lspapplicationid VARCHAR2(40),
@@ -184,86 +186,85 @@ IS
                     api.pkg_columnupdate.setvalue(t_relid_sec,
                                                   'NewCount',
                                                   NVL(sec.primarycount, 1));
-
-                    -- create manual fee
-                    SELECT DISTINCT
-                           fs.description,
-                           (  fs.secondaryamount
-                            * NVL(sec.primarycount, 1))
-                               secondaryamount,
-                           (SELECT g.glaccountid
-                              FROM api.glaccounts g
-                             WHERE g.glaccount = fs.feeactivity)
-                               glaccountid,
-                           fs.objectid
-                      INTO t_description,
-                           t_amount,
-                           t_glaccountid,
-                           t_feeschedule
-                      FROM sitespecific.feeschedule_t  fs
-                           JOIN sitespecific.feeschedule_t fs2
-                               ON (NVL(fs.licensetypecode, 'x') =
-                                   NVL(fs2.licensetypecode, 'x')
-                               AND NVL(fs.otherfeecode, 'x') =
-                                   NVL(fs2.otherfeecode, 'x')
-                               AND NVL(fs.gallonagerange, 'x') =
-                                   NVL(fs2.gallonagerange, 'x')
-                               AND NVL(fs.populationrange, 'x') =
-                                   NVL(fs2.populationrange, 'x')
-                               AND NVL(fs.numberofmonthslicensed, 'x') =
-                                   NVL(fs2.numberofmonthslicensed, 'x')
-                               AND NVL(fs.feetier, 'x') =
-                                   NVL(fs2.feetier, 'x'))
-                     WHERE fs.feeactivity = 'DOR'
-                       AND fs.licensetypecode = sec.licensetypecode
-                       AND NVL(fs.populationrange, 'x') =
-                           NVL(
-                               (SELECT api.pkg_columnquery.VALUE(
-                                           r.toobjectid,
-                                           'PopulationRange')
-                                  FROM api.relationships r
-                                 WHERE r.fromobjectid = a_jobid
-                                   AND r.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'j_Application',
-                                           'Premises')
-                                   AND t_populationapplies = 'Y'),
-                               'x')
-                       AND fs.effectivedate =
-                           (SELECT MAX(fs2.effectivedate)
-                              FROM sitespecific.feeschedule_t fs2
-                             WHERE NVL(fs2.licensetypecode, '0') =
-                                   NVL(fs.licensetypecode, '0')
-                               AND fs2.feeactivity = fs.feeactivity
-                               AND NVL(fs2.gallonagerange, 'x') =
-                                   NVL(fs.gallonagerange, 'x')
-                               AND NVL(fs2.populationrange, 'x') =
-                                   NVL(fs.populationrange, 'x')
-                               AND NVL(fs2.numberofmonthslicensed, 'x') =
-                                   NVL(fs.numberofmonthslicensed, 'x')
-                               AND NVL(fs2.feetier, 'x') =
-                                   NVL(fs.feetier, 'x')
-                               AND NVL(fs2.otherfeecode, 'x') =
-                                   NVL(fs.otherfeecode, 'x')
-                               AND fs2.effectivedate <= TRUNC(SYSDATE));
-
-
-                    sitespecific.pkg_fees.newfee(
-                        a_feeid     => t_feeid,
-                        a_amount    => t_amount,
-                        a_description => t_description,
-                        a_glaccountid => t_glaccountid,
-                        a_jobid     => a_jobid,
-                        a_taxrateid => NULL,
-                        a_feeobjid  => t_feeobjid);
-
-                    t_relid_sec :=
-                        api.pkg_relationshipupdate.new(
-                            api.pkg_configquery.endpointidforname(
-                                'o_Fee',
-                                'LicenseFeeSchedule'),
-                            t_feeobjid,
-                            t_feeschedule);
+                -- create manual fee
+                --                    SELECT DISTINCT
+                --                           fs.description,
+                --                           (  fs.secondaryamount
+                --                            * NVL(sec.primarycount, 1))
+                --                               secondaryamount,
+                --                           (SELECT g.glaccountid
+                --                              FROM api.glaccounts g
+                --                             WHERE g.glaccount = fs.feeactivity)
+                --                               glaccountid,
+                --                           fs.objectid
+                --                      INTO t_description,
+                --                           t_amount,
+                --                           t_glaccountid,
+                --                           t_feeschedule
+                --                      FROM sitespecific.feeschedule_t  fs
+                --                           JOIN sitespecific.feeschedule_t fs2
+                --                               ON (NVL(fs.licensetypecode, 'x') =
+                --                                   NVL(fs2.licensetypecode, 'x')
+                --                               AND NVL(fs.otherfeecode, 'x') =
+                --                                   NVL(fs2.otherfeecode, 'x')
+                --                               AND NVL(fs.gallonagerange, 'x') =
+                --                                   NVL(fs2.gallonagerange, 'x')
+                --                               AND NVL(fs.populationrange, 'x') =
+                --                                   NVL(fs2.populationrange, 'x')
+                --                               AND NVL(fs.numberofmonthslicensed, 'x') =
+                --                                   NVL(fs2.numberofmonthslicensed, 'x')
+                --                               AND NVL(fs.feetier, 'x') =
+                --                                   NVL(fs2.feetier, 'x'))
+                --                     WHERE fs.feeactivity = 'DOR'
+                --                       AND fs.licensetypecode = sec.licensetypecode
+                --                       AND NVL(fs.populationrange, 'x') =
+                --                           NVL(
+                --                               (SELECT api.pkg_columnquery.VALUE(
+                --                                           r.toobjectid,
+                --                                           'PopulationRange')
+                --                                  FROM api.relationships r
+                --                                 WHERE r.fromobjectid = a_jobid
+                --                                   AND r.endpointid =
+                --                                       api.pkg_configquery.endpointidforname(
+                --                                           'j_Application',
+                --                                           'Premises')
+                --                                   AND t_populationapplies = 'Y'),
+                --                               'x')
+                --                       AND fs.effectivedate =
+                --                           (SELECT MAX(fs2.effectivedate)
+                --                              FROM sitespecific.feeschedule_t fs2
+                --                             WHERE NVL(fs2.licensetypecode, '0') =
+                --                                   NVL(fs.licensetypecode, '0')
+                --                               AND fs2.feeactivity = fs.feeactivity
+                --                               AND NVL(fs2.gallonagerange, 'x') =
+                --                                   NVL(fs.gallonagerange, 'x')
+                --                               AND NVL(fs2.populationrange, 'x') =
+                --                                   NVL(fs.populationrange, 'x')
+                --                               AND NVL(fs2.numberofmonthslicensed, 'x') =
+                --                                   NVL(fs.numberofmonthslicensed, 'x')
+                --                               AND NVL(fs2.feetier, 'x') =
+                --                                   NVL(fs.feetier, 'x')
+                --                               AND NVL(fs2.otherfeecode, 'x') =
+                --                                   NVL(fs.otherfeecode, 'x')
+                --                               AND fs2.effectivedate <= TRUNC(SYSDATE));
+                --
+                --
+                --                    sitespecific.pkg_fees.newfee(
+                --                        a_feeid     => t_feeid,
+                --                        a_amount    => t_amount,
+                --                        a_description => t_description,
+                --                        a_glaccountid => t_glaccountid,
+                --                        a_jobid     => a_jobid,
+                --                        a_taxrateid => NULL,
+                --                        a_feeobjid  => t_feeobjid);
+                --
+                --                    t_relid_sec :=
+                --                        api.pkg_relationshipupdate.new(
+                --                            api.pkg_configquery.endpointidforname(
+                --                                'o_Fee',
+                --                                'LicenseFeeSchedule'),
+                --                            t_feeobjid,
+                --                            t_feeschedule);
                 END IF;
             END LOOP;
 
@@ -491,6 +492,8 @@ BEGIN
         t_person       CLOB;
         t_parent       api.pkg_definition.udt_id;
         t_item         api.pkg_definition.udt_id;
+        t_change_type  VARCHAR2(100);
+        t_change_types json_array_t;
     BEGIN
         --*****************
         --Clear any error
@@ -507,7 +510,10 @@ BEGIN
          WHERE seq = a_seq;
 
         SELECT applicationtype,
-               transferchangetype,
+               --               (select listagg(changetype, ',')
+               --                  from json_table (changetype, '$[*]'
+               --                     columns (changetype varchar2(100) path '$'))),
+               changetype,
                changelicensenumber,
                multiplestockmembershiptrans,
                lspid,
@@ -522,9 +528,10 @@ BEGIN
                    '$.DATA'
                    COLUMNS(
                        applicationtype VARCHAR2(50) PATH '$.APPLICATIONTYPE',
-                       transferchangetype
-                           VARCHAR2(100)
-                           PATH '$.TRANSFERCHANGETYPE',
+                       changetype
+                           VARCHAR2(1000)
+                           FORMAT JSON
+                           PATH '$.CHANGETYPE',
                        changelicensenumber
                            VARCHAR2(50)
                            PATH '$.CHANGELICENSENUMBER',
@@ -578,9 +585,17 @@ BEGIN
                                       t_apprec.lspapplicationid);
 
         -- update application job to indicate change type application
-        api.pkg_columnupdate.setvalue(t_jobid,
-                                      t_apprec.transferchangetype,
-                                      'Y');
+        t_change_types := json_array_t.parse(t_apprec.changetypes);
+
+        FOR inx IN 0 .. t_change_types.get_size
+        LOOP
+            IF (t_change_types.get_string(inx) IS NOT NULL)
+            THEN
+                api.pkg_columnupdate.setvalue(t_jobid, --'LicenseTypeExchange',
+                                              t_change_types.get_string(inx),
+                                              'Y');
+            END IF;
+        END LOOP;
 
         t_changelic :=
             api.pkg_simplesearch.objectbyindex(
@@ -611,130 +626,142 @@ BEGIN
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
-        IF (t_apprec.transferchangetype IN ('AddPrimaryLicenseType'))
-        THEN
-            pkg_abis.add_primary_license_types(
-                a_jobid     => t_jobid,
-                a_primarylicensetypes => t_apprec.primarylicensetypes);
-        END IF;
+        FOR inx IN 0 .. t_change_types.get_size
+        LOOP
+            t_change_type := t_change_types.get_string(inx);
 
-        IF (t_apprec.transferchangetype IN
-                ('MembershipTransfer', 'StockTransfer'))
-        THEN
-            SELECT entity, company, person
-              INTO t_entity, t_company, t_person
-              FROM JSON_TABLE(
-                       t_apprec.legal_entities,
-                       '$'
-                       COLUMNS(entity CLOB FORMAT JSON PATH '$.ENTITY',
-                               company CLOB FORMAT JSON PATH '$.COMPANY',
-                               person CLOB FORMAT JSON PATH '$.PERSON'));
-
-            SELECT r.toobjectid
-              INTO t_item
-              FROM api.relationships r
-             WHERE r.endpointid IN
-                       (api.pkg_configquery.endpointidforname(
-                            'o_legalEntity',
-                            'Company'),
-                        api.pkg_configquery.endpointidforname(
-                            'o_legalEntity',
-                            'Person'))
-               AND r.fromobjectid =
-                   (SELECT MIN(tbl.removelegalentityobjectid)    removelegalentityobjectid
+            CASE
+                WHEN t_change_type IN ('AddPrimaryLicenseType')
+                THEN
+                    pkg_abis.add_primary_license_types(
+                        a_jobid     => t_jobid,
+                        a_primarylicensetypes => t_apprec.primarylicensetypes);
+                WHEN t_change_type IN ('MembershipTransfer', 'StockTransfer')
+                THEN
+                    SELECT entity, company, person
+                      INTO t_entity, t_company, t_person
                       FROM JSON_TABLE(
-                               t_entity,
-                               '$[*]'
+                               t_apprec.legal_entities,
+                               '$'
                                COLUMNS(
-                                   objectid
-                                       NUMBER
-                                       PATH '$.LEGALENTITYOBJECTID',
-                                   removelegalentityobjectid
-                                       NUMBER
-                                       PATH '$.REMOVELEGALENTITYOBJECTID'))
-                           tbl
-                     WHERE tbl.removelegalentityobjectid IS NOT NULL);
+                                   entity CLOB FORMAT JSON PATH '$.ENTITY',
+                                   company CLOB FORMAT JSON PATH '$.COMPANY',
+                                   person CLOB FORMAT JSON PATH '$.PERSON'));
 
-            SELECT DISTINCT (SELECT r2.toobjectid
-                               FROM api.relationships r2
-                              WHERE (r2.endpointid =
-                                     api.pkg_configquery.endpointidforname(
-                                         'o_legalEntity',
-                                         'OfficerParentEntity')
-                                  OR r2.endpointid =
-                                     api.pkg_configquery.endpointidforname(
-                                         'o_legalEntity',
-                                         'StockholderParentEntity'))
-                                AND r2.fromobjectid = r.toobjectid)    legalentityparentobjectid
-              INTO t_parent
-              FROM api.relationships r
-             WHERE r.fromobjectid = t_item
-               AND api.pkg_columnquery.VALUE(r.toobjectid,
-                                             'ApplicationJobId') =
-                   t_jobid
-               AND api.pkg_columnquery.VALUE(r.toobjectid, 'LEStructureRel') IN
-                       ('Stockholder', 'Officer');
+                    SELECT r.toobjectid
+                      INTO t_item
+                      FROM api.relationships r
+                     WHERE r.endpointid IN
+                               (api.pkg_configquery.endpointidforname(
+                                    'o_legalEntity',
+                                    'Company'),
+                                api.pkg_configquery.endpointidforname(
+                                    'o_legalEntity',
+                                    'Person'))
+                       AND r.fromobjectid =
+                           (SELECT MIN(tbl.removelegalentityobjectid)    removelegalentityobjectid
+                              FROM JSON_TABLE(
+                                       t_entity,
+                                       '$[*]'
+                                       COLUMNS(
+                                           objectid
+                                               NUMBER
+                                               PATH '$.LEGALENTITYOBJECTID',
+                                           removelegalentityobjectid
+                                               NUMBER
+                                               PATH '$.REMOVELEGALENTITYOBJECTID'))
+                                   tbl
+                             WHERE tbl.removelegalentityobjectid IS NOT NULL);
 
-            IF (t_company IS NOT NULL)
-            THEN
-                pkg_abis.add_company(a_entityobjectid => t_parent,
-                                     a_legal_entity => t_company);
-            END IF;
+                    SELECT DISTINCT (SELECT r2.toobjectid
+                                       FROM api.relationships r2
+                                      WHERE (r2.endpointid =
+                                             api.pkg_configquery.endpointidforname(
+                                                 'o_legalEntity',
+                                                 'OfficerParentEntity')
+                                          OR r2.endpointid =
+                                             api.pkg_configquery.endpointidforname(
+                                                 'o_legalEntity',
+                                                 'StockholderParentEntity'))
+                                        AND r2.fromobjectid = r.toobjectid)    legalentityparentobjectid
+                      INTO t_parent
+                      FROM api.relationships r
+                     WHERE r.fromobjectid = t_item
+                       AND api.pkg_columnquery.VALUE(r.toobjectid,
+                                                     'ApplicationJobId') =
+                           t_jobid
+                       AND api.pkg_columnquery.VALUE(r.toobjectid,
+                                                     'LEStructureRel') IN
+                               ('Stockholder', 'Officer');
 
-            IF (t_person IS NOT NULL)
-            THEN
-                pkg_abis.add_person(a_entityobjectid => t_parent,
-                                    a_person    => t_person);
-            END IF;
-
-            IF (t_entity IS NOT NULL)
-            THEN
-                FOR entity
-                    IN (SELECT *
-                          FROM JSON_TABLE(
-                                   t_entity,
-                                   '$[*]'
-                                   COLUMNS(
-                                       objectid
-                                           NUMBER
-                                           PATH '$.LEGALENTITYOBJECTID',
-                                       removelegalentityobjectid
-                                           NUMBER
-                                           PATH '$.REMOVELEGALENTITYOBJECTID')))
-                LOOP
-                    IF (entity.objectid IS NOT NULL)
+                    IF (t_company IS NOT NULL)
                     THEN
-                        copy_legal_entities(
-                            a_objectid  => t_jobid,
-                            a_legalentityobjectid => entity.objectid);
+                        pkg_abis.add_company(a_entityobjectid => t_parent,
+                                             a_legal_entity => t_company);
                     END IF;
 
-                    IF (entity.removelegalentityobjectid IS NOT NULL)
+                    IF (t_person IS NOT NULL)
                     THEN
-                        remove_entity(
-                            a_applicationobjectid => t_jobid,
-                            a_personcompanyobjectid =>
-                                entity.removelegalentityobjectid);
+                        pkg_abis.add_person(a_entityobjectid => t_parent,
+                                            a_person    => t_person);
                     END IF;
-                END LOOP;
-            END IF;
 
-            -- "ApplicationCreatedDate" must be set last before save
-            api.pkg_columnupdate.setvalue(t_jobid,
-                                          'ApplicationCreatedDate',
-                                          SYSDATE);
+                    IF (t_entity IS NOT NULL)
+                    THEN
+                        FOR entity
+                            IN (SELECT *
+                                  FROM JSON_TABLE(
+                                           t_entity,
+                                           '$[*]'
+                                           COLUMNS(
+                                               objectid
+                                                   NUMBER
+                                                   PATH '$.LEGALENTITYOBJECTID',
+                                               removelegalentityobjectid
+                                                   NUMBER
+                                                   PATH '$.REMOVELEGALENTITYOBJECTID')))
+                        LOOP
+                            IF (entity.objectid IS NOT NULL)
+                            THEN
+                                copy_legal_entities(
+                                    a_objectid  => t_jobid,
+                                    a_legalentityobjectid => entity.objectid);
+                            END IF;
 
-            api.pkg_logicaltransactionupdate.endtransaction;
-            COMMIT;
-        END IF;
+                            IF (entity.removelegalentityobjectid IS NOT NULL)
+                            THEN
+                                remove_entity(
+                                    a_applicationobjectid => t_jobid,
+                                    a_personcompanyobjectid =>
+                                        entity.removelegalentityobjectid);
+                            END IF;
+                        END LOOP;
+                    END IF;
 
-        IF (t_apprec.applicationtype IN ('Change')
-        AND t_apprec.transferchangetype IN ('LicenseTypeExchange'))
-        THEN
-            exchange_primary_license_types(
-                a_jobid     => t_jobid,
-                a_primarylicensetypes => t_apprec.primarylicensetypes);
-        END IF;
+                    -- "ApplicationCreatedDate" must be set last before save
+                    api.pkg_columnupdate.setvalue(t_jobid,
+                                                  'ApplicationCreatedDate',
+                                                  SYSDATE);
+
+                    api.pkg_logicaltransactionupdate.endtransaction;
+                    COMMIT;
+                WHEN t_change_type IN ('LicenseTypeExchange')
+                THEN
+                    exchange_primary_license_types(
+                        a_jobid     => t_jobid,
+                        a_primarylicensetypes => t_apprec.primarylicensetypes);
+                ELSE
+                    NULL;
+            END CASE;
+        END LOOP;
+
+        api.pkg_columnupdate.setvalue(t_jobid,
+                                      'ApplicationCreatedDate',
+                                      SYSDATE);
+
+        api.pkg_logicaltransactionupdate.endtransaction;
+        COMMIT;
+
 
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
@@ -804,4 +831,4 @@ END;
 /
 
 
-GRANT EXECUTE ON BIZMOD_API.CHANGELICENSEAPPJOB TO POSSEEXTENSIONS;
+GRANT EXECUTE ON bizmod_api.changelicenseappjob TO posseextensions;
