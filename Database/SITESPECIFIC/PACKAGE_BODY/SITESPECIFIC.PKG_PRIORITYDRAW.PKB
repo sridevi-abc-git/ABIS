@@ -16,6 +16,8 @@ AS
     --    Date                  Comment
     -- 08/16/2018 TJL         Initial Check-in
     -- 08/01/2023 Pk          Changed relatepdapplication MAX(mc.managepriorityappsjobid) to address objectid gap fixes.
+    -- 07/02/2025 PK          Changed PROCEDURE createmanagepriorityappsubjobs for On-sale special legislation type
+    -- 07/02/2025 PK          Changed procedure PROCEDURE raiseerrrankandstatus for On-sale special legislation type
     -- **************************************************************************
 
     gc_countypreprelendpoint     udt_id
@@ -93,19 +95,21 @@ AS
 
         CURSOR counties
         IS
-            SELECT co.objectid,
+           SELECT co.objectid,
                    co.county,
                    co.countycode,
                    co.onsaleoriginal,
                    co.onsaleintercounty,
                    co.offsaleoriginal,
+                   co.SPECIALLEGISLATIONONSALE,
                    co.offsaleintercounty,
                    co.prioritydrawingdate
               FROM query.o_cacounty co
              WHERE (co.onsaleoriginal > 0
                  OR co.onsaleintercounty > 0
                  OR co.offsaleoriginal > 0
-                 OR co.offsaleintercounty > 0);
+                 OR co.offsaleintercounty > 0
+                 OR co.SPECIALLEGISLATIONONSALE > 0);
     BEGIN
         FOR c IN counties
         LOOP
@@ -143,6 +147,10 @@ AS
             api.pkg_columnupdate.setvalue(t_jobid,
                                           'IntercountyOffSaleCount',
                                           c.offsaleintercounty);
+                                          
+            api.pkg_columnupdate.setvalue(t_jobid,
+                                          'SpecialLegislationOnSaleCount',
+                                          c.SPECIALLEGISLATIONONSALE);  -- Added by Pawan for Special Legislation on 06/04/2025
 
             api.pkg_columnupdate.setvalue(t_jobid,
                                           'DrawingDate',
@@ -376,6 +384,7 @@ AS
            AND r.managepriorityappsjobid = a_managejobid;
 
         api.pkg_relationshipupdate.remove(t_relationshipid, SYSDATE);
+       
     END managedeleterel;
 
     /*********************************************************************************************************
@@ -500,17 +509,20 @@ AS
         t_jobid   := api.pkg_columnquery.VALUE(a_processid, 'JobId');
 
         IF t_prioritydrawcatagory = 'On Sale Original' THEN
-            t_filterboolean   := 'OriginalOnSaleGeneral';
-            t_countname       := 'OriginalOnSaleGeneralCount';
+            t_filterboolean   := 'OriginalOnSaleGeneral';  -- t_filterboolean coming from application job
+            t_countname       := 'OriginalOnSaleGeneralCount'; -- t_countname coming from manage priority job.
         ELSIF t_prioritydrawcatagory = 'Off Sale Original' THEN
             t_filterboolean   := 'OriginalOffSaleGeneral';
             t_countname       := 'OriginalOffSaleGeneralCount';
         ELSIF t_prioritydrawcatagory = 'On Sale Intercounty' THEN
             t_filterboolean   := 'IntercountyOnSaleGeneral';
             t_countname       := 'IntercountyOnSaleGeneralCount';
-        ELSE
+        ELSIF t_prioritydrawcatagory = 'Off Sale Intercounty' THEN
             t_filterboolean   := 'IntercountyOffSaleGeneral';
             t_countname       := 'IntercountyOffSaleGeneralCount';
+        ELSE
+            t_filterboolean   := 'SpecialLegislationOnSale';
+            t_countname       := 'SpecialLegislationOnSaleGenera';
         END IF;
 
         t_relationshipcount   :=

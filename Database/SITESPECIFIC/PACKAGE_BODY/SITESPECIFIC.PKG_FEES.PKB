@@ -87,6 +87,9 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 08/20/2024 TJL BIZ-15444  Added a call to bizmod_api.pkg_abis.newfee in newfee procedure
 -- 12/04/2024 PK             Commented Type 74 code and fixed secondaries not printing in renewal batch issue
 -- 01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
+-- 06/12/2025 PK            made change to application fee calc api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
+-- 07/02/2025 PK WO 35273    Added code for Craft Distillers not to include in produce license batch if they did not report recently produced gallonage
+-- 08/22/2025 PK            Commented Type 74 code as per user
 
 -------------------------------------------------------------------------------
 
@@ -4062,7 +4065,8 @@ IS
         ELSE
             -- Set t_EstimatedIssueDate to j_Application.EstimatedIssueDate
             t_issuedate   :=  --  08/01/2019 TJL  18697   changed to 'CopiesMailed' from 'EstimatedIssueDate'
-                             api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                            -- api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed');
+                             api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate'); -- 06/12/2025 PK 
                              
         -- End If
         END IF;
@@ -9034,13 +9038,15 @@ IS
                                         --Update the dup column because post verify did not run on the job
                                         api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'Y');
                                             -- 12/04/2024 PK             Commented Type 74 code
-                                       --  IF c.licensetypecode = '74' and (t_Reporteddate < ADD_MONTHS(t_ltexpirationdate, -3) or t_Reporteddate is null)  THEN -- WO 35273 Added by Pawan Craft Distillers
-
-                                        --    api.pkg_columnupdate.setvalue(z.jobid, 'IncludeInProduceLicenseBatch', 'N');
-                                               --Update the dup column because post verify did not run on the job
-                                        --    api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'N'); -- WO 35273 Added by Pawan Craft Distillers
-                                            
-                                      --   END IF;
+                                            -- 07/02/2025 PK            Uncommented Type 74 Code
+                                            -- 08/22/2025 PK            Commented Type 74 code as per user
+--                                        IF c.licensetypecode = '74' and (t_Reporteddate < ADD_MONTHS(t_ltexpirationdate, -3) or t_Reporteddate is null)  THEN -- WO 35273 Added by Pawan Craft Distillers
+--
+--                                            api.pkg_columnupdate.setvalue(z.jobid, 'IncludeInProduceLicenseBatch', 'N');
+--                                               --Update the dup column because post verify did not run on the job
+--                                            api.pkg_columnupdate.setvalue(z.jobid, 'dup_IncludeInProduceLicBatchSe', 'N'); -- WO 35273 Added by Pawan Craft Distillers
+--                                            
+--                                         END IF;
                                         
                                         IF api.pkg_columnquery.VALUE(z.jobid, 'SeasonStartMonthNumber') IS NULL THEN
                                             api.pkg_columnupdate.setvalue(z.jobid,

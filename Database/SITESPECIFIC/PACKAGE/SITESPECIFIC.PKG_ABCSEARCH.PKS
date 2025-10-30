@@ -278,7 +278,7 @@ IS
         a_zipcode                    NUMBER,
         a_relatedjoblicno            VARCHAR2,
         a_hierarchylevel             VARCHAR2,
-        a_socialsecurityno           NUMBER,
+        a_socialsecurityno           VARCHAR2,
         a_objects         OUT NOCOPY api.udt_objectlist);
 
     /**************************************************************************************************

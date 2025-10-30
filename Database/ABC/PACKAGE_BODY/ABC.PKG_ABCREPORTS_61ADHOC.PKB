@@ -17,6 +17,7 @@ IS
 -- 08/20/2018 TJL         Initial Check-in
 -- 04/30/2020 NW          Code Formatting Improvements
 -- 05/04/2020 NW          WO 21009 Added AdministrativeType
+-- 05/12/2025 PK          Resolved Issue 4772 
 -- **************************************************************************
 
 	g_golivedate   DATE := TO_DATE('24-MAY-2010', 'DD-MON-YYYY');
@@ -267,7 +268,8 @@ BEGIN
   IF t_investigator IS NULL THEN
     NULL;
   ELSE
-    DELETE FROM abc.abc61_t WHERE assgndto <> t_investigator;                 --original
+   --DELETE FROM abc.abc61_t WHERE assgndto <> t_investigator;   
+     DELETE FROM abc.abc61_t WHERE assgndto NOT LIKE '%'||t_investigator||'%';  --   Resolved Issue 4772 Pawanjit Kaur on 05/08/2025           --original
     -- commit;  --take out in production
   END IF;
 

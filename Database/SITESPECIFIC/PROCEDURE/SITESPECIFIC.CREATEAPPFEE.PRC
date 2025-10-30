@@ -27,6 +27,11 @@ CREATE OR REPLACE PROCEDURE SITESPECIFIC.createappfee(
 --                            caused by changes.
 --  11/15/2021 PK   26001   PK WO 26001 added for 2022 fee increase to create APP fee for brance 02  
 --  12/28/2022 PK   30274   PK WO 30274 - New License Type 90 
+--  06/12/2025 PK            api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate') 
+--                           changed 'CreatedDate' to 'ApplicationCreatedDate' for online application changes
+--  06/12/2025  PK           Changed Created date logic for priority job
+--  07/02/2025 PK           Addeded code to create App fee for Special Legislation type
+--  10/10/2025 PK           Added code to create app fee for change application when change type is Add Primary License Type
 
 -------------------------------------------------------------------------------
 IS
@@ -140,7 +145,7 @@ BEGIN
             t_applicationtype := 'Original';
         END IF;
 
-        IF (t_applicationtype in ('Original', 'Change') OR
+        IF (t_applicationtype in ('Original', 'Change', 'Special Legislation') OR
             -- 09/10/2019 TJL 19059 Transfer license types found in original license array
             --   because transfer flag is not set durning enter priority application process
             (t_applicationtype = 'Intercounty Transfer' 
@@ -169,8 +174,8 @@ BEGIN
                 -- Set t_EstimatedIssueDate to j_Application.EstimatedIssueDate
                 t_issuedate   :=
                     --  08/01/2019 TJL  18697   changed to 'CopiesMailed' from 'EstimatedIssueDate'
-                    NVL(api.pkg_columnquery.datevalue(a_jobid, 'CopiesMailed'),
-                         api.pkg_columnquery.datevalue(a_jobid, 'CreatedDate')); 
+                      NVL(api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate'),-- Changed Copiesmailed date to Created date for priorit apps
+                          api.pkg_columnquery.datevalue(a_jobid, 'CreatedDate'));-- Changed by Pawan to for online application changes
             END IF;
 
               SELECT DISTINCT SUBSTR(ltc.applicationfeetype, 1, 3)
@@ -276,6 +281,11 @@ BEGIN
                     t_feeactivity.EXTEND;
                     t_feeactivity(t_feeactivity.COUNT).feeactivity   := 'APP';
                     t_feeactivity(t_feeactivity.COUNT).tier          := 'NONGENERAL3';
+                    t_feeactivity(t_feeactivity.COUNT).gl            := 'APP';
+                WHEN (t_applicationtype = 'Special Legislation' and t_lttype != 'B') THEN -- Added by pawan for Special Legislation
+                    t_feeactivity.EXTEND;
+                    t_feeactivity(t_feeactivity.COUNT).feeactivity   := 'APP';
+                    t_feeactivity(t_feeactivity.COUNT).tier          := t_tier;
                     t_feeactivity(t_feeactivity.COUNT).gl            := 'APP';
                 WHEN (t_applicationtype = 'Intercounty Transfer') THEN
                     -- Set t_FeeActivityType to 'ICO'
@@ -450,6 +460,15 @@ BEGIN
                             t_tier;
                         t_feeactivity(t_feeactivity.COUNT).gl            := 'APP';
                     END IF;
+                    
+                     IF (api.pkg_columnquery.value(rec.toobjectid, 'AddPrimaryLicenseType') = 'Y'  -- 10/10/2025 Added by Pawan to create app fee on add primary LT for change applications
+                       AND t_lttype != 'B') THEN
+                        t_feeactivity.EXTEND;
+                        t_feeactivity(t_feeactivity.COUNT).feeactivity   := 'APP';
+                        t_feeactivity(t_feeactivity.COUNT).tier          :=
+                            t_tier;
+                        t_feeactivity(t_feeactivity.COUNT).gl            := 'APP';
+                    END IF; --- End of code
 
                     IF (api.pkg_columnquery.VALUE(a_jobid, 'StockTransfer') = 'Y') THEN -- (STK, STM)
                         t_feeactivity.EXTEND;
