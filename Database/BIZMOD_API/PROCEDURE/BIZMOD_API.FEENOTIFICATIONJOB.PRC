@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.FEENOTIFICATIONJOB(
+CREATE OR REPLACE PROCEDURE BIZMOD_API.feenotificationjob(
     a_objectid     api.pkg_definition.udt_id,
     a_asofdate     DATE,
     a_jobid        api.pkg_definition.udt_id)
@@ -13,10 +13,13 @@ AS
     -------------------------------------------------------------------------------
     --              Date           Ticket     Comment
     --   1.0.0    09/16/2025 TJL  BIZ-19212  Initial Procedure Created
+    --   2.0.0    11/03/2025 TJL  BIZ-19554  Added test for non-active licenses so
+    --                                         only active licenses will be notified.
     -- ****************************************************************************
-    t_url         constant varchar2(1000) := '/api/licensing/internal/license-applications/';
-    t_method      constant varchar2(10) := 'PATCH';
-    t_process     constant VARCHAR2(32) := 'FEENOTIFICATIONJOB';
+    t_url CONSTANT VARCHAR2(1000)
+                       := '/api/licensing/internal/license-applications/' ;
+    t_method CONSTANT VARCHAR2(10) := 'PATCH';
+    t_process CONSTANT VARCHAR2(32) := 'FEENOTIFICATIONJOB';
     t_body         json_object_t := json_object_t();
     t_status       VARCHAR2(50);
     t_applicationid NUMBER;
@@ -30,25 +33,36 @@ AS
 BEGIN
     BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
-        t_status := UPPER(nvl(api.pkg_columnquery.value(a_objectid, 'ModifyType'), 'FEES_DUE'));
-        
-        t_body.put('status', t_status);
-        t_body.put('objectId', a_jobid);
-        t_body.put('licenseNumber', api.pkg_columnquery.value(a_jobid, 'LICENSENUMBER'));
+        t_status :=
+            UPPER(
+                NVL(api.pkg_columnquery.VALUE(a_objectid, 'ModifyType'),
+                    'FEES_DUE'));
 
-        t_results := bizmod_api.utl_licenseinfo.lsplogin;
-
-        IF (t_results.get_number('status') = 200)
+        IF (api.pkg_columnquery.VALUE(a_jobid, 'StatusName') NOT IN
+                ('VOID',
+                 'ISSUED',
+                 'WITHDRAWN',
+                 'DENIED'))
         THEN
-            t_token :=
-                t_results.get_object('lspresponse').get_string('token');
+            t_body.put('status', t_status);
+            t_body.put('objectId', a_jobid);
+            t_body.put('licenseNumber',
+                       api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'));
 
-            t_results :=
-                bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_url || t_applicationid,
-                                                   a_method    => t_method,
-                                                   a_content   => t_body,
-                                                   a_token     => t_token);
+            t_results := bizmod_api.utl_licenseinfo.lsplogin;
 
+            IF (t_results.get_number('status') = 200)
+            THEN
+                t_token :=
+                    t_results.get_object('lspresponse').get_string('token');
+
+                t_results :=
+                    bizmod_api.utl_licenseinfo.calllsp(
+                        a_urlinfo   => t_url || t_applicationid,
+                        a_method    => t_method,
+                        a_content   => t_body,
+                        a_token     => t_token);
+            END IF;
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -67,12 +81,13 @@ BEGIN
     AND t_sqlerrm IS NULL)
     THEN
         t_sqlerrm :=
-            CASE WHEN t_results.get_type('lspresponse') = 'OBJECT'
+            CASE
+                WHEN t_results.get_type('lspresponse') = 'OBJECT'
                 THEN
                     t_results.get_object('lspresponse').TO_CLOB || CHR(13)
                 WHEN t_results.has('lspresponse')
-                then
-                     t_results.get_clob('lspresponse')
+                THEN
+                    t_results.get_clob('lspresponse')
                 ELSE
                     t_results.TO_CLOB
             END;
@@ -85,27 +100,32 @@ BEGIN
                                            bktrace,
                                            packet)
              VALUES (
-                 0,
-                 t_process,
-                 substr('Application Id: '
-                 || t_applicationid
-                 || CHR(13)
-                 || 'License Number: '
-                 || api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER')
-                 || CHR(13)
-                 || 'j_Application: '
-                 || a_jobid
-                 || CHR(13)
-                 || 'Notification Type: '
-                 || t_status
-                 || chr(13)
-                 || t_results_text, 1, 3999),
-                 substr(t_sqlerrm,1,4000),
-                 t_trace,
-                 t_value);
+                        0,
+                        t_process,
+                        SUBSTR(
+                            'Application Id: '
+                            || t_applicationid
+                            || CHR(13)
+                            || 'License Number: '
+                            || api.pkg_columnquery.VALUE(a_jobid,
+                                                         'LICENSENUMBER')
+                            || CHR(13)
+                            || 'j_Application: '
+                            || a_jobid
+                            || CHR(13)
+                            || 'Notification Type: '
+                            || t_status
+                            || CHR(13)
+                            || t_results_text,
+                            1,
+                            3999),
+                        SUBSTR(t_sqlerrm, 1, 4000),
+                        t_trace,
+                        t_value);
 
     COMMIT;
 END;
 /
+
 
 GRANT EXECUTE ON BIZMOD_API.FEENOTIFICATIONJOB TO POSSEEXTENSIONS;
