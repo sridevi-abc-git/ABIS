@@ -54,6 +54,7 @@ IS
     --  19.0.0  08/04/2025  TJL  BIZ-18942  Corrected bug to allow pass due renewals to be submitted.
     --  20.0.0  09/12/2025  BN   BIZ-19069  Application update notification procedure inclusion
     --  20.0.1  09/16/2025  TJL  BIZ-19262  Removed code that referenced E_FEES_T table
+    --  20.0.2  11/03/2025  TJL  BIZ-19526   Changed how parameters are passed to create job
     -- ************************************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
@@ -491,7 +492,7 @@ IS
             IF (t_cnt > 0)
             THEN
                 -- create awf payment batches
-                bizmod_api.createawfpaymentsjob(0, SYSDATE);
+                bizmod_api.createawfpaymentsjob(NULL);
             END IF;
 
             -- check for any new license types added
@@ -737,42 +738,6 @@ IS
         END;
     END;
 
-    /*
-        Procedure to get the list of jobIds for which application have been updated and the  APPUPDATENOTIFICATIONJOB is triggered.
-    */
-
-    PROCEDURE sendAppUpdateNotification
-    AS
-    BEGIN
-
-        DECLARE
-            t_jobids       VARCHAR2(32000);
-        BEGIN
-            SELECT json_arrayagg(app.jobid)
-              INTO t_jobids
-              FROM bizmod_api.license_app_t app
-              WHERE NVL(app.hashvalue, 0) != bizmod_api.utl_licenseinfo.getHashValueForApplication(app.jobid)
-              AND app.statusname IN ('PEND', 'POSTED');
-
-            DBMS_OUTPUT.put_line(
-                'arr: ' || t_jobids || CHR(13) || '  length: ' || LENGTH(t_jobids));
-
-            IF (t_jobids IS NOT NULL)
-            THEN
-                -- schedule notify function
-                bizmod_api.utl_licenseinfo.createjob(
-                    a_procedure => 'APPUPDATENOTIFICATIONJOB',
-                    a_description => 'Application Update Notification',
-                    a_argument1 => t_jobids);
-                COMMIT;
-            END IF;
-
-            ROLLBACK;
-        END;
-
-    END;
-
-
 -- ****************************************************************************
 -- ****************************************************************************
 --   Main Process
@@ -989,11 +954,6 @@ BEGIN
             -- Update license and AWF info
             -- ************************************************************
             updateinfo;
-
-            -- ************************************************************
-            -- Application update notification procedure invocation
-            -- ************************************************************
---            sendAppUpdateNotification;
 
             -- ********************************************************************
             --  Update awf fee id and fee object id after payments have been completed
@@ -1355,3 +1315,8 @@ BEGIN
     END;
 END nightlyprocessjob;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO ABC;
+
+GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO POSSEEXTENSIONS;

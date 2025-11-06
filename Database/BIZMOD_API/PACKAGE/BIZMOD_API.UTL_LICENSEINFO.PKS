@@ -35,6 +35,7 @@ AS
     --  13.0.0  05/02/2025  TJL  BIZ-18056    Change prototype for calllsp.
     --  15.0.0  09/10/2025  BN   BIZ-19069    Added method to generate hashvalue for an application.
     --  16.0.0  09/30/2025  TJL  BIZ-19339    Add retry to call LSP on timeout
+    --  17.0.0  10/31/2025  TJL  BIZ-19526    Added an optional parameter to Createjob process
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -116,25 +117,32 @@ AS
                         a_encoding        VARCHAR2 DEFAULT 'text/plain',
                         a_mimetype        VARCHAR2 DEFAULT 'text/plain');
 
-    PROCEDURE createjob(a_procedure    IN VARCHAR2,
-                        a_description  IN VARCHAR2,
-                        a_argument1    IN VARCHAR2 DEFAULT '0',
-                        a_argument2    IN DATE DEFAULT SYSDATE,
-                        a_argument3    IN VARCHAR2 DEFAULT NULL,
-                        a_argument4    IN VARCHAR2 DEFAULT NULL);
-    FUNCTION getHashvalueForApplication(a_jobid IN NUMBER)
+--    PROCEDURE createjob(a_procedure     IN VARCHAR2,
+--                        a_description   IN VARCHAR2,
+--                        a_schedule_time IN DATE DEFAULT SYSDATE,
+--                        a_argument1     IN VARCHAR2 DEFAULT '0',
+--                        a_argument2     IN DATE DEFAULT SYSDATE,
+--                        a_argument3     IN VARCHAR2 DEFAULT NULL,
+--                        a_argument4     IN VARCHAR2 DEFAULT NULL);
+
+    PROCEDURE createjob(a_procedure     IN VARCHAR2,
+                        a_application_id IN NUMBER DEFAULT NULL,
+                        a_schedule_time IN DATE DEFAULT SYSTIMESTAMP,
+                        a_parameters    IN bizmod_api.job_prameters_tbl DEFAULT NULL);
+
+   FUNCTION getHashvalueForApplication(a_jobid IN NUMBER)
         RETURN NUMBER;
 
 END;
 /
 
 
---GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
---
---GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BHAVYAN;
---
---GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
---
---GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO LORDT;
---
---GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO ABC;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BHAVYAN;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO BIZMOD_USER;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO LORDT;
+
+GRANT EXECUTE ON BIZMOD_API.UTL_LICENSEINFO TO SITESPECIFIC;

@@ -59,6 +59,8 @@ AS
     --  14.0.0  07/22/2025  TJL  BIZ-18902    Corrected bug in the parsing of LSP response in CALLLSP.
     --  15.0.0  09/10/2025  BN   BIZ-19069    Added method to generate hashvalue for an application.
     --  16.0.0  09/30/2025  TJL  BIZ-19339    Add retry to call LSP on timeout
+    --  17.0.0  10/31/2025  TJL  BIZ-19526    Change createjob procedure to update a job que table instead
+    --                                          of scheduling the job.
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -359,7 +361,7 @@ AS
                          t_sqlerrm)
                 LOG ERRORS INTO bizmod_api.err$_eservices_log_t ('INSERT')
                         REJECT LIMIT UNLIMITED;
- 
+
         IF (SQL%ROWCOUNT = 0)
         THEN
             INSERT INTO err$_eservices_clob_t(seq, jsondata, filedata)
@@ -367,7 +369,7 @@ AS
         END IF;
 
         COMMIT;
-    
+
         IF (a_allow_retry and t_retry)
         then
             t_return := calllsp(
@@ -738,54 +740,34 @@ AS
         UTL_SMTP.quit(t_conn);
     END sendemail;
 
-
-    PROCEDURE createjob(a_procedure    IN VARCHAR2,
-                        a_description  IN VARCHAR2,
-                        a_argument1    IN VARCHAR2 DEFAULT '0',
-                        a_argument2    IN DATE DEFAULT SYSDATE,
-                        a_argument3    IN VARCHAR2 DEFAULT NULL,
-                        a_argument4    IN VARCHAR2 DEFAULT NULL)
+    -- date format should always be 'MM/DD/YYYY HH24:MI:SS'
+    PROCEDURE createjob(a_procedure     IN VARCHAR2,
+                        a_application_id IN NUMBER DEFAULT NULL,
+                        a_schedule_time IN DATE DEFAULT SYSTIMESTAMP,
+                        a_parameters    IN bizmod_api.job_prameters_tbl DEFAULT NULL)
     IS
-        t_arguments    VARCHAR2(4000);
-        t_schedulekey  api.pkg_definition.udt_id;
     BEGIN
-        --set up arguments for scheduler
-        scheduler.pkg_scheduler.addargument(t_arguments,
-                                            'procedure',
-                                            'BIZMOD_API.' || a_procedure);
-        scheduler.pkg_scheduler.addargument(t_arguments,
-                                            'EffectiveUser',
-                                            'ABC');
+        --set up arguments
+        insert into bizmod_api.e_jobs_que_t j (procedure_name,
+                                               application_id,
+                                               job_parameters,
+                                               schedule_time)
+        values (a_procedure,
+                a_application_id,
+                a_parameters,
+                a_schedule_time);
 
-        scheduler.pkg_scheduler.addargument(t_arguments,
-                                            'arg1',
-                                            NVL(a_argument1, '0'));
-        scheduler.pkg_scheduler.addargument(t_arguments, 'arg2', a_argument2);
+        if (sql%rowcount = 0)
+        then
+            RAISE_APPLICATION_ERROR (-20001, 'Unable to Schedule "'|| a_procedure || '" to Run', TRUE);
+        end if;
 
-        IF (a_argument3 IS NOT NULL)
+        -- if called from abis user do not commit
+        If (USER = 'BIZMOD_USER')
         THEN
-            scheduler.pkg_scheduler.addargument(t_arguments,
-                                                'arg3',
-                                                a_argument3);
+            COMMIT;
         END IF;
-
-        IF (a_argument4 IS NOT NULL)
-        THEN
-            scheduler.pkg_scheduler.addargument(t_arguments,
-                                                'arg4',
-                                                a_argument4);
-        END IF;
-
-        --schedule item to be handled by the process server
-        t_schedulekey :=
-            scheduler.pkg_scheduler.scheduleitem(
-                a_argument2,
-                2,
-                'nc_0011_ExecuteProcedureAsPosseUser',
-                t_arguments,
-                'E-Services ' || a_description,
-                1); --serverkey
-    END;
+    END createjob;
 
     FUNCTION getHashValueForApplication(a_jobid IN NUMBER)
      RETURN NUMBER

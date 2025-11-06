@@ -1,6 +1,5 @@
 CREATE OR REPLACE PROCEDURE BIZMOD_API.createawfpaymentsjob(
-    a_seq          IN NUMBER,
-    a_asofdate     IN DATE)
+    a_seq          IN NUMBER)
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.CREATEAWFPAYMENTSJOB.PRC
@@ -30,6 +29,7 @@ IS
     --   8.0     09/03/2024  TJL BIZ-16191  Add filter to the selection of AWF record to pay
     --   9.0.0   10/16/2025  TJL BIZ-19361  Change how info is retrieved because of changes
     --                                        made to first data upload table.
+    --  10.0.0   11/03/2025  TJL BIZ-19526  Removed as of date and added handling and seq being null
     -- ************************************************************************
     TYPE awf_rec IS RECORD(seq NUMBER,
                            licensenumber VARCHAR2(10),
@@ -58,7 +58,7 @@ IS
     t_batchid      VARCHAR2(30);
     t_info         VARCHAR2(4000 BYTE);
     t_paymenttype  VARCHAR2(25)
-        := CASE a_seq WHEN 0 THEN 'Check' ELSE 'Credit Card' END;
+        := CASE nvl(a_seq, 0) WHEN 0 THEN 'Check' ELSE 'Credit Card' END;
     t_sqlerrm      VARCHAR2(4000);
     t_backtrace    VARCHAR2(4000);
     t_filename     VARCHAR2(512);

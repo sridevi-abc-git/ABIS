@@ -1,5 +1,4 @@
-/* Formatted on 9/25/2025 8:45:27 AM (QP5 v5.404) */
-CREATE OR REPLACE PACKAGE BODY bizmod_api.pkg_abis
+CREATE OR REPLACE PACKAGE BODY BIZMOD_API.pkg_abis
 AS
     -- **************************************************************************
     -- File:        BIZMOD_API.PKG_ABIS.PKB
@@ -32,43 +31,48 @@ AS
     --                                          Applications
     --  10.1.0   09/15/2025  TJL  BIZ-19212  Added fee_notification procedure.
     --  10.2.0   09/22/2025  BN   BIZ-19170  Gallonage value not getting set issue.
+    --  11.0.0   11/03/2025  TJL  BIZ-19526  Changed how parameters are passed to create job
     -- **************************************************************************
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
     IS
-        a_scheduleddate DATE := SYSDATE;
-        t_cnt          NUMBER := 0;
-        t_sqlerrm      VARCHAR2(4000);
-        t_trace        VARCHAR2(4000);
+        t_scheduleddate     TIMESTAMP;
+        t_cnt               NUMBER := 0;
+        t_sqlerrm           VARCHAR2(4000);
+        t_trace             VARCHAR2(4000);
+        t_application_id    NUMBER := api.pkg_columnquery.NUMERICVALUE(a_objectid, 'LSPId');
     BEGIN
+--dbms_output.put_line('app id: ' || t_application_id);
+
         -- check if online application
-        IF (api.pkg_columnquery.VALUE(a_objectid, 'LSPId') IS NOT NULL)
+        IF (t_application_id IS NOT NULL)
         THEN
-            a_scheduleddate :=
+            t_scheduleddate :=
                 CASE api.pkg_columnquery.VALUE(a_objectid, 'OutCome')
                     -- add 2 minute delay to when job is to run to allow abc-218 to be generated
-                    WHEN 'Approved' THEN SYSDATE + ((1 / 24 / 60) * 2)
-                    ELSE SYSDATE
+                    WHEN 'Approved' THEN SYSDATE + INTERVAL '2' MINUTE
+                    ELSE SYSTIMESTAMP + INTERVAL '5' SECOND
                 END;
+--dbms_output.put_line('scheduled: ' || t_scheduleddate);
 
             -- check to see if this application has already been secheuled. This process can be called twice
             --  when application is approved
-            SELECT COUNT(s.object)
+            SELECT COUNT(1)
               INTO t_cnt
-              FROM scheduler.sysschedule s
-             WHERE s.description =
-                   'E-Services Catering Notify LSP Job ' || a_objectid
-               AND TRUNC(s.scheduledate) >= TRUNC(SYSDATE)
-               AND status IN (1, 3);
+              FROM bizmod_api.e_jobs_que_t j
+             where j.procedure_name = 'CATERINGNOTIFYLSPJOB'
+               and j.application_id = t_application_id;
 
+--dbms_output.put_line('cnt: ' || t_cnt);
             IF (t_cnt = 0)
             THEN
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'CATERINGNOTIFYLSPJOB',
-                    a_description =>
-                        'E-Services Catering Notify LSP Job ' || a_objectid,
-                    a_argument1 => a_objectid,
-                    a_argument2 => a_scheduleddate);
+                    a_application_id => t_application_id,
+                    a_schedule_time => t_scheduleddate,
+                    a_parameters =>
+                            bizmod_api.job_prameters_tbl(a_objectid,
+                            t_scheduleddate));
             END IF;
         END IF;
     EXCEPTION
@@ -76,7 +80,7 @@ AS
         THEN
             t_sqlerrm := SQLERRM;
             t_trace := DBMS_UTILITY.format_error_backtrace;
-
+--dbms_output.put_line('Error: ' || t_sqlerrm);
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
                                                    info,
@@ -112,13 +116,10 @@ AS
         THEN
             bizmod_api.utl_licenseinfo.createjob(
                 a_procedure => 'APPLICATIONSAVEJOB',
-                a_description =>
-                    'Application Saved Notify LSP ID: '
-                    || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
-                a_argument1 => a_objectid,
-                a_argument2 => SYSDATE,
-                a_argument3 => a_jobid,
-                a_argument4 => a_status);
+                a_application_id => api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
+                a_parameters =>
+                            bizmod_api.job_prameters_tbl(nvl(a_objectid, a_jobid),
+                                systimestamp, a_jobid, a_status));
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -149,7 +150,7 @@ AS
     IS
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
-        t_schedule_time DATE;
+        t_schedule_time TIMESTAMP := systimestamp;
         t_lspid        NUMBER;
         t_count        NUMBER;
     BEGIN
@@ -182,51 +183,27 @@ AS
                     (SELECT p.feeobjid
                        FROM bizmod_api.e_payments_t p
                       WHERE p.feeobjid = reo.objectid));
-              
---              FROM api.fees  f
---                   JOIN api.registeredexternalobjects reo
---                       ON (reo.objectdefid =
---                           api.pkg_configquery.objectdefidforname('o_fee')
---                       AND reo.linkvalue = TO_CHAR(f.feeid))
---             WHERE api.pkg_columnquery.VALUE(f.jobid, 'ObjectDefName') =
---                   'j_Application'
---               AND NOT EXISTS
---                       (SELECT p.feeobjid
---                          FROM bizmod_api.e_payments_t p
---                         WHERE p.feeobjid = reo.objectid)
---               AND f.jobid = a_jobid
---               AND f.paidamount != 0;
 
             IF (t_count > 0)
             THEN
                 -- check to see if there is a fee pending notification
-                BEGIN
-                      SELECT s.scheduledate + (5 / (24 * 60 * 60))
-                        INTO t_schedule_time
-                        FROM scheduler.sysschedule s
-                       WHERE UPPER(s.description) LIKE
-                                 UPPER(
-                                     'E-Services Fee Notification %ID: '
-                                     || t_lspid
-                                     || '%')
-                         AND s.status = 1
-                    ORDER BY s.schedulekey DESC
-                       FETCH FIRST ROWS ONLY;
-                EXCEPTION
-                    WHEN NO_DATA_FOUND
-                    THEN
-                        t_schedule_time := SYSDATE;
-                END;
+            SELECT COUNT(1)
+              INTO t_count
+              FROM bizmod_api.e_jobs_que_t j
+             where j.procedure_name = 'MANUALPAYMENTJOB'
+               and j.application_id = t_lspid;
 
+            IF (t_count = 0)
+            then
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'MANUALPAYMENTJOB',
-                    a_description =>
-                        'Manual Payment for LSP ID: '
-                        || api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
-                    a_argument1 => a_objectid,
-                    a_argument2 => t_schedule_time,
-                    a_argument3 => a_jobid);
+                    a_application_id => t_lspid,
+                    a_parameters =>
+                            bizmod_api.job_prameters_tbl(a_objectid,
+                            t_schedule_time,
+                            a_jobid));
             END IF;
+            end if;
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -259,37 +236,33 @@ AS
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
         t_notify_type  VARCHAR2(100);
-        t_description  VARCHAR2(100);
-        t_exists       VARCHAR2(1);
+        t_count        NUMBER;
+        t_lspid        NUMBER := api.pkg_columnquery.numericVALUE(a_jobid, 'LSPId');
     BEGIN
-        IF (api.pkg_columnquery.VALUE(a_jobid, 'LSPId') IS NOT NULL)
+        IF (t_lspid IS NOT NULL)
         THEN
             -- find out type of notification
             t_notify_type :=
                 NVL(api.pkg_columnquery.VALUE(a_objectid, 'ModifyType'),
                     'New Fee');
-            t_description :=
-                'Fee Notification for LSP ID: '
-                || api.pkg_columnquery.VALUE(a_jobid, 'LSPId')
-                || ' ('
-                || t_notify_type
-                || ')';
 
             -- check to see if fee notification job has already been created for this LSP Id
-            SELECT NVL2(MAX(s.schedulekey), 'Y', 'N')
-              INTO t_exists
-              FROM scheduler.sysschedule s
-             WHERE status IN (1)
-               AND s.description LIKE '%' || t_description || '%';
+            SELECT COUNT(1)
+              INTO t_count
+              FROM bizmod_api.e_jobs_que_t j
+             where j.procedure_name = 'FEENOTIFICATIONJOB'
+               and j.application_id = t_lspid;
 
-            IF (t_exists = 'N')
+            IF (t_count = 0)
             THEN
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'FEENOTIFICATIONJOB',
-                    a_description => t_description, -- || ' (' || t_notify_type || ')',
-                    a_argument1 => a_objectid,
-                    a_argument2 => SYSDATE + (5 / (24 * 60 * 60)), -- five second delay
-                    a_argument3 => a_jobid);
+                    a_application_id => t_lspid,
+                    a_schedule_time => SYSTIMESTAMP + INTERVAL '10' SECOND,
+                    a_parameters =>
+                            bizmod_api.job_prameters_tbl(a_objectid,
+                            SYSTIMESTAMP,
+                            a_jobid));
             END IF;
         END IF;
     EXCEPTION

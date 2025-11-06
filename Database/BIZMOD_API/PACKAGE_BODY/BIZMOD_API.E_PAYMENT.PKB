@@ -34,9 +34,8 @@ AS
     --                                        wrong fee record when multiple fees available for same
     --                                        license with different confirmation number.
     -- **************************************************************************
-    PROCEDURE makepayment(a_confirmationid   VARCHAR2,
-                          a_asofdate         DATE,
-                          a_error        OUT VARCHAR2)
+    PROCEDURE makepayment(a_confirmationid IN  VARCHAR2,
+                          a_error          OUT VARCHAR2)
     IS
         t_sqlerrm      VARCHAR2(4000);
         t_backtrace    VARCHAR2(4000);
@@ -141,11 +140,11 @@ AS
         END IF;
     END;
 
-    PROCEDURE makepayment(a_confirmationid VARCHAR2, a_asofdate DATE)
+    PROCEDURE makepayment(a_confirmationid IN VARCHAR2)
     IS
         t_sqlerrm      VARCHAR2(4000);
     BEGIN
-        makepayment(a_confirmationid, a_asofdate, t_sqlerrm);
+        makepayment(a_confirmationid, t_sqlerrm);
     END;
 
 
@@ -645,8 +644,3 @@ AS
     END payfees;
 END;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.E_PAYMENT TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.E_PAYMENT TO POSSEEXTENSIONS;

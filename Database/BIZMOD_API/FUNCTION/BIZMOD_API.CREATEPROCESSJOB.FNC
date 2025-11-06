@@ -14,6 +14,7 @@ IS
     --    Ver:     Date                       Comment
     --    1.0   09/12/2023  TJL BIZ-12467   Initial Function Created
     --    2.0   08/08/2024  TJL BIZ-16000   Change to new createjob procedure
+    --    3.0.1 11/03/2025  TJL BIZ-19526   Changed how parameters are passed to create job
     -- ****************************************************************************
     t_process      VARCHAR2(40);
 BEGIN
@@ -21,8 +22,7 @@ BEGIN
 
 
     bizmod_api.utl_licenseinfo.createjob(a_procedure => t_process,
-                         a_description => t_process,
-                         a_argument1 => a_seq);
+                    a_parameters => bizmod_api.job_prameters_tbl(a_seq, sysdate));
 
     RETURN json_object(
                'PACKET_TYPE' VALUE 'MESSAGE',

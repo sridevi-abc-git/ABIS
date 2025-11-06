@@ -23,6 +23,7 @@ IS
     --   5.0    08/08/2024  TJL  BIZ-16000  Change to new createjob procedure
     --   6.0    11/21/2024  BN              License type code null issue.
     --   7.0.0  12/11/2024  TJL  BIZ-16948  When License Type Code is NULL change it to 'NA'
+    --   8.0.0  11/03/2025  TJL  BIZ-19526   Changed how parameters are passed to create job
     -- ****************************************************************************
     t_payresult    payresult_tbl := payresult_tbl();
     t_packet       CLOB := EMPTY_CLOB();
@@ -34,6 +35,7 @@ IS
     t_amountpaid   NUMBER;
     t_paid         VARCHAR2(1);
     t_payment      NUMBER;
+    t_jobid        NUMBER;
 BEGIN
     FOR paidfees
         IN (SELECT info.*,
@@ -161,6 +163,9 @@ BEGIN
 
                 t_count := SQL%ROWCOUNT;
 
+                t_jobid := api.pkg_columnquery.numericvalue(
+                                 paidfees.feeobjid,
+                                 'JobId');
                 IF (t_count = 0)
                 THEN
                     SELECT e.ora_err_mesg$
@@ -253,12 +258,8 @@ BEGIN
 
             bizmod_api.utl_licenseinfo.createjob(
                 a_procedure => 'E_PAYMENT.MAKEPAYMENT',
-                a_description =>
-                    'Pay License Number: '
-                    || paidfees.licensenumber
-                    || 'Confirmation Number: '
-                    || paidfees.confirmationid,
-                a_argument1 => paidfees.confirmationid);
+                a_application_id => api.pkg_columnquery.numericvalue(t_jobid, 'LSPId'),
+                a_parameters => bizmod_api.job_prameters_tbl(paidfees.confirmationid));
 
             t_paidcount := 0;
         END IF;
