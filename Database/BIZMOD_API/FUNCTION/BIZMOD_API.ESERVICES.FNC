@@ -78,7 +78,6 @@ BEGIN
     -- ***********************************************************************
     -- Verify file data exists
     -- ***********************************************************************
-    DBMS_OUTPUT.PUT_LINE('REQUEST: '|| t_request);
     IF(json_value(a_packet, '$.PROCESS') = 'FILEUPLOADJOB' AND a_filedata IS NULL)
     THEN
         RAISE missing_file;
@@ -172,8 +171,3 @@ EXCEPTION
                                    'EXCEPTION' VALUE t_sqlerrm));
 END eservices;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.ESERVICES TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.ESERVICES TO BIZMOD_USER;

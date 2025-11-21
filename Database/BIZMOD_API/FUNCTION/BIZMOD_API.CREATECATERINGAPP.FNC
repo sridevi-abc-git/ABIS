@@ -18,11 +18,11 @@ IS
     --    2.0   01/11/2024  TJL BIZ-12162   Added validating License Type status
     --    3.0   06/06/2024  BN  BIZ-15641   Fixed Duplicate Catering Auth packets issue
     --    4.0   08/08/2024  TJL BIZ-16000   Change to new createjob procedure
+    --    5.0.1 11/03/2025  TJL BIZ-19526   Change how the parameters are passed to createjob
     -- ****************************************************************************
     t_process      VARCHAR2(40);
     t_json_obj     json_object_t := json_object_t();
     t_json_arr     json_array_t := json_array_t();
-    t_json_failure json_object_t := json_object_t();
     t_json_data    json_object_t := json_object_t();
     t_licensetypecode VARCHAR2(3);
     t_starttime    NUMBER;
@@ -32,9 +32,10 @@ IS
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
     t_msg          VARCHAR2(4000 BYTE);
-    t_dupReqCount   NUMBER;
+    t_dupreqcount  NUMBER;
 BEGIN
-    DBMS_OUTPUT.PUT_LINE('packaet information: '|| a_packet);
+    DBMS_OUTPUT.put_line('packaet information: ' || a_packet);
+
     FOR rec
         IN (SELECT *
               FROM JSON_TABLE(
@@ -44,69 +45,99 @@ BEGIN
                            packet_type VARCHAR2(1000) PATH '$.PACKET_TYPE',
                            NESTED PATH '$.DATA.APPLICATION[*]'
                                COLUMNS(
-                                   applicationtype VARCHAR2(4000)
+                                   applicationtype
+                                       VARCHAR2(4000)
                                        PATH '$.APPLICATIONTYPE',
-                                   lsppaymentid VARCHAR2(4000)
+                                   lsppaymentid
+                                       VARCHAR2(4000)
                                        PATH '$.LSPPAYMENTID',
-                                   licensenumber VARCHAR2(4000)
+                                   licensenumber
+                                       VARCHAR2(4000)
                                        PATH '$.LICENSENUMBER',
-                                   applicationid VARCHAR2(4000)
+                                   applicationid
+                                       VARCHAR2(4000)
                                        PATH '$.APPLICATIONID',
-                                   eventstartdate DATE
+                                   eventstartdate
+                                       DATE
                                        PATH '$.EVENTSTARTDATE',
                                    eventenddate DATE PATH '$.EVENTENDDATE',
-                                   eventstarttime VARCHAR2(8)
+                                   eventstarttime
+                                       VARCHAR2(8)
                                        PATH '$.EVENTSTARTTIME',
-                                   eventendtime VARCHAR2(8)
+                                   eventendtime
+                                       VARCHAR2(8)
                                        PATH '$.EVENTENDTIME',
-                                   expectedattendance NUMBER
+                                   expectedattendance
+                                       NUMBER
                                        PATH '$.EXPECTEDATTENDANCE',
-                                   publicevent VARCHAR2(4000)
+                                   publicevent
+                                       VARCHAR2(4000)
                                        PATH '$.PUBLICEVENT',
-                                   eventtype VARCHAR2(4000)
+                                   eventtype
+                                       VARCHAR2(4000)
                                        PATH '$.EVENTTYPE',
-                                   sponsoringorganization VARCHAR2(4000)
+                                   sponsoringorganization
+                                       VARCHAR2(4000)
                                        PATH '$.SPONSORINGORGANIZATION',
-                                   sponsoringorganizationaddress1 VARCHAR2(4000)
+                                   sponsoringorganizationaddress1
+                                       VARCHAR2(4000)
                                        PATH '$.SPONSORINGORGANIZATIONADDRESS1',
-                                   sponsoringorganizationaddress2 VARCHAR2(4000)
+                                   sponsoringorganizationaddress2
+                                       VARCHAR2(4000)
                                        PATH '$.SPONSORINGORGANIZATIONADDRESS2',
-                                   sponsoringorganizationcity VARCHAR2(4000)
+                                   sponsoringorganizationcity
+                                       VARCHAR2(4000)
                                        PATH '$.SPONSORINGORGANIZATIONCITY',
-                                   sponsoringorganizationzip VARCHAR2(4000)
+                                   sponsoringorganizationzip
+                                       VARCHAR2(4000)
                                        PATH '$.SPONSORINGORGANIZATIONZIP',
-                                   personinchargeofevent VARCHAR2(4000)
+                                   personinchargeofevent
+                                       VARCHAR2(4000)
                                        PATH '$.PERSONINCHARGEOFEVENT',
-                                   personinchargephonenumber VARCHAR2(4000)
+                                   personinchargephonenumber
+                                       VARCHAR2(4000)
                                        PATH '$.PERSONINCHARGEPHONENUMBER',
-                                   eventlocationaddress1 VARCHAR2(4000)
+                                   eventlocationaddress1
+                                       VARCHAR2(4000)
                                        PATH '$.EVENTLOCATIONADDRESS1',
-                                   eventlocationaddress2 VARCHAR2(4000)
+                                   eventlocationaddress2
+                                       VARCHAR2(4000)
                                        PATH '$.EVENTLOCATIONADDRESS2',
-                                   eventlocationcity VARCHAR2(4000)
+                                   eventlocationcity
+                                       VARCHAR2(4000)
                                        PATH '$.EVENTLOCATIONCITY',
-                                   eventlocationzip VARCHAR2(4000)
+                                   eventlocationzip
+                                       VARCHAR2(4000)
                                        PATH '$.EVENTLOCATIONZIP',
-                                   specificlocation VARCHAR2(4000)
+                                   specificlocation
+                                       VARCHAR2(4000)
                                        PATH '$.SPECIFICLOCATION',
-                                   contactname VARCHAR2(4000)
+                                   contactname
+                                       VARCHAR2(4000)
                                        PATH '$.CONTACTNAME',
-                                   contactphone VARCHAR2(4000)
+                                   contactphone
+                                       VARCHAR2(4000)
                                        PATH '$.CONTACTPHONE',
-                                   contactemail VARCHAR2(4000)
+                                   contactemail
+                                       VARCHAR2(4000)
                                        PATH '$.CONTACTEMAIL',
-                                   withincitylimits VARCHAR2(4000)
+                                   withincitylimits
+                                       VARCHAR2(4000)
                                        PATH '$.WITHINCITYLIMITS',
-                                   annualeventscount NUMBER
+                                   annualeventscount
+                                       NUMBER
                                        PATH '$.ANNUALEVENTSCOUNT',
-                                   disclaimerattested VARCHAR2(4000)
+                                   disclaimerattested
+                                       VARCHAR2(4000)
                                        PATH '$.DISCLAIMERATTESTED',
-                                   totalamountdue NUMBER
+                                   totalamountdue
+                                       NUMBER
                                        PATH '$.TOTALAMOUNTDUE',
                                    submitteddate DATE PATH '$.SUBMITTEDDATE'))))
     LOOP
         BEGIN
-            SELECT distinct api.pkg_columnquery.VALUE(o.objectid, 'LicenseTypeCode')    licensetypecode
+            SELECT DISTINCT
+                   api.pkg_columnquery.VALUE(o.objectid, 'LicenseTypeCode')    licensetypecode
               INTO t_licensetypecode
               FROM TABLE(
                        CAST(
@@ -124,29 +155,33 @@ BEGIN
              WHERE api.pkg_columnquery.VALUE(slt.toobjectid,
                                              'LicenseTypeCode') IN
                        ('58')
-               AND api.pkg_columnquery.VALUE(o.objectid, 'StatusName') = 'ACTIVE';
+               AND api.pkg_columnquery.VALUE(o.objectid, 'StatusName') =
+                   'ACTIVE';
         EXCEPTION
             WHEN NO_DATA_FOUND
             THEN
-                t_json_arr.append(
-                    'Invalid License Type or Status');
+                t_json_arr.append('Invalid License Type or Status');
         END;
-        
-        
+
+
         -- BIZ-15641   Fixed Duplicate Catering Auth packets issue
         -- Fetching on the number of request which have been present in the ESERVICES_LOG_T
-        
-        SELECT COUNT(*) INTO t_dupReqCount 
-        FROM bizmod_api.eservices_log_t eg 
-        WHERE JSON_VALUE(eg.packet, '$.DATA.APPLICATION.APPLICATIONID') = rec.applicationid  and eg.request = 'CREATECATERINGAPP';
-             
-        
-        DBMS_OUTPUT.PUT_LINE('t_dupReqCount: '|| t_dupReqCount);
-        if(t_dupReqCount >1)
+
+        SELECT COUNT(*)
+          INTO t_dupreqcount
+          FROM bizmod_api.eservices_log_t eg
+         WHERE json_value(eg.packet, '$.DATA.APPLICATION.APPLICATIONID') =
+               rec.applicationid
+           AND eg.request = 'CREATECATERINGAPP';
+
+
+        DBMS_OUTPUT.put_line('t_dupReqCount: ' || t_dupreqcount);
+
+        IF (t_dupreqcount > 1)
         THEN
-          t_json_arr.append('Duplicate Application Request');
+            t_json_arr.append('Duplicate Application Request');
         END IF;
-            
+
 
         -- check if duplicate application
         IF (api.pkg_simplesearch.objectbyindex(
@@ -329,9 +364,13 @@ BEGIN
 
     IF (t_json_arr.get_size() = 0)
     THEN
-        bizmod_api.utl_licenseinfo.createjob(a_procedure => 'CREATECATERINGAPPJOB',
-                                             a_description => 'Create Catering Application',
-                                             a_argument1 => a_seq);
+        bizmod_api.utl_licenseinfo.createjob(
+            a_procedure => 'CREATECATERINGAPPJOB',
+            a_application_id =>
+                json_value(a_packet,
+                           '$.DATA.APPLICATION.APPLICATIONID'
+                           RETURNING NUMBER),
+            a_parameters => bizmod_api.job_prameters_tbl(a_seq, SYSDATE));
 
         t_json_data.put('MSGNO', '0');
         t_json_data.put('MSG', 'E-Services ' || t_process || ' Scheduled');

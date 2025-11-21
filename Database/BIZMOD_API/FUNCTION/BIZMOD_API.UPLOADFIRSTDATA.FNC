@@ -553,11 +553,7 @@ BEGIN
             THEN
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'CREATEAWFPAYMENTSJOB',
-                    a_description =>
-                        'Create AWF Payment Batch (File: '
-                        || t_filename
-                        || ')',
-                    a_argument1 => a_seq);
+                    a_parameters => bizmod_api.job_prameters_tbl(a_seq));
             END IF;
 
             -- for all other payments call the Create Job Process to schedule the job
@@ -566,9 +562,7 @@ BEGIN
             THEN
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'CREATETRANSMITTALJOB',
-                    a_description =>
-                        'Create Transmittals (File: ' || t_filename || ')',
-                    a_argument1 => a_seq);
+                    a_parameters => bizmod_api.job_prameters_tbl(a_seq, sysdate));
             END IF;
 
             -- Create the JSON response that the settlement file was processedc
