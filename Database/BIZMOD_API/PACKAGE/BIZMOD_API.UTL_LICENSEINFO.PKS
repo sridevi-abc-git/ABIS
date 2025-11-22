@@ -84,6 +84,9 @@ AS
                                 federalemployeridentificationn  VARCHAR2(4000),
                                 address CLOB);
 
+    g_token         VARCHAR2(1000);
+    g_token_time    TIMESTAMP;
+
     FUNCTION lsplogin
         RETURN json_object_t;
 
@@ -93,6 +96,12 @@ AS
                      a_file         IN BLOB DEFAULT NULL,
                      a_token        IN VARCHAR2 DEFAULT NULL,
                      a_allow_retry  IN BOOLEAN DEFAULT TRUE)
+        RETURN json_object_t;
+
+    FUNCTION notify_lsp(a_urlinfo      IN VARCHAR2,
+                        a_method       IN VARCHAR2,
+                        a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
+                        a_file         IN BLOB DEFAULT NULL)
         RETURN json_object_t;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)
@@ -116,14 +125,6 @@ AS
                         a_clob         IN CLOB DEFAULT NULL,
                         a_encoding        VARCHAR2 DEFAULT 'text/plain',
                         a_mimetype        VARCHAR2 DEFAULT 'text/plain');
-
---    PROCEDURE createjob(a_procedure     IN VARCHAR2,
---                        a_description   IN VARCHAR2,
---                        a_schedule_time IN DATE DEFAULT SYSDATE,
---                        a_argument1     IN VARCHAR2 DEFAULT '0',
---                        a_argument2     IN DATE DEFAULT SYSDATE,
---                        a_argument3     IN VARCHAR2 DEFAULT NULL,
---                        a_argument4     IN VARCHAR2 DEFAULT NULL);
 
     PROCEDURE createjob(a_procedure     IN VARCHAR2,
                         a_application_id IN NUMBER DEFAULT NULL,
