@@ -13,8 +13,6 @@ IS
     -------------------------------------------------------------------------------
     --             Date                         Comment
     --   1.0.0  04/03/2025  TJL  BIZ-17503  Initial Package Created
-    --   2.0.0  10/02/2025  TJL             Added check for duplicate applications and
-    --                                        Fixed typo 
     -- ****************************************************************************
     t_json_obj     json_object_t := json_object_t();
     t_json_data    json_object_t := json_object_t();

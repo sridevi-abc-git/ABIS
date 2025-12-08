@@ -36,6 +36,7 @@ AS
     --  15.0.0  09/10/2025  BN   BIZ-19069    Added method to generate hashvalue for an application.
     --  16.0.0  09/30/2025  TJL  BIZ-19339    Add retry to call LSP on timeout
     --  17.0.0  10/31/2025  TJL  BIZ-19526    Added an optional parameter to Createjob process
+    --  18.0.0  11/25/2025  TJL  BIZ-19701    Added notify_lsp and removed lsplogin, calllsp
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -84,19 +85,9 @@ AS
                                 federalemployeridentificationn  VARCHAR2(4000),
                                 address CLOB);
 
+    gc_request_fail constant  number :=  -29273; -- 503; --
     g_token         VARCHAR2(1000);
     g_token_time    TIMESTAMP;
-
-    FUNCTION lsplogin
-        RETURN json_object_t;
-
-    FUNCTION calllsp(a_urlinfo      IN VARCHAR2,
-                     a_method       IN VARCHAR2,
-                     a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
-                     a_file         IN BLOB DEFAULT NULL,
-                     a_token        IN VARCHAR2 DEFAULT NULL,
-                     a_allow_retry  IN BOOLEAN DEFAULT TRUE)
-        RETURN json_object_t;
 
     FUNCTION notify_lsp(a_urlinfo      IN VARCHAR2,
                         a_method       IN VARCHAR2,
