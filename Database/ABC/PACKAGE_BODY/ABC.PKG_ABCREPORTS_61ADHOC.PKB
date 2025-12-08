@@ -17,7 +17,9 @@ IS
 -- 08/20/2018 TJL         Initial Check-in
 -- 04/30/2020 NW          Code Formatting Improvements
 -- 05/04/2020 NW          WO 21009 Added AdministrativeType
--- 05/12/2025 PK          Resolved Issue 4772 
+-- 05/08/2025 PK          Resolved Issue 4772 
+-- 07/18/2025 PK          Task 4725 Adding Complaint Type
+-- 11/03/2025 PK          Resolved Req 7247 Commented code in Get61LicAssignments
 -- **************************************************************************
 
 	g_golivedate   DATE := TO_DATE('24-MAY-2010', 'DD-MON-YYYY');
@@ -31,6 +33,7 @@ IS
 	t_investigationnumber      VARCHAR2(15);
 	t_InvestigationType        VARCHAR2(60);
 	t_AdministrativeType       VARCHAR(100);   -- NW wo 21009
+	t_ComplaintType       VARCHAR(100);   -- PK Task 4725
 	t_investigator             VARCHAR2(60);
 	t_includecrewassignments   CHAR(1);
 	t_firstvisitdate           DATE;
@@ -56,6 +59,7 @@ BEGIN
 			o.investigationnumber,
 			o.investigationtype,
 			o.AdministrativeType,    -- NW wo 21009
+			o.ComplaintType,
 			o.investigator,
 			r.userid,
 			o.includecrewassignments,
@@ -74,6 +78,7 @@ BEGIN
       t_investigationnumber,
 			t_InvestigationType,
 			t_AdministrativeType,  -- NW wo 21009
+			t_ComplaintType,
 			t_investigator,
 			t_userid,
 			t_includecrewassignments,
@@ -268,8 +273,8 @@ BEGIN
   IF t_investigator IS NULL THEN
     NULL;
   ELSE
-   --DELETE FROM abc.abc61_t WHERE assgndto <> t_investigator;   
-     DELETE FROM abc.abc61_t WHERE assgndto NOT LIKE '%'||t_investigator||'%';  --   Resolved Issue 4772 Pawanjit Kaur on 05/08/2025           --original
+   -- DELETE FROM abc.abc61_t WHERE assgndto <> t_investigator;                 --original
+     DELETE FROM abc.abc61_t WHERE assgndto NOT LIKE '%'||t_investigator||'%';
     -- commit;  --take out in production
   END IF;
 
@@ -286,6 +291,13 @@ BEGIN
     DELETE FROM abc.abc61_t 
     WHERE AdministrativeType <> t_AdministrativeType
     OR AdministrativeType IS NULL;
+--    COMMIT;
+  END IF;
+  -- 7/18/2025 Added by Pawan to add Complaint type
+    IF  t_InvestigationType ='COMPLAINT' AND  t_ComplaintType IS NOT NULL THEN
+    DELETE FROM abc.abc61_t 
+    WHERE ComplaintType <> t_ComplaintType
+    OR ComplaintType IS NULL;
 --    COMMIT;
   END IF;
 
@@ -755,7 +767,8 @@ BEGIN
       completeddt,
       premadd1,
       offccode,
-      administrativetype
+      administrativetype,
+      complainttype
     )
     SELECT 
       a_objectid
@@ -792,7 +805,8 @@ BEGIN
       completeddate completeddt,
       premaddress1line premadd1,
       districtoffice offccode,
-      administrativetype
+      administrativetype,
+      complainttype
     FROM abc.v_all_61_enforcement a
     WHERE process_type IN ('Conduct', 'Close') -- don't display Assign recs
       AND job_id = t_enfobjectids(i).objectid
@@ -1004,9 +1018,9 @@ IS
                        (SELECT CASE
                                    WHEN n.assignstaffname IS NULL THEN
                                        n.dup_licensingrepresentative
-                                   WHEN n.assignstaffname !=
-                                        n.dup_licensingrepresentative THEN
-                                       n.dup_licensingrepresentative
+                                --   WHEN n.assignstaffname !=  -- 11/03/2025 PK          Resolved Req 7247 Commented code in Get61LicAssignments
+                                    --    n.dup_licensingrepresentative THEN
+                                     --  n.dup_licensingrepresentative
                                    ELSE
                                        n.assignstaffname
                                END
