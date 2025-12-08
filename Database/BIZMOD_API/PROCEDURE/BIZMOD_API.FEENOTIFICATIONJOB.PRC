@@ -1,7 +1,8 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.feenotificationjob(
+CREATE OR REPLACE PROCEDURE bizmod_api.feenotificationjob(
     a_objectid     api.pkg_definition.udt_id,
     a_asofdate     DATE,
-    a_jobid        api.pkg_definition.udt_id)
+    a_jobid        api.pkg_definition.udt_id,
+    a_retry        BOOLEAN DEFAULT FALSE)
 AS
     -- ****************************************************************************
     -- File:        BIZMOD_API.FEENOTIFICATIONJOB.PRC
@@ -15,6 +16,7 @@ AS
     --   1.0.0    09/16/2025 TJL  BIZ-19212  Initial Procedure Created
     --   2.0.0    11/03/2025 TJL  BIZ-19554  Added test for non-active licenses so
     --                                         only active licenses will be notified.
+    --   3.0.0    11/24/2025 TJL  BIZ-19701  Added support to retry job job on timeout error
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
                        := '/api/licensing/internal/license-applications/' ;
@@ -49,20 +51,11 @@ BEGIN
             t_body.put('licenseNumber',
                        api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'));
 
-            t_results := bizmod_api.utl_licenseinfo.lsplogin;
-
-            IF (t_results.get_number('status') = 200)
-            THEN
-                t_token :=
-                    t_results.get_object('lspresponse').get_string('token');
-
-                t_results :=
-                    bizmod_api.utl_licenseinfo.calllsp(
-                        a_urlinfo   => t_url || t_applicationid,
-                        a_method    => t_method,
-                        a_content   => t_body,
-                        a_token     => t_token);
-            END IF;
+            t_results :=
+                bizmod_api.utl_licenseinfo.notify_lsp(
+                    a_urlinfo   => t_url || t_applicationid,
+                    a_method    => t_method,
+                    a_content   => t_body);
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -93,39 +86,53 @@ BEGIN
             END;
     END IF;
 
-    INSERT INTO bizmod_api.e_process_log_t(seq,
-                                           processjob,
-                                           info,
-                                           errmsg,
-                                           bktrace,
-                                           packet)
-             VALUES (
-                        0,
-                        t_process,
-                        SUBSTR(
-                            'Application Id: '
-                            || t_applicationid
-                            || CHR(13)
-                            || 'License Number: '
-                            || api.pkg_columnquery.VALUE(a_jobid,
-                                                         'LICENSENUMBER')
-                            || CHR(13)
-                            || 'j_Application: '
-                            || a_jobid
-                            || CHR(13)
-                            || 'Notification Type: '
-                            || t_status
-                            || CHR(13)
-                            || t_results_text,
-                            1,
-                            3999),
-                        SUBSTR(t_sqlerrm, 1, 4000),
-                        t_trace,
-                        t_value);
+    IF (t_results.get_number('status') !=
+        bizmod_api.utl_licenseinfo.gc_request_fail
+     OR a_retry)
+    THEN
+        INSERT INTO bizmod_api.e_process_log_t(seq,
+                                               processjob,
+                                               info,
+                                               errmsg,
+                                               bktrace,
+                                               packet)
+                 VALUES (
+                            0,
+                            t_process,
+                            SUBSTR(
+                                'Application Id: '
+                                || t_applicationid
+                                || CHR(13)
+                                || 'License Number: '
+                                || api.pkg_columnquery.VALUE(a_jobid,
+                                                             'LICENSENUMBER')
+                                || CHR(13)
+                                || 'j_Application: '
+                                || a_jobid
+                                || CHR(13)
+                                || 'Notification Type: '
+                                || t_status
+                                || CHR(13)
+                                || t_results_text,
+                                1,
+                                3999),
+                            SUBSTR(t_sqlerrm, 1, 4000),
+                            t_trace,
+                            t_value);
 
-    COMMIT;
+        COMMIT;
+    ELSE
+        bizmod_api.utl_licenseinfo.createjob(
+            a_procedure => t_process,
+            a_application_id => api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
+            a_parameters => bizmod_api.job_prameters_tbl(a_objectid,
+                                                         a_asofdate,
+                                                         a_jobid,
+                                                         'TRUE'));
+        COMMIT;
+    END IF;
 END;
 /
 
 
-GRANT EXECUTE ON BIZMOD_API.FEENOTIFICATIONJOB TO POSSEEXTENSIONS;
+GRANT EXECUTE ON bizmod_api.feenotificationjob TO posseextensions;

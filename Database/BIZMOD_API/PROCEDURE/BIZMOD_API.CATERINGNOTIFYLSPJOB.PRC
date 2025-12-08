@@ -1,6 +1,7 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.cateringnotifylspjob(
+CREATE OR REPLACE PROCEDURE bizmod_api.cateringnotifylspjob(
     a_objectid     api.pkg_definition.udt_id,
-    a_asofdate     DATE)
+    a_asofdate     DATE,
+    a_retry        BOOLEAN DEFAULT FALSE)
 AS
     -- **************************************************************************
     -- File:        BIZMOD_API.CATERINGNOTIFYLSPJOB.PRC
@@ -32,6 +33,7 @@ AS
     --                                          to lsplogin
     --   6.0.0   07/23/2025 TJL  BIZ-18902  Added handling oracl error message from CALLLSP
     --   6.0.1   07/28/2025 TJL  BIZ-18902  Corrected parsing bug in LSP Response
+    --   7.0.0   11/24/2025 TJL  BIZ-19701  Added support to retry job job on timeout error
     -- **************************************************************************
     FUNCTION parseaddress(a_address IN VARCHAR2)
         RETURN bizmod_api.var_tbl
@@ -399,7 +401,7 @@ BEGIN
         t_currhash     NUMBER;
         t_header       VARCHAR2(4000);
         t_packet_value CLOB;
-        t_results      json_object_t;
+        t_results      json_object_t := json_object_t();
         t_token        VARCHAR2(1000);
         t_results_text VARCHAR2(32767);
         t_text         VARCHAR2(32767);
@@ -491,64 +493,54 @@ BEGIN
 
         SELECT ORA_HASH(t_text) INTO t_hashvalue FROM DUAL;
 
-        -- login to LSP
-        t_results := bizmod_api.utl_licenseinfo.lsplogin;
-
-        IF (t_results.get_number('status') = 200)
+        IF (t_hashvalue != t_currhash)
         THEN
-            t_token :=
-                t_results.get_object('lspresponse').get_string('token');
+            t_licensenumber :=
+                api.pkg_columnquery.VALUE(
+                    api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
+                    'licensenumber');
 
-            IF (t_hashvalue != t_currhash)
+
+            -- update LSP of any changes to application data
+            t_urlinfo :=
+                REPLACE(t_url_update, '<<applicationId>>', t_applicationid);
+
+            t_results :=
+                bizmod_api.utl_licenseinfo.notify_lsp(
+                    a_urlinfo   => t_urlinfo,
+                    a_method    => t_method_update,
+                    a_content   => t_packet);
+
+
+            t_results_text := t_results.TO_CLOB;
+            t_packet_value :=
+                json_query(t_packet.TO_CLOB, '$' RETURNING CLOB PRETTY);
+
+            IF (t_results.get_number('status') != 200)
+            THEN
+                t_sqlerrm :=
+                    CASE
+                        WHEN t_results.get_type('lspresponse') = 'ARRAY'
+                        THEN
+                            t_results.get_array('lspresponse').TO_CLOB
+                        WHEN t_results.get_type('lspresponse') = 'OBJECT'
+                        THEN
+                            t_results.get_object('lspresponse').TO_CLOB
+                        WHEN t_results.get_type('lspresponse') = 'SCALAR'
+                        THEN
+                            t_results.get_clob('lspresponse')
+                        ELSE
+                            t_results.TO_CLOB
+                    END;
+            END IF;
+
+            IF (t_results.get_number('status') !=
+                bizmod_api.utl_licenseinfo.gc_request_fail
+             OR a_retry)
             THEN
                 UPDATE bizmod_api.catering_app_t c
                    SET c.hashvalue = t_hashvalue
                  WHERE c.processid = a_objectid;
-
-                COMMIT;
-                t_licensenumber :=
-                    api.pkg_columnquery.VALUE(
-                        api.pkg_columnquery.numericvalue(a_objectid, 'jobid'),
-                        'licensenumber');
-
-
-                -- update LSP of any changes to application data
-                t_urlinfo :=
-                    REPLACE(t_url_update,
-                            '<<applicationId>>',
-                            t_applicationid);
-
-                t_results :=
-                    bizmod_api.utl_licenseinfo.calllsp(
-                        a_urlinfo   => t_urlinfo,
-                        a_method    => t_method_update,
-                        a_content   => t_packet,
-                        a_token     => t_token);
-
-
-                t_results_text := t_results.TO_CLOB;
-                t_packet_value :=
-                    json_query(t_packet.TO_CLOB, '$' RETURNING CLOB PRETTY);
-
-                IF (t_results.get_number('status') != 200)
-                THEN
-                    t_sqlerrm :=
-                        CASE
-                            WHEN t_results.get_type('lspresponse') = 'ARRAY'
-                            THEN
-                                t_results.get_array('lspresponse').to_clob
-
-                            WHEN t_results.get_type('lspresponse') = 'OBJECT'
-                            THEN
-                                t_results.get_object('lspresponse').to_clob
-
-                            WHEN t_results.get_type('lspresponse') = 'SCALAR'
-                            THEN
-                                t_results.get_clob('lspresponse')
-                            ELSE
-                                t_results.to_clob
-                        END;                
-                END IF;
 
                 INSERT INTO bizmod_api.e_process_log_t(seq,
                                                        processjob,
@@ -562,11 +554,21 @@ BEGIN
                              t_packet_value);
 
                 COMMIT;
+            ELSE
+                bizmod_api.utl_licenseinfo.createjob(
+                    a_procedure => t_process,
+                    a_application_id =>
+                        api.pkg_columnquery.VALUE(a_objectid, 'LSPId'),
+                    a_parameters =>
+                        bizmod_api.job_prameters_tbl(a_objectid,
+                                                     a_asofdate,
+                                                     'TRUE'));
+                COMMIT;
             END IF;
         END IF;
 
         IF (t_outcome IS NOT NULL
-        AND t_results.get_number('status') = 200)
+        AND NVL(t_results.get_number('status'), 200) = 200)
         THEN
             t_urlinfo :=
                 REPLACE(
@@ -602,11 +604,10 @@ BEGIN
             END IF;
 
             t_results :=
-                bizmod_api.utl_licenseinfo.calllsp(
+                bizmod_api.utl_licenseinfo.notify_lsp(
                     a_urlinfo   => t_urlinfo,
                     a_method    => t_method_status,
-                    a_file      => t_data,
-                    a_token     => t_token);
+                    a_file      => t_data);
 
             IF (t_results.get_number('status') != 200
             AND t_sqlerrm IS NULL)
@@ -615,30 +616,43 @@ BEGIN
                     CASE
                         WHEN t_results.get_type('lspresponse') = 'ARRAY'
                         THEN
-                            t_results.get_array('lspresponse').to_clob
-
+                            t_results.get_array('lspresponse').TO_CLOB
                         WHEN t_results.get_type('lspresponse') = 'OBJECT'
                         THEN
-                            t_results.get_object('lspresponse').to_clob
-
+                            t_results.get_object('lspresponse').TO_CLOB
                         WHEN t_results.get_type('lspresponse') = 'SCALAR'
                         THEN
                             t_results.get_clob('lspresponse')
                         ELSE
-                            t_results.to_clob
-                    END;                
+                            t_results.TO_CLOB
+                    END;
             END IF;
 
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg)
-                 VALUES (0,
-                         t_process,
-                         t_header,
-                         t_sqlerrm);
+            IF (t_results.get_number('status') !=
+                bizmod_api.utl_licenseinfo.gc_request_fail
+             OR a_retry)
+            THEN
+                INSERT INTO bizmod_api.e_process_log_t(seq,
+                                                       processjob,
+                                                       info,
+                                                       errmsg)
+                     VALUES (0,
+                             t_process,
+                             t_header,
+                             t_sqlerrm);
 
-            COMMIT;
+                COMMIT;
+            ELSE
+                bizmod_api.utl_licenseinfo.createjob(
+                    a_procedure => t_process,
+                    a_application_id =>
+                        api.pkg_columnquery.VALUE(a_objectid, 'LSPId'),
+                    a_parameters =>
+                        bizmod_api.job_prameters_tbl(a_objectid,
+                                                     a_asofdate,
+                                                     'TRUE'));
+                COMMIT;
+            END IF;
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -665,4 +679,4 @@ END;
 /
 
 
-GRANT EXECUTE ON BIZMOD_API.CATERINGNOTIFYLSPJOB TO POSSEEXTENSIONS;
+GRANT EXECUTE ON bizmod_api.cateringnotifylspjob TO posseextensions;
