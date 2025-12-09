@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.createcateringappjob(
+CREATE OR REPLACE PROCEDURE bizmod_api.createcateringappjob(
     a_seq          IN NUMBER,
     a_asofdate     IN DATE)
 IS
@@ -33,6 +33,7 @@ IS
     --   7.2.0   02/04/2025 TJL  BIZ-17356    Added handling of the return value from CALLLSP and call
     --                                          to lsplogin
     --   8.0.0   07/22/2025 TJL  BIZ-18902    Added exception handling and handling LSP responses
+    --   9.0.1   11/24/2025 TJL  BIZ-19701    Change CALLLSP to Notify_lsp procedure
     -- ****************************************************************************
     --************************
     --Object Id
@@ -96,8 +97,6 @@ IS
     --*********
     t_feeid        NUMBER(20);
     t_feeobjid     api.pkg_definition.udt_id;
-    t_feetotal     NUMBER(20);
-    t_feedescription VARCHAR2(50);
     t_isscatobjid  api.pkg_definition.udt_id;
     --******************
     --Address Object Id
@@ -113,19 +112,11 @@ IS
     t_sqlcode      NUMBER;
     t_sqlerrm      VARCHAR2(4000);
     t_trace        VARCHAR2(4000);
-    t_msg          VARCHAR2(4000);
-    --    t_results      CLOB;
-    t_response     CLOB;
-    t_output       CLOB;
     t_count        NUMBER;
-    t_json_app     json_object_t;
-    t_parameternames json_object_t;
-    t_replacementvalues json_object_t;
 
     t_body         json_object_t := json_object_t();
     t_body_value   CLOB;
     t_results      json_object_t;
-    t_token        VARCHAR2(1000);
     t_results_text VARCHAR2(32767);
     t_app_status   VARCHAR2(20) := 'Posted';
 BEGIN
@@ -593,10 +584,6 @@ BEGIN
             t_sqlcode := SQLCODE;
             t_sqlerrm := SQLERRM;
             t_trace := DBMS_UTILITY.format_error_backtrace;
-            --                    t_results.put('status', SQLCODE);
-            --                    t_results.put(
-            --                        'ora-error',
-            --                        SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
             t_app_status := 'Errored';
             --*****************
             --Clear any error
@@ -608,40 +595,29 @@ BEGIN
     -- *****************************************************************
     --  Notify LSP of application is completed
 
-    t_results := bizmod_api.utl_licenseinfo.lsplogin;
-
-    IF (t_results.get_number('status') = 200)
-    THEN
-        t_token := t_results.get_object('lspresponse').get_string('token');
-
-        t_urlinfo :=
-            REPLACE(
-                REPLACE(t_url_status, '<<applicationId>>', t_applicationid),
+    t_urlinfo :=
+        REPLACE(REPLACE(t_url_status, '<<applicationId>>', t_applicationid),
                 '<<status>>',
                 t_app_status);
 
-        t_results :=
-            bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
-                                               a_method    => t_method,
-                                               a_token     => t_token);
-    END IF;
+    t_results :=
+        bizmod_api.utl_licenseinfo.notify_lsp(a_urlinfo   => t_urlinfo,
+                                              a_method    => t_method);
 
-    -- if status is error then update result packet with the error information
     IF (t_results.get_number('status') = 200
     AND t_app_status = 'Posted')
     THEN
         t_urlinfo := REPLACE(t_url_fees, '<<lsppaymentid>>', t_lsppaymentid);
 
         --**********************************
-        --Format data packet and use CallLSP
+        --Format data packet and use Notify LSP
         --**********************************
         t_body.put('feeObjectId', t_feeobjid);
 
         t_results :=
-            bizmod_api.utl_licenseinfo.calllsp(a_urlinfo   => t_urlinfo,
-                                               a_method    => t_method,
-                                               a_content   => t_body,
-                                               a_token     => t_token);
+            bizmod_api.utl_licenseinfo.notify_lsp(a_urlinfo   => t_urlinfo,
+                                                  a_method    => t_method,
+                                                  a_content   => t_body);
     END IF;
 
     t_results_text := t_results.TO_CLOB;
@@ -686,13 +662,6 @@ BEGIN
                         t_trace,
                         t_results_text);
 
-    --********************
-    --Update eServices Log
-    --********************
-    UPDATE bizmod_api.eservices_log_t
-       SET response = t_results_text
-     WHERE seq = a_seq;
-
     COMMIT;
 --**************
 --Error Handling
@@ -735,8 +704,3 @@ EXCEPTION
         COMMIT;
 END;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.CREATECATERINGAPPJOB TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.CREATECATERINGAPPJOB TO POSSEEXTENSIONS;

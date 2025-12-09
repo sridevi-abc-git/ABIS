@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE bizmod_api.transferlicenseappjob(
+CREATE OR REPLACE PROCEDURE BIZMOD_API.transferlicenseappjob(
     a_seq          IN NUMBER,
     a_asofdate     IN DATE)
 IS
@@ -344,7 +344,7 @@ BEGIN
                 -20000,
                 'Duplicate LSP Appication Id: ' || t_apprec.lspapplicationid);
         END IF;
-        
+
         IF (t_apprec.transfertypes IS JSON)
         THEN
             t_transfertypes := json_element_t.parse(t_apprec.transfertypes);
@@ -584,4 +584,4 @@ END;
 /
 
 
-GRANT EXECUTE ON bizmod_api.transferlicenseappjob TO posseextensions;
+GRANT EXECUTE ON BIZMOD_API.TRANSFERLICENSEAPPJOB TO POSSEEXTENSIONS;

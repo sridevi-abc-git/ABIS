@@ -1,4 +1,5 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.execute_jobs
+/* Formatted on 11/23/2025 2:26:00 PM (QP5 v5.404) */
+CREATE OR REPLACE PROCEDURE bizmod_api.execute_jobs
 IS
     /******************************************************************************
         File:       BIZMOD_API.EXECUTE_JOBS.PRC
@@ -8,7 +9,7 @@ IS
         -------------------------------------------------------------------------------
                       Date          Ticket      Comment
            1.0.1   10/29/2025  TJL BIZ-19526  Initial Procedure Created
-
+           2.0.0   11/24/2025  TJL BIZ-19701  Added support for boolean value
     ******************************************************************************/
     TYPE job_rec
         IS RECORD(seq bizmod_api.e_jobs_que_t.seq%TYPE,
@@ -68,6 +69,8 @@ IS
     c              PLS_INTEGER;
     n              PLS_INTEGER;
 BEGIN
+    --dbms_output.put_line('Starting exeute jobs');
+
     OPEN c_jobs;
 
     FETCH c_jobs BULK COLLECT INTO t_jobs;
@@ -128,6 +131,19 @@ BEGIN
                                     || t_jobs(inx).process_arguments(i).argument_name,
                                     TO_NUMBER(
                                         t_jobs(inx).process_arguments(i).prameter_value));
+                            WHEN 'PL/SQL BOOLEAN'
+                            THEN
+                                DBMS_SQL.bind_variable(
+                                    c,
+                                    ':'
+                                    || t_jobs(inx).process_arguments(i).argument_name,
+                                    CASE t_jobs(inx).process_arguments(i).prameter_value
+                                        WHEN 'TRUE'
+                                        THEN
+                                            TRUE
+                                        ELSE
+                                            FALSE
+                                    END);
                             WHEN 'DATE'
                             THEN
                                 DBMS_SQL.bind_variable(
@@ -329,8 +345,6 @@ END;
 /
 
 
-GRANT EXECUTE ON BIZMOD_API.EXECUTE_JOBS TO ABC;
+GRANT EXECUTE ON bizmod_api.execute_jobs TO abc;
 
-GRANT EXECUTE ON BIZMOD_API.EXECUTE_JOBS TO LORDT;
-
-GRANT EXECUTE ON BIZMOD_API.EXECUTE_JOBS TO POSSEEXTENSIONS;
+GRANT EXECUTE ON bizmod_api.execute_jobs TO posseextensions;

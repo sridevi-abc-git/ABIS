@@ -1,6 +1,4 @@
-CREATE OR REPLACE FUNCTION BIZMOD_API.uploadfirstdata(
-    a_packet       IN CLOB,
-    a_seq          IN NUMBER)
+CREATE OR REPLACE FUNCTION uploadfirstdata(a_packet IN CLOB, a_seq IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
@@ -12,16 +10,17 @@ IS
     -- History:
     -------------------------------------------------------------------------------
     --    Ver:     Date          Ticket          Comment
-    --          09/13/2023 TJL  BIZ-14091   Initial File Created
-    --          12/20/2023 TJL  BIZ-14091   Corrected bugs and adding logging
-    --    1.0   01/04/2023 TJL  BIZ-14091   Corrected bug in parsing file
-    --    2.0   02/06/2024 TJL  BIZ-14440   Removed parsing of Reference Column Data
-    --    3.0   05/21/2024 TJL  BIZ-15523   Changed how batches are scheduled
-    --    3.1.2 05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
-    --                                        and what email procedure is called
-    --    4.0   07/08/2024 TJL              Add check to see if file already uploaded
-    --    5.0   08/08/2024 TJL  BIZ-16000   Change to new createjob procedure
-    --    6.0   10/14/2025 TJL  BIZ-19361   Change how file upload records are processed.
+    --           09/13/2023 TJL  BIZ-14091   Initial File Created
+    --           12/20/2023 TJL  BIZ-14091   Corrected bugs and adding logging
+    --    1.0    01/04/2023 TJL  BIZ-14091   Corrected bug in parsing file
+    --    2.0    02/06/2024 TJL  BIZ-14440   Removed parsing of Reference Column Data
+    --    3.0    05/21/2024 TJL  BIZ-15523   Changed how batches are scheduled
+    --    3.1.2  05/24/2024 TJL  BIZ-15485   Changed how uploade file data is processed
+    --                                         and what email procedure is called
+    --    4.0    07/08/2024 TJL              Add check to see if file already uploaded
+    --    5.0    08/08/2024 TJL  BIZ-16000   Change to new createjob procedure
+    --    6.0    10/14/2025 TJL  BIZ-19361   Change how file upload records are processed.
+    --    7.0.0  12/08/2025 TJL  BIZ-19750   Limit number of charactes for t_sqlerrm
     -- ****************************************************************************
 
     t_return       CLOB;
@@ -224,7 +223,7 @@ BEGIN
                         ORDER BY v)
             LOOP
                 -- reset variable
-                t_paymentobjectid := null;
+                t_paymentobjectid := NULL;
 
                 BEGIN
                     WITH
@@ -294,79 +293,86 @@ BEGIN
                 EXCEPTION
                     WHEN NO_DATA_FOUND
                     THEN
-                        IF (t_paymentobjectid is not null)
-                        then
-                        -- If confirmation number not found in the eservices table
-                        --  but has a payment object, then it was manually paid
-                        --  thru ABIS and not LSP.
-                        -- Retrieve payment information from payment objectid
-                        SELECT fd_rec(
-                                   LISTAGG(
-                                       DISTINCT
-                                           api.pkg_columnquery.VALUE(
+                        IF (t_paymentobjectid IS NOT NULL)
+                        THEN
+                            -- If confirmation number not found in the eservices table
+                            --  but has a payment object, then it was manually paid
+                            --  thru ABIS and not LSP.
+                            -- Retrieve payment information from payment objectid
+                            SELECT fd_rec(
+                                       LISTAGG(
+                                           DISTINCT
                                                api.pkg_columnquery.VALUE(
-                                                   r.fromobjectid,
-                                                   'jobid'),
-                                               'LicenseNumber'),
-                                       ','),
-                                   LISTAGG(
-                                       DISTINCT
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.fromobjectid,
+                                                       'jobid'),
+                                                   'LicenseNumber'),
+                                           ','),
+                                       LISTAGG(
+                                           DISTINCT
+                                               api.pkg_columnquery.VALUE(
+                                                   r.toobjectid,
+                                                   'feeactivity'),
+                                           ','), -- feeactivity,
+                                       SUM(
+                                           api.pkg_columnquery.numericvalue(
+                                               reo.objectid,
+                                               'PaymentAmount')), -- paymentamount,
+                                       MAX(
                                            api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'feeactivity'),
-                                       ','), -- feeactivity,
-                                   SUM(
-                                       api.pkg_columnquery.numericvalue(
-                                           reo.objectid,
-                                           'PaymentAmount')), -- paymentamount,
-                                   MAX(
-                                       api.pkg_columnquery.VALUE(
-                                           reo.objectid,
-                                           'paymentmethod')), -- PAYMENTMEDIUM
-                                   MAX(
-                                       api.pkg_columnquery.VALUE(
-                                           reo.objectid,
-                                           'PayeeReference')), --   CONFIRMATIONNUMBER,
-                                   CASE
-                                       WHEN MAX(fd.confirmationnumber)
-                                                IS NULL
-                                       THEN
-                                           'Y'
-                                       ELSE
-                                           'D'
-                                   END) -- ABISPAYMENT)
-                          INTO t_row
-                          -- To get to some of the payment information need to go from
-                          --  payment object -> payment transaction -> fee transaction
-                          --   -> fee object -> license fee schedule
-                          FROM api.registeredexternalobjects  reo
-                               JOIN api.paymenttransactions pt
-                                   ON pt.paymentid = TO_NUMBER(reo.linkvalue)
-                               JOIN api.feetransactions ft
-                                   ON ft.transactionid = pt.transactionid
-                               JOIN api.relationships r
-                                   ON (r.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'o_fee',
-                                           'LicenseFeeSchedule')
-                                   AND r.fromobjectid =
-                                       (SELECT reo.objectid -- feeobjid
-                                          FROM api.registeredexternalobjects
-                                               reo
-                                         WHERE reo.objectdefid =
-                                               api.pkg_configquery.objectdefidforname(
-                                                   'o_fee')
-                                           AND reo.linkvalue =
-                                               TO_CHAR(ft.feeid)))
-                               LEFT OUTER JOIN bizmod_api.first_data_t fd
-                                   ON (fd.confirmationnumber =
-                                       api.pkg_columnquery.VALUE(
-                                           reo.objectid,
-                                           'PayeeReference'))
-                         WHERE reo.objectid = t_paymentobjectid;
-                    else
-                        t_row := fd_rec(null,null,null,null,rec.v,'E');
-                    END IF;
+                                               reo.objectid,
+                                               'paymentmethod')), -- PAYMENTMEDIUM
+                                       MAX(
+                                           api.pkg_columnquery.VALUE(
+                                               reo.objectid,
+                                               'PayeeReference')), --   CONFIRMATIONNUMBER,
+                                       CASE
+                                           WHEN MAX(fd.confirmationnumber)
+                                                    IS NULL
+                                           THEN
+                                               'Y'
+                                           ELSE
+                                               'D'
+                                       END) -- ABISPAYMENT)
+                              INTO t_row
+                              -- To get to some of the payment information need to go from
+                              --  payment object -> payment transaction -> fee transaction
+                              --   -> fee object -> license fee schedule
+                              FROM api.registeredexternalobjects  reo
+                                   JOIN api.paymenttransactions pt
+                                       ON pt.paymentid =
+                                          TO_NUMBER(reo.linkvalue)
+                                   JOIN api.feetransactions ft
+                                       ON ft.transactionid = pt.transactionid
+                                   JOIN api.relationships r
+                                       ON (r.endpointid =
+                                           api.pkg_configquery.endpointidforname(
+                                               'o_fee',
+                                               'LicenseFeeSchedule')
+                                       AND r.fromobjectid =
+                                           (SELECT reo.objectid -- feeobjid
+                                              FROM api.registeredexternalobjects
+                                                   reo
+                                             WHERE reo.objectdefid =
+                                                   api.pkg_configquery.objectdefidforname(
+                                                       'o_fee')
+                                               AND reo.linkvalue =
+                                                   TO_CHAR(ft.feeid)))
+                                   LEFT OUTER JOIN bizmod_api.first_data_t fd
+                                       ON (fd.confirmationnumber =
+                                           api.pkg_columnquery.VALUE(
+                                               reo.objectid,
+                                               'PayeeReference'))
+                             WHERE reo.objectid = t_paymentobjectid;
+                        ELSE
+                            t_row :=
+                                fd_rec(NULL,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       rec.v,
+                                       'E');
+                        END IF;
                 END;
 
                 -- start building email information for body of a processing email
@@ -392,6 +398,7 @@ BEGIN
                 THEN
                     t_row.abispayment := 'B'; -- indicates already in a batch
                 END IF;
+
                 t_recordsprocessed := t_recordsprocessed + 1;
 
                 -- setup error information if duplicate or already processed in a batch
@@ -415,9 +422,7 @@ BEGIN
                     WHEN 'E'
                     THEN
                         t_error_info :=
-                            t_error_info
-                            || 'Not Found: '
-                            || t_line_info;
+                            t_error_info || 'Not Found: ' || t_line_info;
 
                         t_errorrecords := t_errorrecords + 1;
                     ELSE
@@ -544,7 +549,7 @@ BEGIN
                     'Error Records:   (Error, License Number, Fee Activity(s), Payment Amount, Confirmation Number, Payee Name)'
                     || CHR(13)
                     || t_error_info;
-                t_sqlerrm := t_error_info;
+                t_sqlerrm := SUBSTR(t_error_info, 1, 3999);
             END IF;
 
             -- if there were any AWF payments in the upload then call the create job process
@@ -562,7 +567,8 @@ BEGIN
             THEN
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'CREATETRANSMITTALJOB',
-                    a_parameters => bizmod_api.job_prameters_tbl(a_seq, sysdate));
+                    a_parameters =>
+                        bizmod_api.job_prameters_tbl(a_seq, SYSDATE));
             END IF;
 
             -- Create the JSON response that the settlement file was processedc
