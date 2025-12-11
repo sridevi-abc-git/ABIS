@@ -71,7 +71,6 @@ IS
                 || '."');
     END;
 
-
     ----------------------------------------------------------------------------------------------------
     --  DatePlus()     --Public
     --  This procedure adds a_PlusDays days to the a_Date1 date field and sets the a_Date2Name date field with a_Date1 + a_PlusDays.
@@ -117,7 +116,25 @@ IS
     ** This is used to copy the ProcessId of a process to
     ** the process that created it
     *********************************/
-    PROCEDURE raiseerrpairedlt(a_objectid      udt_id,
+    PROCEDURE copyidtocreatedbyprocess(a_objectid udt_id, a_asofdate DATE)
+    IS
+        t_createdbyprocessid   udt_id;
+    BEGIN
+        t_createdbyprocessid   :=
+            api.pkg_columnquery.numericvalue(a_objectid,
+                                             'CreatedByProcessId');
+
+        api.pkg_columnupdate.setvalue(t_createdbyprocessid,
+                                      'CreatedProcessId',
+                                      a_objectid);
+    END copyidtocreatedbyprocess;
+
+    /*******************************
+     ** RaiseErrPairedLT()
+     ** This will run on completion of Enter Application, Add Permit/LT and Issue License
+     **   to verify that any Paired Master LTs for any existing LTs are added to the Application.
+    ****************************** */
+   PROCEDURE raiseerrpairedlt(a_objectid      udt_id,
                                a_asofdate      DATE,
                                a_jobid         udt_id)
     IS
