@@ -412,7 +412,8 @@ AS
                 t_results :=
                     calllsp(a_urlinfo   => a_urlinfo,
                               a_method    => a_method,
-                              a_content   => a_content);
+                              a_content   => a_content,
+                              a_file      => a_file);
 
                 CASE t_results.get_number('status')
                     WHEN 403 -- forbidden

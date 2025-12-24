@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE applicationsavejob(
+CREATE OR REPLACE PROCEDURE BIZMOD_API.applicationsavejob(
     a_objectid     api.pkg_definition.udt_id,
     a_asofdate     DATE,
     a_jobid        api.pkg_definition.udt_id,
@@ -47,7 +47,7 @@ AS
     t_results_text VARCHAR2(32767);
     t_retry        varchar2(1) := case when a_retry then 'Y' else 'N' end;
     t_status_code  NUMBER;
-    
+
 BEGIN
     BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
@@ -132,7 +132,7 @@ BEGIN
                                 || 'Return Code: '
                                 || t_status_code
                                 || CHR(13)
-                                || 'Retried: ' 
+                                || 'Retried: '
                                 || case t_retry when 'Y' then 'TRUE' else 'FALSE' end
                                 || CHR(13)
                                 || 'Results: '
@@ -165,4 +165,4 @@ END;
 /
 
 
-GRANT EXECUTE ON bizmod_api.applicationsavejob TO posseextensions;
+GRANT EXECUTE ON BIZMOD_API.APPLICATIONSAVEJOB TO POSSEEXTENSIONS;
