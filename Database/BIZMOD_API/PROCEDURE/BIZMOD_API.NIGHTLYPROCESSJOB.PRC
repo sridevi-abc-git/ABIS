@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE BIZMOD_API.nightlyprocessjob
+CREATE OR REPLACE PROCEDURE bizmod_api.nightlyprocessjob
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.NIGHTLYPROCESSJOB.PRC
@@ -55,7 +55,7 @@ IS
     --  20.0.0  09/12/2025  BN   BIZ-19069  Application update notification procedure inclusion
     --  20.0.1  09/16/2025  TJL  BIZ-19262  Removed code that referenced E_FEES_T table
     --  20.0.2  11/03/2025  TJL  BIZ-19526   Changed how parameters are passed to create job
-    --  21.0.0  12/24/2025  TJL  BIZ-19829  Corrected bug in updating e_payments_t table with AWF Information
+    --  21.0.1  12/24/2025  TJL  BIZ-19829  Corrected bug in updating e_payments_t table with AWF Information
     -- ************************************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
@@ -493,7 +493,7 @@ IS
             IF (t_cnt > 0)
             THEN
                 -- create awf payment batches
-                bizmod_api.createawfpaymentsjob(NULL);
+                bizmod_api.createawfpaymentsjob(0);
             END IF;
 
             -- check for any new license types added
@@ -1330,6 +1330,6 @@ END nightlyprocessjob;
 /
 
 
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO ABC;
+GRANT EXECUTE ON bizmod_api.nightlyprocessjob TO abc;
 
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO POSSEEXTENSIONS;
+GRANT EXECUTE ON bizmod_api.nightlyprocessjob TO posseextensions;
