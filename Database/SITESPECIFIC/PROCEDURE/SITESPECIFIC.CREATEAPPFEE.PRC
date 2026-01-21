@@ -32,6 +32,7 @@ CREATE OR REPLACE PROCEDURE SITESPECIFIC.createappfee(
 --  06/12/2025  PK           Changed Created date logic for priority job
 --  07/02/2025 PK           Addeded code to create App fee for Special Legislation type
 --  10/10/2025 PK           Added code to create app fee for change application when change type is Add Primary License Type
+--  01/21/2026 PK           commented code to prevenmt creating App fee for Intercounty Transfer Priority Application Task 7992
 
 -------------------------------------------------------------------------------
 IS
@@ -139,11 +140,11 @@ BEGIN
 
         -- 09/10/2019 TJL 19059 added following code to handle isTransfered flag not
         --    being set during Enter Priority Application process
-        IF (t_applicationtype IN ('Intercounty Transfer')) AND
-            (api.pkg_columnquery.value(a_objectid, 'objectdefname') != 'p_EnterPriorityApplication' 
-             AND api.pkg_columnquery.VALUE(rec.toobjectid, 'istransferred') = 'N') THEN
-            t_applicationtype := 'Original';
-        END IF;
+--        IF (t_applicationtype IN ('Intercounty Transfer')) AND
+--            (api.pkg_columnquery.value(a_objectid, 'objectdefname') != 'p_EnterPriorityApplication' 
+--             AND api.pkg_columnquery.VALUE(rec.toobjectid, 'istransferred') = 'N') THEN
+--            t_applicationtype := 'Original';
+--        END IF; ----  01/21/2026 PK           commented code to prevenmt creating App fee for Intercounty Transfer Priority Application Task 7992
 
         IF (t_applicationtype in ('Original', 'Change', 'Special Legislation') OR
             -- 09/10/2019 TJL 19059 Transfer license types found in original license array
