@@ -37,6 +37,7 @@ AS
     --  16.0.0  09/30/2025  TJL  BIZ-19339    Add retry to call LSP on timeout
     --  17.0.0  10/31/2025  TJL  BIZ-19526    Added an optional parameter to Createjob process
     --  18.0.0  11/25/2025  TJL  BIZ-19701    Added notify_lsp and removed lsplogin, calllsp
+    --  19.0.0  01/28/2026  TJL  BIZ-19069    Removed FUNCTION getHashvalueForApplication
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -121,9 +122,6 @@ AS
                         a_application_id IN NUMBER DEFAULT NULL,
                         a_schedule_time IN DATE DEFAULT SYSTIMESTAMP,
                         a_parameters    IN bizmod_api.job_prameters_tbl DEFAULT NULL);
-
---   FUNCTION getHashvalueForApplication(a_jobid IN NUMBER)
---        RETURN NUMBER;
 
 END;
 /

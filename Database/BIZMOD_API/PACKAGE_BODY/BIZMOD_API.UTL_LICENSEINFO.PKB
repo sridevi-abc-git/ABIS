@@ -61,6 +61,7 @@ AS
     --  16.0.0  09/30/2025  TJL  BIZ-19339    Add retry to call LSP on timeout
     --  17.0.0  10/31/2025  TJL  BIZ-19526    Change createjob procedure to update a job que table instead
     --  18.0.0  11/25/2025  TJL  BIZ-19701    Added notify_lsp and removed lsplogin
+    --  19.0.0  01/28/2026  TJL  BIZ-19069    Removed FUNCTION getHashvalueForApplication
     -- ****************************************************************************
     gc_newline CONSTANT CHAR(2) := CHR(13) || CHR(10);
 
@@ -1148,32 +1149,5 @@ AS
         END IF;
     END createjob;
 
---    FUNCTION gethashvalueforapplication(a_jobid IN NUMBER)
---        RETURN NUMBER
---    IS
---        t_hashvalue    NUMBER;
---        t_text         VARCHAR2(32767);
---    BEGIN
---        t_text :=
---            'APPLICANTNAME : '
---            || api.pkg_columnquery.VALUE(a_jobid, 'APPLICANTNAMES');
---        t_text :=
---            t_text
---            || ' DBA : '
---            || api.pkg_columnquery.VALUE(a_jobid, 'PRIMARYDBA');
---        t_text :=
---            t_text
---            || ' PREMISESADDRESS : '
---            || api.pkg_columnquery.VALUE(a_jobid, 'PREMADDRESS1LINEDISPLAY');
---        t_text :=
---            t_text
---            || ' SECONDARYLICENSETYPES'
---            || api.pkg_columnquery.VALUE(a_jobid, 'SECONDARYLTCODEWITHCOUNT');
---
---        -- t_text := t_json_app.to_string;
---        SELECT ORA_HASH(t_text) INTO t_hashvalue FROM DUAL;
---
---        RETURN t_hashvalue;
---    END;
 END;
 /
