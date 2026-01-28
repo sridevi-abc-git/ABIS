@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE bizmod_api.nightlyprocessjob
+CREATE OR REPLACE PROCEDURE BIZMOD_API.nightlyprocessjob
 IS
     -- ****************************************************************************
     -- File:        BIZMOD_API.NIGHTLYPROCESSJOB.PRC
@@ -56,6 +56,7 @@ IS
     --  20.0.1  09/16/2025  TJL  BIZ-19262  Removed code that referenced E_FEES_T table
     --  20.0.2  11/03/2025  TJL  BIZ-19526   Changed how parameters are passed to create job
     --  21.0.1  12/24/2025  TJL  BIZ-19829  Corrected bug in updating e_payments_t table with AWF Information
+    --  22.0.0  01/28/2026  TJL  BIZ-19069  Added scheduling the LICENCEAPPUPDATJOB.
     -- ************************************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
@@ -1147,19 +1148,24 @@ BEGIN
                         p
                         AS
                             (SELECT b.id,
-                                    b.feeid                awffeeid,
+                                    b.feeid
+                                        awffeeid,
                                     (SELECT objectid
-                                     FROM api.registeredexternalobjects reo
-                                    WHERE reo.objectdefid =
-                                          api.pkg_configquery.objectdefidforname(
-                                              'o_fee')
-                                      AND reo.linkvalue = TO_CHAR(b.feeid)) awffeeobjid,
+                                       FROM api.registeredexternalobjects
+                                            reo
+                                      WHERE reo.objectdefid =
+                                            api.pkg_configquery.objectdefidforname(
+                                                'o_fee')
+                                        AND reo.linkvalue =
+                                            TO_CHAR(b.feeid))
+                                        awffeeobjid,
                                     api.pkg_simplesearch.objectbyindex(
                                         'j_PaymentBatch',
                                         'ExternalFileNum',
                                         api.pkg_columnquery.VALUE(
                                             b.paymentobjectid,
-                                            'BatchId'))    paymentbatch,
+                                            'BatchId'))
+                                        paymentbatch,
                                     b.licensetypejobid
                                FROM (SELECT a.ROWID
                                                 id,
@@ -1313,6 +1319,9 @@ BEGIN
                 t_trace := DBMS_UTILITY.format_error_backtrace;
         END;
 
+        bizmod_api.utl_licenseinfo.createjob(
+            a_procedure => 'LICENSEAPPUPDATEJOB');
+
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,
                                                info,
@@ -1330,6 +1339,6 @@ END nightlyprocessjob;
 /
 
 
-GRANT EXECUTE ON bizmod_api.nightlyprocessjob TO abc;
+GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO ABC;
 
-GRANT EXECUTE ON bizmod_api.nightlyprocessjob TO posseextensions;
+GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO POSSEEXTENSIONS;

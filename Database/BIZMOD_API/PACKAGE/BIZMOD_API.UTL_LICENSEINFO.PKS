@@ -122,8 +122,8 @@ AS
                         a_schedule_time IN DATE DEFAULT SYSTIMESTAMP,
                         a_parameters    IN bizmod_api.job_prameters_tbl DEFAULT NULL);
 
-   FUNCTION getHashvalueForApplication(a_jobid IN NUMBER)
-        RETURN NUMBER;
+--   FUNCTION getHashvalueForApplication(a_jobid IN NUMBER)
+--        RETURN NUMBER;
 
 END;
 /

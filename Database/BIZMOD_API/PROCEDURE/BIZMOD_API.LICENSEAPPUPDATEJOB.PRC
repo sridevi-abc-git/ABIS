@@ -200,5 +200,5 @@ BEGIN
 
         COMMIT;
     END IF;
-END licenseapplicationupdate;
+END licenseappupdatejob;
 /

@@ -1148,32 +1148,32 @@ AS
         END IF;
     END createjob;
 
-    FUNCTION gethashvalueforapplication(a_jobid IN NUMBER)
-        RETURN NUMBER
-    IS
-        t_hashvalue    NUMBER;
-        t_text         VARCHAR2(32767);
-    BEGIN
-        t_text :=
-            'APPLICANTNAME : '
-            || api.pkg_columnquery.VALUE(a_jobid, 'APPLICANTNAMES');
-        t_text :=
-            t_text
-            || ' DBA : '
-            || api.pkg_columnquery.VALUE(a_jobid, 'PRIMARYDBA');
-        t_text :=
-            t_text
-            || ' PREMISESADDRESS : '
-            || api.pkg_columnquery.VALUE(a_jobid, 'PREMADDRESS1LINEDISPLAY');
-        t_text :=
-            t_text
-            || ' SECONDARYLICENSETYPES'
-            || api.pkg_columnquery.VALUE(a_jobid, 'SECONDARYLTCODEWITHCOUNT');
-
-        -- t_text := t_json_app.to_string;
-        SELECT ORA_HASH(t_text) INTO t_hashvalue FROM DUAL;
-
-        RETURN t_hashvalue;
-    END;
+--    FUNCTION gethashvalueforapplication(a_jobid IN NUMBER)
+--        RETURN NUMBER
+--    IS
+--        t_hashvalue    NUMBER;
+--        t_text         VARCHAR2(32767);
+--    BEGIN
+--        t_text :=
+--            'APPLICANTNAME : '
+--            || api.pkg_columnquery.VALUE(a_jobid, 'APPLICANTNAMES');
+--        t_text :=
+--            t_text
+--            || ' DBA : '
+--            || api.pkg_columnquery.VALUE(a_jobid, 'PRIMARYDBA');
+--        t_text :=
+--            t_text
+--            || ' PREMISESADDRESS : '
+--            || api.pkg_columnquery.VALUE(a_jobid, 'PREMADDRESS1LINEDISPLAY');
+--        t_text :=
+--            t_text
+--            || ' SECONDARYLICENSETYPES'
+--            || api.pkg_columnquery.VALUE(a_jobid, 'SECONDARYLTCODEWITHCOUNT');
+--
+--        -- t_text := t_json_app.to_string;
+--        SELECT ORA_HASH(t_text) INTO t_hashvalue FROM DUAL;
+--
+--        RETURN t_hashvalue;
+--    END;
 END;
 /
