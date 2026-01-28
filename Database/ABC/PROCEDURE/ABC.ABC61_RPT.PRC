@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE ABC.abc61_rpt(
+CREATE OR REPLACE PROCEDURE ABC."ABC61_RPT" (
     a_objectid      api.pkg_definition.udt_id)
 AS
     -- **************************************************************************
@@ -15,7 +15,8 @@ AS
     -- History:
     -----------------------------------------------------------------------------
     --    Date                  Comment
-    -- 08/20/2018 TJL         Initial Check-in
+    -- 08/20/2018 TJL           Initial Check-in
+    -- 12/03/2025 CX            Report performance updates
     -- **************************************************************************
     t_conductlicenseinvestigation   api.pkg_definition.udt_id
         := api.pkg_configquery.objectdefidforname(
@@ -138,8 +139,8 @@ BEGIN
                    liul.endtime              endtime,
                    riiul.investigationjobid  objectid
               FROM query.r_investigationinvuserlog  riiul
-                   JOIN query.l_investigationuserlog liul
-                       ON liul.userlogid = riiul.investigationuserloglogid
+                   JOIN query.o_investigationuserlog liul
+                       ON liul.Objectid = riiul.InvestigationUserLogObjId
              WHERE riiul.investigationjobid = a_objectid;
     ELSE
         INSERT INTO abc.abc61_individual_t(premadd,
@@ -302,45 +303,69 @@ BEGIN
                                            starttime,
                                            endtime,
                                            objectid)
-            SELECT lrl.username  investigator,
-                   lrl.logdate   logdate,
-                   lrl.comments  invcomments,
-                   lrl.starttime starttime,
-                   lrl.endtime   endtime,
-                   p.processid   objectid
-              FROM api.processes  p
-                   JOIN query.l_lruserlog lrl
-                       ON lrl.referencedobjectid = p.processid
-             WHERE p.processid = a_objectid
-               AND p.processtypeid IN
+            with w_UserLogs as ( --   -- 12/03/2025 CX            Report performance updates
+              select 
+                ToObjectId,   -- ProcessId
+                u.UserName,
+                u.LogDate,
+                u.Comments,
+                u.StartTime,
+                u.EndTime
+              from api.Relationships r
+              join query.o_LRUserLog u
+                on u.ObjectId = r.FromObjectId
+              where r.ToObjectId = a_ObjectId
+                and EndpointId in (
+                    api.pkg_ConfigQuery.EndPointIdForName('o_LRUserLog', 'Application'),
+                    api.pkg_ConfigQuery.EndPointIdForName('o_LRUserLog', 'AdminInvestigation'),
+                    api.pkg_ConfigQuery.EndPointIdForName('o_LRUserLog', 'LicenseInvestigation')
+               ) 
+            )
+            SELECT 
+              w.UserName investigator,
+              w.LogDate logdate,
+              w.Comments invcomments,
+              w.StartTime starttime,
+              w.EndTime endtime,
+              p.ProcessId objectid
+            FROM 
+              api.processes  p
+              JOIN w_UserLogs w
+                  ON w.ToObjectId = p.ProcessId
+            WHERE p.processid = a_objectid
+                AND p.processtypeid IN
                        (t_conductlicenseinvestigation,
                         t_conductadmininvestigation)
             UNION
-            SELECT lrl.username  investigator,
-                   lrl.logdate   logdate,
-                   lrl.comments  invcomments,
-                   lrl.starttime starttime,
-                   lrl.endtime   endtime,
-                   p.processid   objectid
-              FROM query.p_assignlicenseinvestigation  a
-                   JOIN query.p_conductlicenseinvestigation p
-                       ON p.processid = a.assignprocessid
-                   JOIN query.l_lruserlog lrl
-                       ON lrl.referencedobjectid = p.processid
-             WHERE a.processid = a_objectid
+            SELECT 
+              w.UserName investigator,
+              w.LogDate logdate,
+              w.Comments invcomments,
+              w.StartTime starttime,
+              w.EndTime endtime,
+              p.ProcessId objectid
+            FROM 
+              query.p_assignlicenseinvestigation  a
+              JOIN query.p_conductlicenseinvestigation p
+                  ON p.processid = a.assignprocessid
+              JOIN w_UserLogs w
+                  ON w.ToObjectId = p.processid
+            WHERE a.processid = a_objectid
             UNION
-            SELECT lrl.username  investigator,
-                   lrl.logdate   logdate,
-                   lrl.comments  invcomments,
-                   lrl.starttime starttime,
-                   lrl.endtime   endtime,
-                   p.processid   objectid
-              FROM query.p_assignadmininvestigation  a
-                   JOIN query.p_conductadmininvestigation p
-                       ON p.processid = a.assignprocessid
-                   JOIN query.l_lruserlog lrl
-                       ON lrl.referencedobjectid = p.processid
-             WHERE a.processid = a_objectid;
+            SELECT --   -- 12/03/2025 CX            Report performance updates
+              w.UserName investigator,
+              w.LogDate logdate,
+              w.Comments invcomments,
+              w.StartTime starttime,
+              w.EndTime endtime,
+              p.ProcessId objectid
+            FROM 
+              query.p_assignadmininvestigation  a
+              JOIN query.p_conductadmininvestigation p
+                  ON p.processid = a.assignprocessid
+              JOIN w_UserLogs w
+                  ON w.ToObjectId = p.processid
+            WHERE a.processid = a_objectid;
     END IF;
 END abc61_rpt;
 /
