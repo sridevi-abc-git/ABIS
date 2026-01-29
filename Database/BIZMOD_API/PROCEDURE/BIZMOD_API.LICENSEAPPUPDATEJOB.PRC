@@ -55,7 +55,7 @@ BEGIN
         DBMS_OUTPUT.put_line(rec.jobid);
 
         -- compare hash value to see if data has been changed in abis
-        --        CONTINUE WHEN rec.licensedata = t_license_data;
+        CONTINUE WHEN rec.licensedata = t_license_data;
 
         -- add info to process table
         t_proc_info.EXTEND(1);
