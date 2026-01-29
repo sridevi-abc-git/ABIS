@@ -40,7 +40,7 @@ AS
       RETURN CLOB
     IS
         t_license_data  CLOB;
-        
+
     BEGIN
     SELECT json_query(
            json_object(
@@ -143,7 +143,7 @@ AS
   into t_license_data
   FROM dual;
 
-    
+
         return t_license_data;
     end get_license_data;
 
