@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION uploadfirstdata(a_packet IN CLOB, a_seq IN NUMBER)
+CREATE OR REPLACE FUNCTION BIZMOD_API.uploadfirstdata(a_packet IN CLOB, a_seq IN NUMBER)
     RETURN CLOB
 IS
     -- ****************************************************************************
