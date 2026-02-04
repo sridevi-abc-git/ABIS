@@ -35,6 +35,7 @@ IS
     --                                        removed support for transfer applications since
     --                                        that support was moved to a different process
     --   9.0.0  09/17/2025  TJL  BIZ-19069  Added getting hash value for the application
+    --  10.0.0  01/28/2026  TJL  BIZ-19069  Removed getting hash value and added geting application data
     -- ****************************************************************************
 
     TYPE apprec_t IS RECORD(lspapplicationid VARCHAR2(40),
@@ -479,9 +480,9 @@ BEGIN
         COMMIT;
 
         UPDATE bizmod_api.license_app_t a
-           SET a.hashvalue =
-                   bizmod_api.utl_licenseinfo.gethashvalueforapplication(
-                       a.jobid)
+           SET a.licensedata =
+                   bizmod_api.pkg_abis.get_license_data( -- 01/28/2026  TJL  BIZ-19069
+                       a_jobid => a.jobid)
          WHERE a.jobid = t_jobid;
 
         IF (t_sqlerrm IS NOT NULL)

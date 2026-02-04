@@ -1,5 +1,4 @@
-/* Formatted on 11/23/2025 2:26:00 PM (QP5 v5.404) */
-CREATE OR REPLACE PROCEDURE bizmod_api.execute_jobs
+CREATE OR REPLACE PROCEDURE BIZMOD_API.execute_jobs
 IS
     /******************************************************************************
         File:       BIZMOD_API.EXECUTE_JOBS.PRC
@@ -345,6 +344,8 @@ END;
 /
 
 
-GRANT EXECUTE ON bizmod_api.execute_jobs TO abc;
+GRANT EXECUTE ON BIZMOD_API.EXECUTE_JOBS TO ABC;
 
-GRANT EXECUTE ON bizmod_api.execute_jobs TO posseextensions;
+GRANT EXECUTE ON BIZMOD_API.EXECUTE_JOBS TO LORDT;
+
+GRANT EXECUTE ON BIZMOD_API.EXECUTE_JOBS TO POSSEEXTENSIONS;

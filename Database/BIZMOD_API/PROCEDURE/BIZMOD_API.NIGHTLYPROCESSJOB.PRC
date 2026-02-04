@@ -55,6 +55,8 @@ IS
     --  20.0.0  09/12/2025  BN   BIZ-19069  Application update notification procedure inclusion
     --  20.0.1  09/16/2025  TJL  BIZ-19262  Removed code that referenced E_FEES_T table
     --  20.0.2  11/03/2025  TJL  BIZ-19526   Changed how parameters are passed to create job
+    --  21.0.1  12/24/2025  TJL  BIZ-19829  Corrected bug in updating e_payments_t table with AWF Information
+    --  22.0.0  01/28/2026  TJL  BIZ-19069  Added scheduling the LICENCEAPPUPDATJOB.
     -- ************************************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
@@ -492,7 +494,7 @@ IS
             IF (t_cnt > 0)
             THEN
                 -- create awf payment batches
-                bizmod_api.createawfpaymentsjob(NULL);
+                bizmod_api.createawfpaymentsjob(0);
             END IF;
 
             -- check for any new license types added
@@ -596,7 +598,7 @@ IS
              WHERE t_fiscalstart = TRUNC(SYSDATE)
                AND NVL(lt.awfflag, 'Y') != 'NA'
                AND (lt.licensetypeexpirationdate = t_fiscalend
-                     or lt.awfflag = 'N'); -- 08/04/2025  TJL  BIZ-18942
+                 OR lt.awfflag = 'N'); -- 08/04/2025  TJL  BIZ-18942
 
             -- update awfflag for non 02 and 22 and update 02 and 22 that are not active
             UPDATE bizmod_api.licensetype_t lt
@@ -737,7 +739,6 @@ IS
             COMMIT;
         END;
     END;
-
 -- ****************************************************************************
 -- ****************************************************************************
 --   Main Process
@@ -758,9 +759,8 @@ BEGIN
         t_seq          NUMBER := bizmod_api.e_payment_seq.NEXTVAL();
         t_errorcnt     NUMBER := 0;
         t_fiscalstart  DATE
-                := TO_DATE(
-                       '01-JUL-'
-                       || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)));
+            := TO_DATE(
+                   '01-JUL-' || EXTRACT(YEAR FROM ADD_MONTHS(SYSDATE, -6)));
     BEGIN
         -- ********************************************************************
         t_body := 'E-Service Nightly Job Completed' || CHR(10) || CHR(13);
@@ -1005,11 +1005,13 @@ BEGIN
                           FROM bizmod_api.awf_t a
                          WHERE a.licensetypejobid = lt.licensetypejobid
                            AND ((a.submitteddate >
-                               ADD_MONTHS(lt.licensetypeexpirationdate, -12)
-                                  and lt.licensetypeexpirationdate >= t_fiscalstart)
-                               or (a.submitteddate > lt.licensetypeexpirationdate -- 08/04/2025  TJL  BIZ-18942
-                                  and lt.licensetypeexpirationdate < t_fiscalstart)
-                               )
+                                 ADD_MONTHS(lt.licensetypeexpirationdate,
+                                            -12)
+                             AND lt.licensetypeexpirationdate >=
+                                 t_fiscalstart)
+                             OR (a.submitteddate >
+                                 lt.licensetypeexpirationdate -- 08/04/2025  TJL  BIZ-18942
+                             AND lt.licensetypeexpirationdate < t_fiscalstart))
                            AND a.awffeeid IS NOT NULL);
 
             COMMIT;
@@ -1021,7 +1023,7 @@ BEGIN
             FOR rec IN (SELECT p.feeobjid, p.seq
                           FROM bizmod_api.e_payments_t p
                          WHERE p.feeobjid IS NOT NULL
-                           AND NVL(p.paymentobjectid, 1) > 0 -- 04/26/2024 TJL BIZ-15142
+                           AND p.paymentobjectid IS NULL -- 12/24/2025 TJL BIZ-19829
                            AND p.description LIKE '%AWF%')
             LOOP
                 BEGIN
@@ -1146,13 +1148,24 @@ BEGIN
                         p
                         AS
                             (SELECT b.id,
-                                    b.feeid                awffeeid,
+                                    b.feeid
+                                        awffeeid,
+                                    (SELECT objectid
+                                       FROM api.registeredexternalobjects
+                                            reo
+                                      WHERE reo.objectdefid =
+                                            api.pkg_configquery.objectdefidforname(
+                                                'o_fee')
+                                        AND reo.linkvalue =
+                                            TO_CHAR(b.feeid))
+                                        awffeeobjid,
                                     api.pkg_simplesearch.objectbyindex(
                                         'j_PaymentBatch',
                                         'ExternalFileNum',
                                         api.pkg_columnquery.VALUE(
                                             b.paymentobjectid,
-                                            'BatchId'))    paymentbatch,
+                                            'BatchId'))
+                                        paymentbatch,
                                     b.licensetypejobid
                                FROM (SELECT a.ROWID
                                                 id,
@@ -1193,6 +1206,7 @@ BEGIN
                                          AND a.paymentbatch IS NULL)) b)
                     SELECT p.id,
                            p.awffeeid,
+                           p.awffeeobjid,
                            p.paymentbatch,
                            api.pkg_columnquery.datevalue(p.paymentbatch,
                                                          'CompletedDate')
@@ -1203,6 +1217,7 @@ BEGIN
                 -- update awf record with payment information
                 UPDATE bizmod_api.awf_t a
                    SET a.awffeeid = rec.awffeeid,
+                       a.awffeeobjid = rec.awffeeobjid,
                        a.paymentbatch = rec.paymentbatch,
                        a.paymentbatchdate = rec.paymentbatchdate,
                        a.completed = 'Y'
@@ -1287,6 +1302,10 @@ BEGIN
                            WHERE a.awffeeid IS NOT NULL
                              AND p.licensenumber = a.licensenumber
                              AND p.licensetypecode = a.licensetypecode
+                             AND NOT EXISTS
+                                     (SELECT 1
+                                        FROM bizmod_api.e_payments_t p2
+                                       WHERE p2.feeobjid = a.awffeeobjid)
                         ORDER BY submitteddate DESC
                            FETCH FIRST 1 ROWS ONLY) -- BIZ-15991
              WHERE p.feeobjid IS NULL
@@ -1299,6 +1318,9 @@ BEGIN
                 t_sqlerrm := SQLERRM;
                 t_trace := DBMS_UTILITY.format_error_backtrace;
         END;
+
+        bizmod_api.utl_licenseinfo.createjob(
+            a_procedure => 'LICENSEAPPUPDATEJOB');
 
         INSERT INTO bizmod_api.e_process_log_t(seq,
                                                processjob,

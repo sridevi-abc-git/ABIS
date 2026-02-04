@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE manualpaymentjob(
+CREATE OR REPLACE PROCEDURE BIZMOD_API.manualpaymentjob(
     a_objectid     api.pkg_definition.udt_id,
     a_asofdate     DATE,
     a_jobid        api.pkg_definition.udt_id,
@@ -163,3 +163,6 @@ BEGIN
     END IF;
 END;
 /
+
+
+GRANT EXECUTE ON BIZMOD_API.MANUALPAYMENTJOB TO POSSEEXTENSIONS;

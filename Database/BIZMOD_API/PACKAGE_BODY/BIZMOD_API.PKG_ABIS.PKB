@@ -32,7 +32,122 @@ AS
     --  10.1.0   09/15/2025  TJL  BIZ-19212  Added fee_notification procedure.
     --  10.2.0   09/22/2025  BN   BIZ-19170  Gallonage value not getting set issue.
     --  11.0.0   11/03/2025  TJL  BIZ-19526  Changed how parameters are passed to create job
+    --  12.0.0   01/27/2026  TJL  BIZ-19069  Added get_license_data function
     -- **************************************************************************
+
+    FUNCTION get_license_data(
+        a_jobid         IN api.pkg_definition.udt_id)
+      RETURN CLOB
+    IS
+        t_license_data  CLOB;
+        
+    BEGIN
+    SELECT json_query(
+           json_object(
+               'objectId' VALUE a_jobid,
+               'applicants' VALUE
+                   json_object(
+                       'newApplicantName' VALUE
+                           api.pkg_columnquery.VALUE(a_jobid,
+                                                     'PrimaryApplicant')),
+               'premises' VALUE
+                   json_object(
+                       'newAddress' VALUE
+                           (SELECT json_object(
+                                       'location' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'addresslocation'),
+                                       'line1' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'ADDRESSLINE1'),
+                                       'line2' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'ADDRESSLINE2'),
+                                       'line3' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'ADDRESSLINE3'),
+                                       'city' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'USACITY'),
+                                       'state' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'USASTATE'),
+                                       'country' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'COUNTRY'),
+                                       'zipcode' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'ZIPCODE'),
+                                       'outsideCityLimits' VALUE
+                                           api.pkg_columnquery.VALUE(
+                                               r.toobjectid,
+                                               'outsidecitylimits')
+                                       ABSENT ON NULL)
+                              FROM api.relationships r
+                             WHERE r.endpointid =
+                                   api.pkg_configquery.endpointidforname(
+                                       'j_Application',
+                                       'Premises')
+                               AND r.fromobjectid = a_jobid
+                                                             ),
+                       'newDBAName' VALUE
+                           api.pkg_columnquery.VALUE(a_jobid, 'DBA')),
+               'primaryLicenseTypes' VALUE
+                   (SELECT json_arrayagg(
+                               json_object(
+                                   'LicenseTypeCode' VALUE
+                                       api.pkg_columnquery.VALUE(
+                                           r.toobjectid,
+                                           'LicenseTypeCode'),
+                                   'primaryCount' VALUE
+                                       api.pkg_columnquery.VALUE(
+                                           r.toobjectid,
+                                           'PrimaryLicenseTypeCount'),
+                                   'updatedSecondaryLicenseTypes' VALUE
+                                       (SELECT json_arrayagg(json_object(
+                                                                 'LicenseTypeCode' VALUE
+                                                                     api.pkg_columnquery.VALUE(
+                                                                         r2.toobjectid,
+                                                                         'LicenseTypeCode'),
+                                                                 'primaryCount' VALUE
+                                                                     api.pkg_columnquery.VALUE(
+                                                                         r2.relationshipid,
+                                                                         'LicenseTypeCount'))
+                                                             ORDER BY
+                                               api.pkg_columnquery.VALUE(
+                                                   r2.toobjectid,
+                                                   'LicenseTypeCode'))
+                                          FROM api.relationships r2
+                                         WHERE r2.endpointid =
+                                               api.pkg_configquery.endpointidforname(
+                                                   'o_PrimaryLicenseType',
+                                                   'LicTypeCatSecondary')
+                                           AND r2.fromobjectid = r.toobjectid)
+                                   ABSENT ON NULL))
+                      FROM api.relationships r
+                     WHERE r.endpointid =
+                           api.pkg_configquery.endpointidforname(
+                               'j_Application',
+                               'PrimaryLicenseType')
+                       AND r.fromobjectid = a_jobid)),
+           '$'
+           RETURNING CLOB PRETTY)
+  into t_license_data
+  FROM dual;
+
+    
+        return t_license_data;
+    end get_license_data;
+
+
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
     IS
