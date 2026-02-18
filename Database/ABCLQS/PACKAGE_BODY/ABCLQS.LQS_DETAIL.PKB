@@ -40,6 +40,7 @@ CREATE OR REPLACE PACKAGE BODY ABCLQS.LQS_DETAIL AS
 -- 12/10/2019 TJL   20023   Added returning Section Code with condition information  
 -- 06/15/2020 NW            Formatting
 -- 02/25/2025 PK            Added Notification for LA fires
+-- 02/17/2026 PK    7783    7783 status on website of withdrawn application
 -- ****************************************************************************
 
 ---------------------------------------------------
@@ -336,6 +337,7 @@ WITH LICENSE_TYPES AS
   JOIN MART.LICENSE LIC ON LIC.EXTERNALFILENUM = A.LICENSENUMBER 
   WHERE -- A.LICENSEEXISTS = 'Y' AND -- WO# 16847 Sheik 11/26/18 
    A.APPLICATIONSTATUS IN ('PEND', 'ISSUPD', 'DENIED', 'WTHDRN') 
+   AND A.APPLICATIONTYPE not in 'Change' -- Addeed by Pawan on 02/17/2026 7783 status on website of withdrawn application
   AND LIC.JOBID = p_JobId   
  
   UNION ALL -- Q5 
