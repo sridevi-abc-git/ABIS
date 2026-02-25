@@ -13,12 +13,12 @@ CREATE TABLE BIZMOD_API.ESERVICES_LOG_T_NEW
   INFO           CLOB,
   PACKET         CLOB,
   RESPONSE       CLOB,
-  CODE           NUMBER,
-  ERRM           CLOB,
-  BACKTRACE      CLOB,
-  RESPONSEDATE   TIMESTAMP(3),
   FILEDATA       BLOB,
-  CREATEDDATE    TIMESTAMP(6)
+  CODE           NUMBER,
+  ERR            CLOB,
+  BACKTRACE      CLOB,
+  REQUESTDATE    TIMESTAMP(3)                   DEFAULT SYSTIMESTAMP,
+  RESPONSEDATE   TIMESTAMP(3)
 )
 LOB (BACKTRACE) STORE AS SECUREFILE (
   TABLESPACE  API_ENC_DATA
@@ -35,7 +35,7 @@ LOB (BACKTRACE) STORE AS SECUREFILE (
               PCTINCREASE      0
               BUFFER_POOL      DEFAULT
              ))
-LOB (ERRM) STORE AS SECUREFILE (
+LOB (ERR) STORE AS SECUREFILE (
   TABLESPACE  API_ENC_DATA
   ENABLE      STORAGE IN ROW
   CHUNK       8192
@@ -81,11 +81,11 @@ LOB (INFO) STORE AS SECUREFILE (
               BUFFER_POOL      DEFAULT
              ))
 LOB (PACKET) STORE AS SECUREFILE (
-  TABLESPACE  API_ENC_LOB_DATA
+  TABLESPACE  API_ENC_DATA
   ENABLE      STORAGE IN ROW
   CHUNK       8192
   RETENTION
-  CACHE
+  NOCACHE
   LOGGING
   STORAGE    (
               INITIAL          104K
@@ -96,11 +96,11 @@ LOB (PACKET) STORE AS SECUREFILE (
               BUFFER_POOL      DEFAULT
              ))
 LOB (RESPONSE) STORE AS SECUREFILE (
-  TABLESPACE  API_ENC_LOB_DATA
+  TABLESPACE  API_ENC_DATA
   ENABLE      STORAGE IN ROW
   CHUNK       8192
   RETENTION
-  CACHE
+  NOCACHE
   LOGGING
   STORAGE    (
               INITIAL          104K
@@ -125,52 +125,3 @@ STORAGE    (
 LOGGING 
 NOCOMPRESS 
 NOCACHE;
-
-
-ALTER TABLE BIZMOD_API.ESERVICES_LOG_T_NEW ADD (
-  CONSTRAINT LOG_PACKET_JSON_CK_NEW
-  CHECK (packet IS JSON)
-  ENABLE VALIDATE);
-
-
-CREATE OR REPLACE TRIGGER BIZMOD_API.ESERVICES_LOG_T_NEW_TRG
-    AFTER INSERT OR UPDATE OF code
-    ON bizmod_api.eservices_log_t_new
-FOR EACH ROW
-DISABLE
-DECLARE
-    t_body         VARCHAR2(32000);
-BEGIN
-IF (nvl(:new.code, 0) < 0)
-THEN
-        t_body :=
---  LICENSENUMBER
---  OBJECTID     
---  APPLICATIONID
---  PROCESS      
---  CODE
---  ERRM
---    BACKTRACE
-            'Process Job '
-            || :new.request
-            || ' Failed'
-            || CHR(13)
-            || 'Seq Id: '
-            || CHR(9)
-            || :new.seq
-            || CHR(13)
-            || 'Error:  '
-            || CHR(13)
-            || :new.errm;
-
-        bizmod_api.utl_licenseinfo.sendemail(
-            a_process   => 'EMAIL_ERR',
-            a_subject   => 'Request :  ' || :new.request || ' has Errors',
-            a_body      => t_body);
-    END IF;
-    EXCEPTION
-        WHEN OTHERS
-        THEN
-            NULL;
-END;
-/
