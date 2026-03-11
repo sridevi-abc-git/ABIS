@@ -90,6 +90,7 @@ CREATE OR REPLACE PACKAGE BODY SITESPECIFIC."PKG_FEES"
 -- 06/12/2025 PK            made change to application fee calc api.pkg_columnquery.datevalue(a_jobid, 'ApplicationCreatedDate');
 -- 07/02/2025 PK WO 35273    Added code for Craft Distillers not to include in produce license batch if they did not report recently produced gallonage
 -- 08/22/2025 PK            Commented Type 74 code as per user
+-- 12/10/2025 PK 6584       New license Type 93 – Estate Tasting Event Permit
 
 -------------------------------------------------------------------------------
 
@@ -3047,7 +3048,7 @@ IS
                     --if population applies for this secondary, set secondary populationrange to primary populationrange, else set it to null.
                     IF z.populationapplies = 'Y'
                     OR (t_ltcode IN (50, 51, 52)
-                    AND z.licensetypecode IN (58, 91)) THEN   --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
+                    AND z.licensetypecode IN (58, 91, 93)) THEN --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.--12/03/2025 PK 6584 New license Type 93 – Estate Tasting Event Permit
                         t_spopulationrange   := t_populationrange;
                     ELSE
                         t_spopulationrange   := NULL;
@@ -4347,7 +4348,7 @@ IS
                                  AND z.licensetypecode NOT IN ('68') THEN  -- Added by Pawan for new LT 88 on 12/20/2018 WO 16989
                                     t_populationrange
                                 WHEN x.licensetypecode IN (50, 51, 52)
-                                  AND z.licensetypecode IN (58, 91) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
+                                  AND z.licensetypecode IN (58, 91, 93) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.--12/10/2025 PK 6584 New license Type 93 – Estate Tasting Event Permit
                                   OR x.licensetypecode IN (47,
                                                            48,
                                                            50,
@@ -4410,7 +4411,7 @@ IS
                                      AND z.licensetypecode NOT IN ('68') THEN  ---- Added by Pawan for new LT 88 on 12/20/2018 WO 16989
                                         t_populationrange
                                     WHEN x.licensetypecode IN (50, 51, 52)
-                                     AND z.licensetypecode IN (58, 91) --New License Type 91 - Beer Caterer Permit
+                                     AND z.licensetypecode IN (58, 91, 93) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.--12/10/2025 PK 6584
                                       OR x.licensetypecode IN (47,
                                                                48,
                                                                50,
@@ -4495,7 +4496,7 @@ IS
                                      AND z.licensetypecode NOT IN ('68') THEN  ---- Added by Pawan for new LT 88 on 12/20/2018 WO 16989
                                         t_populationrange
                                     WHEN x.licensetypecode IN (50, 51, 52)
-                                     AND z.licensetypecode IN (58, 91) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
+                                     AND z.licensetypecode IN (58, 91, 93) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.--12/10/2025 PK 6584
                                       OR x.licensetypecode IN (47,
                                                                48,
                                                                50,
@@ -4688,7 +4689,7 @@ IS
                              AND z.licensetypecode NOT IN ('68') THEN  --Added by Pawan for new LT 88 on 12/20/2018 WO 16989
                                 t_populationrange
                             WHEN x.licensetypecode IN (50, 51, 52)
-                             AND z.licensetypecode IN (58, 91) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
+                             AND z.licensetypecode IN (58, 91, 93) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.--12/10/2025 PK 6584
                               OR x.licensetypecode IN (47,
                                                        48,
                                                        50,
@@ -4740,7 +4741,7 @@ IS
                              AND z.licensetypecode NOT IN ('68') THEN  --Added by Pawan for new LT 88 on 12/20/2018 WO 16989
                                 t_populationrange
                             WHEN x.licensetypecode IN (50, 51, 52)
-                             AND z.licensetypecode IN (58, 91) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
+                             AND z.licensetypecode IN (58, 91, 93) --01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.--12/10/2025 PK 6584
                               OR x.licensetypecode IN (47,
                                                        48,
                                                        50,
@@ -8657,7 +8658,9 @@ IS
                 
             WHEN a_feeactivity = 'CATA' and  t_CateringOrEvent = '91 - Beer Catering' THEN ---- 01/02/2025 PK  2769      New License Type 91 - Beer Caterer Permit.
                 t_ltcode   := '91';
-                
+                  
+            WHEN a_feeactivity = 'CATA' and  t_CateringOrEvent = '93 - Estate Tasting' THEN   --12/10/2025 PK 6584 New license Type 93 – Estate Tasting Event Permit
+                t_ltcode   := '93';                  
             ELSE
                 t_ltcode   := '77';
         END CASE;

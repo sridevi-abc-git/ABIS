@@ -15,6 +15,7 @@ IS
     -----------------------------------------------------------------------------
     --    Date                  Comment
     -- 08/20/2018 TJL         Initial Check-in
+    -- 12/10/2025 PK          For type 94 when address in outside CA no error -- Added this code FOr type 94 Pawan 12/10/2025
     -- **************************************************************************
 
 
@@ -133,7 +134,7 @@ IS
      ** This will run on completion of Enter Application, Add Permit/LT and Issue License
      **   to verify that any Paired Master LTs for any existing LTs are added to the Application.
     ****************************** */
-    PROCEDURE raiseerrpairedlt(a_objectid      udt_id,
+   PROCEDURE raiseerrpairedlt(a_objectid      udt_id,
                                a_asofdate      DATE,
                                a_jobid         udt_id)
     IS
@@ -197,7 +198,24 @@ IS
                 WHEN TOO_MANY_ROWS THEN
                     t_raiseerr   := 'N';
             END;
-
+             -- For type 94 when address in outside CA no error -- Added this code FOr type 94 Pawan 12/02/2025
+                BEGIN 
+                SELECT 'N'
+                  INTO t_raiseerr
+                  FROM query.r_appprimarylicensetype  aplt2
+                       JOIN query.o_primarylicensetype plt
+                           ON plt.objectid = aplt2.licensetypeobjectid
+                 WHERE aplt2.applicationobjectid = a_jobid
+                   AND plt.licensetypecode = '94'
+                   and  api.pkg_columnquery.VALUE(a_jobid, 'PremisesAddressLocation') = 'In USA, Outside CA';
+        
+              EXCEPTION
+                WHEN NO_DATA_FOUND THEN
+                NULL;
+                       WHEN TOO_MANY_ROWS THEN
+                            t_raiseerr   := 'N';
+                    END;
+                     
             EXIT WHEN t_raiseerr = 'N';
         END LOOP;
 
@@ -220,7 +238,16 @@ IS
                             ltr.licensetypecategoryobjectid
                WHERE aplt.applicationobjectid = a_jobid
             GROUP BY aplt.licensetypeobjectid;
-
+            
+          IF t_pairedlt = '94' THEN  -- For type 94 when address in outside CA no error -- Added this code FOr type 94 Pawan 12/02/2025
+          api.pkg_errors.raiseerror(
+                -20000,
+                   'CA Licensee must hold License Type '
+                || t_pairedmaster
+                || ' to get License Type '
+                ||  t_pairedlt
+                || '.'); -- For type 94 when address in outside CA no error -- Added this code FOr type 94 Pawan 12/02/2025
+          Else
             api.pkg_errors.raiseerror(
                 -20000,
                    'A License Type '
@@ -228,6 +255,7 @@ IS
                 || ' cannot exist without a License Type '
                 || t_pairedmaster
                 || '.');
+        END IF;
         END IF;
     END raiseerrpairedlt;
 

@@ -27,6 +27,7 @@ IS
     --                               This replaces the "Max" function call
     -- 05/08/2025 PK               Added Food Lessee to Original, change anf trannsfer application code 
     --                              so that it would be copied over to License created t_licleflepid  and  t_applegalentityflepid
+    --12/10/2025 PK    6989      Request for New License Type 94 
     -- **************************************************************************
 
     -- Variable Declarations for package
@@ -288,7 +289,7 @@ IS
             api.pkg_columnupdate.setvalue(a_jobid, 'ExpiringMonth', 'JUNE');
             api.pkg_columnupdate.setvalue(a_jobid, 'ExpiringYear', t_expyear);
         --Checking to see if we are issuing an 67,80 License Type, this will set the epiration date to the next June 30th in the timeline
-        ELSIF t_licensetypecode IN ('67', '80') THEN
+        ELSIF t_licensetypecode IN ('67', '80', '94') THEN ----12/10/2025 PK    6989      Request for New License Type 94 
             SELECT CASE
                        WHEN TO_CHAR(SYSDATE, 'MM') <= '12' THEN
                            TO_CHAR(SYSDATE, 'YYYY')

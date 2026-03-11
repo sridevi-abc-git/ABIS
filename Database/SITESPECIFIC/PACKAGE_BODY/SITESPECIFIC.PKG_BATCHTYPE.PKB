@@ -29,6 +29,7 @@ IS
     -- 08/05/2021 TJL  WO 25899  truncated ready to issue date when testing if licenses should be
     --                            included in produce license batch for renewals (relatependingltstobatch)
     -- 05/05/2023 PK              Changed log type of issuance to address objectid gap fixes in prod
+    -- 12/16/2025 PK              Type 94 not to include in 1st renewal batch after produce License Batch is completed as 94 is only valid until Dec 2026 no renewals allowed.
     -- **************************************************************************
 
     t_newprocid        udt_id;
@@ -1496,6 +1497,7 @@ IS
         t_licensetypejobids              udt_idlist;
         t_ltcatobjectids                 udt_idlist;
         t_reinstate                      VARCHAR2(1);
+        t_LicenseTypeCode                VARCHAR2(3); -- Added by Pawan License Type 94
         t_donotactivate                  VARCHAR2(1);
         t_ltstatus                       VARCHAR2(30);
         t_licissuedate                   DATE;
@@ -1547,6 +1549,7 @@ IS
         FOR i IN 1 .. t_licensejobids.COUNT
         LOOP
             t_reinstate                                          := api.pkg_columnquery.VALUE(t_licensetypejobids(i), 'Reinstate');
+            t_LicenseTypeCode                                    := api.pkg_columnquery.VALUE(t_licensetypejobids(i), 'dup_LicenseTypeCode'); -- Added by Pawan for type 94
             t_donotactivate                                      := api.pkg_columnquery.VALUE(t_licensetypejobids(i), 'DoNotActivate');
             t_ltstatus                                           := api.pkg_columnquery.VALUE(t_licensetypejobids(i), 'StatusName');
             t_readytoissuedate                                   := api.pkg_columnquery.datevalue(t_licensetypejobids(i), 'ReadyToIssueDate');
@@ -1670,8 +1673,13 @@ IS
 
                     --HotFix22 Part One - Produce License we are setting the batch flags to first renewal.
                     --Set Batch Flags - First Renewal
+                      IF t_LicenseTypeCode != '94' Then -- Added by Pawan for type 94
                     sitespecific.pkg_batchtype.setbatchflags(a_lictypejobid => t_licensetypejobids(i),
                                                              a_includein1strenewal => 'Y');
+                     Else
+                     sitespecific.pkg_batchtype.setbatchflags(a_lictypejobid => t_licensetypejobids(i),
+                                                             a_includein1strenewal => 'N');
+                    END IF;
 
                     -- Set License Type IssueDate if it is not already set.
                     --If License is not seasonal or, in the case of a seasonal, the current month is part of the season, then set issuedate to current date.
@@ -1991,9 +1999,13 @@ IS
 
                     --HotFix22 Part One - Produce License we are setting the batch flags to first renewal.
                     --Set Batch Flags - First Renewal
+                      IF t_LicenseTypeCode != '94' Then -- Added by Pawan for type 94
                     sitespecific.pkg_batchtype.setbatchflags(a_lictypejobid => t_licensetypejobids(i),
                                                              a_includein1strenewal => 'Y');
-
+                     Else
+                     sitespecific.pkg_batchtype.setbatchflags(a_lictypejobid => t_licensetypejobids(i),
+                                                             a_includein1strenewal => 'N');
+                    END IF;
                     -- Set the Type Of Issuance column to Reinstatement.
                     --api.pkg_columnupdate.SetValue(t_LicenseTypeJobIds(i), 'TypeOfIssuance', 'RENEWAL'); Removed 5/24/2010
                     t_fromstat      := NULL;
@@ -4219,6 +4231,8 @@ IS
 END pkg_batchtype;
 /
 
+
+GRANT EXECUTE, DEBUG ON SITESPECIFIC.PKG_BATCHTYPE TO BHAVYAN;
 
 GRANT EXECUTE ON SITESPECIFIC.PKG_BATCHTYPE TO EXTENSION;
 
