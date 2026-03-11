@@ -1,4 +1,4 @@
-CREATE OR REPLACE PROCEDURE bizmod_api.feenotificationjob(
+CREATE OR REPLACE PROCEDURE BIZMOD_API.feenotificationjob(
     a_objectid     api.pkg_definition.udt_id,
     a_asofdate     DATE,
     a_jobid        api.pkg_definition.udt_id,
@@ -17,6 +17,7 @@ AS
     --   2.0.0    11/03/2025 TJL  BIZ-19554  Added test for non-active licenses so
     --                                         only active licenses will be notified.
     --   3.0.0    11/24/2025 TJL  BIZ-19701  Added support to retry job job on timeout error
+    --   4.0.0    03/09/2026 TJL  BIZ-20213  Added enhance logging
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
                        := '/api/licensing/internal/license-applications/' ;
@@ -25,100 +26,112 @@ AS
     t_body         json_object_t := json_object_t();
     t_status       VARCHAR2(50);
     t_applicationid NUMBER;
+    t_seq          NUMBER;
+    t_errid        NUMBER;
     t_sqlerrm      VARCHAR2(4000);
-    t_trace        VARCHAR2(4000);
-    t_value        CLOB;
     t_body_value   CLOB;
     t_results      json_object_t;
-    t_token        VARCHAR2(1000);
     t_results_text VARCHAR2(32767);
+    t_retry        VARCHAR2(1) := CASE WHEN a_retry THEN 'Y' ELSE 'N' END;
+    t_status_code  NUMBER;
 BEGIN
-    BEGIN
-        t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
-        t_status :=
-            UPPER(
-                NVL(api.pkg_columnquery.VALUE(a_objectid, 'ModifyType'),
-                    'FEES_DUE'));
+    t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
+    t_status :=
+        UPPER(
+            NVL(api.pkg_columnquery.VALUE(a_objectid, 'ModifyType'),
+                'FEES_DUE'));
 
-        IF (api.pkg_columnquery.VALUE(a_jobid, 'StatusName') NOT IN
-                ('VOID',
-                 'ISSUED',
-                 'WITHDRAWN',
-                 'DENIED'))
-        THEN
-            t_body.put('status', t_status);
-            t_body.put('objectId', a_jobid);
-            t_body.put('licenseNumber',
-                       api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'));
+    IF (api.pkg_columnquery.VALUE(a_jobid, 'StatusName') NOT IN ('VOID',
+                                                                 'ISSUED',
+                                                                 'WITHDRAWN',
+                                                                 'DENIED'))
+    THEN
+        t_body.put('status', t_status);
+        t_body.put('objectId', a_jobid);
+        t_body.put('licenseNumber',
+                   api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'));
 
-            t_results :=
-                bizmod_api.utl_licenseinfo.notify_lsp(
-                    a_urlinfo   => t_url || t_applicationid,
-                    a_method    => t_method,
-                    a_content   => t_body);
-        END IF;
-    EXCEPTION
-        WHEN OTHERS
-        THEN
-            t_sqlerrm := SQLERRM;
-            t_results.put('status', SQLCODE);
-            t_results.put(
-                'ora-error',
-                SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
-    END;
+        t_results :=
+            bizmod_api.utl_licenseinfo.notify_lsp(
+                a_urlinfo   => t_url || t_applicationid,
+                a_method    => t_method,
+                a_licensenumber =>
+                    api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'),
+                a_objectid  => a_jobid,
+                a_applicationid => t_applicationid,
+                a_process   => t_process,
+                a_content   => t_body);
+    END IF;
 
     t_results_text := t_results.TO_CLOB;
     t_body_value := t_body.TO_CLOB;
 
-    IF (t_results.get_number('status') != 200
-    AND t_sqlerrm IS NULL)
+    t_seq := NVL(t_results.get_number('seq'), 0);
+    t_errid := t_results.get_number('errid');
+    t_status_code := t_results.get_number('status_code');
+
+    IF (t_status_code != 200
+    AND t_status_code > 0)
     THEN
-        t_sqlerrm :=
-            CASE
-                WHEN t_results.get_type('lspresponse') = 'OBJECT'
-                THEN
-                    t_results.get_object('lspresponse').TO_CLOB || CHR(13)
-                WHEN t_results.has('lspresponse')
-                THEN
-                    t_results.get_clob('lspresponse')
-                ELSE
-                    t_results.TO_CLOB
-            END;
+        t_sqlerrm := t_results.get_clob('lspresponse');
+        INSERT INTO bizmod_api.e_errors_t e(e.licensenumber,
+                                            e.objectid,
+                                            e.applicationid,
+                                            e.process,
+                                            e.errcode,
+                                            e.errm)
+             VALUES (api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'),
+                     a_jobid,
+                     t_applicationid,
+                     t_process,
+                     t_status_code,
+                     t_sqlerrm)
+          RETURNING errid
+               INTO t_errid;
+
+        UPDATE bizmod_api.eservices_log_t l
+           SET l.errid = t_errid
+         WHERE l.seq = t_seq;
+
+        COMMIT;
     END IF;
 
-    IF (t_results.get_number('status') !=
-        bizmod_api.utl_licenseinfo.gc_request_fail
+    IF (t_status_code != bizmod_api.utl_licenseinfo.gc_request_fail
      OR a_retry)
     THEN
-        INSERT INTO bizmod_api.e_process_log_t(seq,
-                                               processjob,
-                                               info,
-                                               errmsg,
-                                               bktrace,
-                                               packet)
+        INSERT INTO bizmod_api.e_process_log_t pl(pl.seq,
+                                                  pl.licensenumber,
+                                                  pl.objectid,
+                                                  pl.applicationid,
+                                                  pl.processjob,
+                                                  pl.errid,
+                                                  pl.info,
+                                                  pl.packet)
                  VALUES (
-                            0,
+                            t_seq,
+                            api.pkg_columnquery.VALUE(a_jobid,
+                                                      'LICENSENUMBER'),
+                            a_jobid,
+                            t_applicationid,
                             t_process,
+                            t_errid,
                             SUBSTR(
-                                'Application Id: '
-                                || t_applicationid
-                                || CHR(13)
-                                || 'License Number: '
-                                || api.pkg_columnquery.VALUE(a_jobid,
-                                                             'LICENSENUMBER')
-                                || CHR(13)
-                                || 'j_Application: '
-                                || a_jobid
-                                || CHR(13)
-                                || 'Notification Type: '
+                                'Status: '
                                 || t_status
+                                || CHR(13)
+                                || 'Return Code: '
+                                || t_status_code
+                                || CHR(13)
+                                || 'Retried: '
+                                || CASE t_retry
+                                       WHEN 'Y' THEN 'TRUE'
+                                       ELSE 'FALSE'
+                                   END
                                 || CHR(13)
                                 || t_results_text,
                                 1,
                                 3999),
-                            SUBSTR(t_sqlerrm, 1, 4000),
-                            t_trace,
-                            t_value);
+                            t_body_value);
 
         COMMIT;
     ELSE
@@ -126,7 +139,7 @@ BEGIN
             a_procedure => t_process,
             a_application_id => api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
             a_parameters => bizmod_api.job_prameters_tbl(a_objectid,
-                                                         a_asofdate,
+                                                         SYSTIMESTAMP,
                                                          a_jobid,
                                                          'TRUE'));
         COMMIT;
@@ -135,4 +148,4 @@ END;
 /
 
 
-GRANT EXECUTE ON bizmod_api.feenotificationjob TO posseextensions;
+GRANT EXECUTE ON BIZMOD_API.FEENOTIFICATIONJOB TO POSSEEXTENSIONS;

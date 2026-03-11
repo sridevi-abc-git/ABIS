@@ -9,6 +9,9 @@ IS
                       Date          Ticket      Comment
            1.0.1   10/29/2025  TJL BIZ-19526  Initial Procedure Created
            2.0.0   11/24/2025  TJL BIZ-19701  Added support for boolean value
+           3.0.0   02/17/2026  TJL            Added a outer loop to check if any
+                                                other records added while executing
+                                                jobs selected.
     ******************************************************************************/
     TYPE job_rec
         IS RECORD(seq bizmod_api.e_jobs_que_t.seq%TYPE,
@@ -69,267 +72,270 @@ IS
     n              PLS_INTEGER;
 BEGIN
     --dbms_output.put_line('Starting exeute jobs');
-
-    OPEN c_jobs;
-
-    FETCH c_jobs BULK COLLECT INTO t_jobs;
-
-    CLOSE c_jobs;
-
-    FOR inx IN 1 .. t_jobs.COUNT
     LOOP
-        BEGIN
-            -- Construct the dynamic SQL statement
-            t_sql_stmt :=
-                'BEGIN '
-                || t_jobs(inx).schema_name
-                || '.'
-                || t_jobs(inx).procedure_name
-                || '(';
+        OPEN c_jobs;
 
-            FOR i IN 1 .. t_jobs(inx).process_arguments.COUNT
-            LOOP
-                IF (t_jobs(inx).process_arguments(i).prameter_value
-                        IS NOT NULL)
-                THEN
-                    IF i > 1
-                    THEN
-                        t_sql_stmt := t_sql_stmt || ',';
-                    END IF;
+        FETCH c_jobs BULK COLLECT INTO t_jobs;
 
-                    t_sql_stmt :=
-                        t_sql_stmt
-                        || t_jobs(inx).process_arguments(i).argument_name
-                        || ' => :'
-                        || t_jobs(inx).process_arguments(i).argument_name;
-                END IF;
-            END LOOP;
+        CLOSE c_jobs;
 
-            t_sql_stmt := t_sql_stmt || '); END;';
+        EXIT WHEN t_jobs.COUNT = 0;
 
-            --dbms_output.put_line(t_sql_stmt);
+        FOR inx IN 1 .. t_jobs.COUNT
+        LOOP
             BEGIN
-                -- Open a DBMS_SQL cursor
-                c := DBMS_SQL.open_cursor;
+                -- Construct the dynamic SQL statement
+                t_sql_stmt :=
+                    'BEGIN '
+                    || t_jobs(inx).schema_name
+                    || '.'
+                    || t_jobs(inx).procedure_name
+                    || '(';
 
-                -- Parse the dynamic SQL statement
-                DBMS_SQL.parse(c, t_sql_stmt, DBMS_SQL.native);
-
-                -- Bind the parameters
                 FOR i IN 1 .. t_jobs(inx).process_arguments.COUNT
                 LOOP
                     IF (t_jobs(inx).process_arguments(i).prameter_value
                             IS NOT NULL)
                     THEN
-                        CASE t_jobs(inx).process_arguments(i).data_type
-                            WHEN 'NUMBER'
-                            THEN
-                                DBMS_SQL.bind_variable(
-                                    c,
-                                    ':'
-                                    || t_jobs(inx).process_arguments(i).argument_name,
-                                    TO_NUMBER(
-                                        t_jobs(inx).process_arguments(i).prameter_value));
-                            WHEN 'PL/SQL BOOLEAN'
-                            THEN
-                                DBMS_SQL.bind_variable(
-                                    c,
-                                    ':'
-                                    || t_jobs(inx).process_arguments(i).argument_name,
-                                    CASE t_jobs(inx).process_arguments(i).prameter_value
-                                        WHEN 'TRUE'
-                                        THEN
-                                            TRUE
-                                        ELSE
-                                            FALSE
-                                    END);
-                            WHEN 'DATE'
-                            THEN
-                                DBMS_SQL.bind_variable(
-                                    c,
-                                    ':'
-                                    || t_jobs(inx).process_arguments(i).argument_name,
-                                    CASE
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS TIMESTAMP) =
-                                             1
-                                        THEN
-                                            CAST(
-                                                TO_TIMESTAMP(
-                                                    t_jobs(inx).process_arguments(
-                                                        i).prameter_value)
-                                                    AS DATE)
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS TIMESTAMP WITH TIME ZONE) =
-                                             1
-                                        THEN
-                                            CAST(
-                                                TO_TIMESTAMP_TZ(
-                                                    t_jobs(inx).process_arguments(
-                                                        i).prameter_value)
-                                                    AS DATE)
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS DATE) =
-                                             1
-                                        THEN
-                                            TO_DATE(
-                                                t_jobs(inx).process_arguments(
-                                                    i).prameter_value)
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS DATE,
-                                                 t_date_format) =
-                                             1
-                                        THEN
-                                            TO_DATE(
-                                                t_jobs(inx).process_arguments(
-                                                    i).prameter_value,
-                                                t_date_format)
-                                        ELSE
-                                            NULL
-                                    END);
-                            WHEN 'TIMESTAMP'
-                            THEN
-                                DBMS_SQL.bind_variable(
-                                    c,
-                                    ':'
-                                    || t_jobs(inx).process_arguments(i).argument_name,
-                                    CASE
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS TIMESTAMP) =
-                                             1
-                                        THEN
-                                            TO_TIMESTAMP(
-                                                t_jobs(inx).process_arguments(
-                                                    i).prameter_value)
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS TIMESTAMP WITH TIME ZONE) =
-                                             1
-                                        THEN
-                                            TO_TIMESTAMP_TZ(
-                                                t_jobs(inx).process_arguments(
-                                                    i).prameter_value)
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS TIMESTAMP,
-                                                 t_date_format) =
-                                             1
-                                        THEN
-                                            TO_TIMESTAMP(
-                                                t_jobs(inx).process_arguments(
-                                                    i).prameter_value,
-                                                t_date_format)
-                                        WHEN validate_conversion(
-                                                 t_jobs(inx).process_arguments(
-                                                     i).prameter_value
-                                                     AS DATE) =
-                                             1
-                                        THEN
-                                            CAST(
-                                                TO_DATE(
-                                                    t_jobs(inx).process_arguments(
-                                                        i).prameter_value)
-                                                    AS TIMESTAMP)
-                                        ELSE
-                                            NULL
-                                    END);
-                            ELSE
-                                DBMS_SQL.bind_variable(
-                                    c,
-                                    ':'
-                                    || t_jobs(inx).process_arguments(i).argument_name,
-                                    t_jobs(inx).process_arguments(i).prameter_value);
-                        END CASE;
+                        IF i > 1
+                        THEN
+                            t_sql_stmt := t_sql_stmt || ',';
+                        END IF;
+
+                        t_sql_stmt :=
+                            t_sql_stmt
+                            || t_jobs(inx).process_arguments(i).argument_name
+                            || ' => :'
+                            || t_jobs(inx).process_arguments(i).argument_name;
                     END IF;
                 END LOOP;
 
-                -- Execute the statement
-                n := DBMS_SQL.execute(c);
+                t_sql_stmt := t_sql_stmt || '); END;';
 
-                -- Close the cursor
-                DBMS_SQL.close_cursor(c);
+                --dbms_output.put_line(t_sql_stmt);
+                BEGIN
+                    -- Open a DBMS_SQL cursor
+                    c := DBMS_SQL.open_cursor;
+
+                    -- Parse the dynamic SQL statement
+                    DBMS_SQL.parse(c, t_sql_stmt, DBMS_SQL.native);
+
+                    -- Bind the parameters
+                    FOR i IN 1 .. t_jobs(inx).process_arguments.COUNT
+                    LOOP
+                        IF (t_jobs(inx).process_arguments(i).prameter_value
+                                IS NOT NULL)
+                        THEN
+                            CASE t_jobs(inx).process_arguments(i).data_type
+                                WHEN 'NUMBER'
+                                THEN
+                                    DBMS_SQL.bind_variable(
+                                        c,
+                                        ':'
+                                        || t_jobs(inx).process_arguments(i).argument_name,
+                                        TO_NUMBER(
+                                            t_jobs(inx).process_arguments(i).prameter_value));
+                                WHEN 'PL/SQL BOOLEAN'
+                                THEN
+                                    DBMS_SQL.bind_variable(
+                                        c,
+                                        ':'
+                                        || t_jobs(inx).process_arguments(i).argument_name,
+                                        CASE t_jobs(inx).process_arguments(i).prameter_value
+                                            WHEN 'TRUE'
+                                            THEN
+                                                TRUE
+                                            ELSE
+                                                FALSE
+                                        END);
+                                WHEN 'DATE'
+                                THEN
+                                    DBMS_SQL.bind_variable(
+                                        c,
+                                        ':'
+                                        || t_jobs(inx).process_arguments(i).argument_name,
+                                        CASE
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS TIMESTAMP) =
+                                                 1
+                                            THEN
+                                                CAST(
+                                                    TO_TIMESTAMP(
+                                                        t_jobs(inx).process_arguments(
+                                                            i).prameter_value)
+                                                        AS DATE)
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS TIMESTAMP WITH TIME ZONE) =
+                                                 1
+                                            THEN
+                                                CAST(
+                                                    TO_TIMESTAMP_TZ(
+                                                        t_jobs(inx).process_arguments(
+                                                            i).prameter_value)
+                                                        AS DATE)
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS DATE) =
+                                                 1
+                                            THEN
+                                                TO_DATE(
+                                                    t_jobs(inx).process_arguments(
+                                                        i).prameter_value)
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS DATE,
+                                                     t_date_format) =
+                                                 1
+                                            THEN
+                                                TO_DATE(
+                                                    t_jobs(inx).process_arguments(
+                                                        i).prameter_value,
+                                                    t_date_format)
+                                            ELSE
+                                                NULL
+                                        END);
+                                WHEN 'TIMESTAMP'
+                                THEN
+                                    DBMS_SQL.bind_variable(
+                                        c,
+                                        ':'
+                                        || t_jobs(inx).process_arguments(i).argument_name,
+                                        CASE
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS TIMESTAMP) =
+                                                 1
+                                            THEN
+                                                TO_TIMESTAMP(
+                                                    t_jobs(inx).process_arguments(
+                                                        i).prameter_value)
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS TIMESTAMP WITH TIME ZONE) =
+                                                 1
+                                            THEN
+                                                TO_TIMESTAMP_TZ(
+                                                    t_jobs(inx).process_arguments(
+                                                        i).prameter_value)
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS TIMESTAMP,
+                                                     t_date_format) =
+                                                 1
+                                            THEN
+                                                TO_TIMESTAMP(
+                                                    t_jobs(inx).process_arguments(
+                                                        i).prameter_value,
+                                                    t_date_format)
+                                            WHEN validate_conversion(
+                                                     t_jobs(inx).process_arguments(
+                                                         i).prameter_value
+                                                         AS DATE) =
+                                                 1
+                                            THEN
+                                                CAST(
+                                                    TO_DATE(
+                                                        t_jobs(inx).process_arguments(
+                                                            i).prameter_value)
+                                                        AS TIMESTAMP)
+                                            ELSE
+                                                NULL
+                                        END);
+                                ELSE
+                                    DBMS_SQL.bind_variable(
+                                        c,
+                                        ':'
+                                        || t_jobs(inx).process_arguments(i).argument_name,
+                                        t_jobs(inx).process_arguments(i).prameter_value);
+                            END CASE;
+                        END IF;
+                    END LOOP;
+
+                    -- Execute the statement
+                    n := DBMS_SQL.execute(c);
+
+                    -- Close the cursor
+                    DBMS_SQL.close_cursor(c);
+                EXCEPTION
+                    WHEN OTHERS
+                    THEN
+                        t_sqlerrm := SQLERRM;
+                        t_trace := DBMS_UTILITY.format_error_backtrace;
+
+                        IF DBMS_SQL.is_open(c)
+                        THEN
+                            DBMS_SQL.close_cursor(c);
+                        END IF;
+                END;
+
+                --            FOR job IN (SELECT * FROM TABLE(t_jobs(inx).process_arguments))
+                --            LOOP
+                --                DBMS_OUTPUT.put_line(
+                --                    job.position
+                --                    || '  argument_name: '
+                --                    || job.argument_name
+                --                    || '  data_type: '
+                --                    || job.data_type
+                --                    || '  parameter value: '
+                --                    || job.prameter_value);
+                --            END LOOP;
+                --
+                -- update job history table
+                INSERT INTO bizmod_api.e_jobs_hist_t j(seq,
+                                                       schema_name,
+                                                       procedure_name,
+                                                       application_id,
+                                                       job_parameters,
+                                                       repeat_cycle,
+                                                       schedule_time,
+                                                       errmsg,
+                                                       bktrace)
+                     VALUES (t_jobs(inx).seq,
+                             t_jobs(inx).schema_name,
+                             t_jobs(inx).procedure_name,
+                             t_jobs(inx).application_id,
+                             t_jobs(inx).job_parameters,
+                             t_jobs(inx).repeat_cycle,
+                             t_jobs(inx).schedule_time,
+                             t_sqlerrm,
+                             t_trace);
+
+                -- check if this job is a recurring job
+                IF (t_jobs(inx).repeat_cycle IS NULL)
+                THEN
+                    DELETE bizmod_api.e_jobs_que_t j
+                     WHERE j.seq = t_jobs(inx).seq;
+                ELSE
+                    UPDATE bizmod_api.e_jobs_que_t j
+                       SET j.schedule_time =
+                                 t_jobs(inx).schedule_time
+                               + NUMTODSINTERVAL(t_jobs(inx).repeat_cycle,
+                                                 'HOUR'),
+                           j.seq = bizmod_api.e_jobs_seq.NEXTVAL
+                     WHERE j.seq = t_jobs(inx).seq;
+                END IF;
+
+                COMMIT;
             EXCEPTION
                 WHEN OTHERS
                 THEN
-                    t_sqlerrm := SQLERRM;
-                    t_trace := DBMS_UTILITY.format_error_backtrace;
-
                     IF DBMS_SQL.is_open(c)
                     THEN
                         DBMS_SQL.close_cursor(c);
                     END IF;
+
+                    RAISE;
             END;
-
-            --            FOR job IN (SELECT * FROM TABLE(t_jobs(inx).process_arguments))
-            --            LOOP
-            --                DBMS_OUTPUT.put_line(
-            --                    job.position
-            --                    || '  argument_name: '
-            --                    || job.argument_name
-            --                    || '  data_type: '
-            --                    || job.data_type
-            --                    || '  parameter value: '
-            --                    || job.prameter_value);
-            --            END LOOP;
-            --
-            -- update job history table
-            INSERT INTO bizmod_api.e_jobs_hist_t j(seq,
-                                                   schema_name,
-                                                   procedure_name,
-                                                   application_id,
-                                                   job_parameters,
-                                                   repeat_cycle,
-                                                   schedule_time,
-                                                   errmsg,
-                                                   bktrace)
-                 VALUES (t_jobs(inx).seq,
-                         t_jobs(inx).schema_name,
-                         t_jobs(inx).procedure_name,
-                         t_jobs(inx).application_id,
-                         t_jobs(inx).job_parameters,
-                         t_jobs(inx).repeat_cycle,
-                         t_jobs(inx).schedule_time,
-                         t_sqlerrm,
-                         t_trace);
-
-            -- check if this job is a recurring job
-            IF (t_jobs(inx).repeat_cycle IS NULL)
-            THEN
-                DELETE bizmod_api.e_jobs_que_t j
-                 WHERE j.seq = t_jobs(inx).seq;
-            ELSE
-                UPDATE bizmod_api.e_jobs_que_t j
-                   SET j.schedule_time =
-                             t_jobs(inx).schedule_time
-                           + NUMTODSINTERVAL(t_jobs(inx).repeat_cycle,
-                                             'HOUR'),
-                       j.seq = bizmod_api.e_jobs_seq.NEXTVAL
-                 WHERE j.seq = t_jobs(inx).seq;
-            END IF;
-
-            COMMIT;
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                IF DBMS_SQL.is_open(c)
-                THEN
-                    DBMS_SQL.close_cursor(c);
-                END IF;
-
-                RAISE;
-        END;
+        END LOOP;
     END LOOP;
 EXCEPTION
     WHEN OTHERS

@@ -32,6 +32,7 @@ AS
     --   7.0.0  03/05/2025 TJL  BIZ-17503  Corrected bug in logging errors from CALLLSP
     --   8.0.0  07/22/2025 TJL  BIZ-18902  Corrected bug in parsing lspresponse
     --   9.0.0  11/24/2025 TJL  BIZ-19701  Added support to retry job job on timeout error
+    --  10.0.0  03/09/2026 TJL  BIZ-20213  Added enhance logging
     -- ****************************************************************************
     t_url CONSTANT VARCHAR2(1000)
                        := '/api/licensing/internal/license-applications/' ;
@@ -39,17 +40,17 @@ AS
     t_body         json_object_t := json_object_t();
     t_applicationid VARCHAR2(40);
     t_process      VARCHAR2(32) := 'APPLICATIONSAVEJOB';
-    t_sqlerrm      VARCHAR2(32000);
-    t_trace        VARCHAR2(4000);
+    t_seq          NUMBER;
+    t_errid        NUMBER;
     t_status       VARCHAR2(40) := a_status;
     t_body_value   CLOB;
     t_results      json_object_t;
     t_results_text VARCHAR2(32767);
     t_retry        varchar2(1) := case when a_retry then 'Y' else 'N' end;
     t_status_code  NUMBER;
+    t_sqlerrm      CLOB;
 
 BEGIN
-    BEGIN
         t_applicationid := api.pkg_columnquery.VALUE(a_jobid, 'LSPId');
 
         IF (t_status IS NULL)
@@ -71,78 +72,75 @@ BEGIN
             bizmod_api.utl_licenseinfo.notify_lsp(
                 a_urlinfo   => t_url || t_applicationid,
                 a_method    => t_method,
+                a_licensenumber => api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'),
+                a_objectid      => a_jobid,
+                a_applicationid => t_applicationid,
+                a_process       => t_process,
                 a_content   => t_body);
-    EXCEPTION
-        WHEN OTHERS
-        THEN
-            t_sqlerrm := SQLERRM;
-            t_results.put('status', SQLCODE);
-            t_results.put(
-                'ora-error',
-                SQLERRM || CHR(10) || DBMS_UTILITY.format_error_backtrace);
-    END;
+
 
     t_results_text := t_results.TO_CLOB;
     t_body_value := t_body.TO_CLOB;
 
-    IF (t_results.get_number('status') != 200
-    AND t_sqlerrm IS NULL)
+    t_seq := nvl(t_results.get_number('seq'), 0);
+    t_errid := t_results.get_number('errid');
+    t_status_code := t_results.get_number('status_code');
+
+    IF (t_status_code != 200
+    AND t_status_code > 0)
     THEN
-        t_sqlerrm :=
-            CASE
-                WHEN t_results.get_type('lspresponse') = 'OBJECT'
-                THEN
-                    t_results.get_object('lspresponse').TO_CLOB || CHR(13)
-                WHEN t_results.has('lspresponse')
-                THEN
-                    t_results.get_clob('lspresponse')
-                ELSE
-                    t_results.TO_CLOB
-            END;
+        t_sqlerrm := t_results.get_clob('lspresponse');
+        INSERT INTO bizmod_api.e_errors_t e (e.licensenumber,
+                                               e.objectid,
+                                               e.applicationid,
+                                               e.process,
+                                               e.errcode,
+                                               e.errm)
+                 VALUES (api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'),
+                            a_jobid,
+                            t_applicationid,
+                            t_process,
+                            t_status_code,
+                            t_sqlerrm)
+              RETURNING errid
+                   INTO t_errid;
+
+        UPDATE bizmod_api.eservices_log_t l
+           SET l.errid = t_errid
+         WHERE l.seq = t_seq;
+
     END IF;
 
-    IF (t_results.get_number('status') !=
+    IF (t_status_code !=
         bizmod_api.utl_licenseinfo.gc_request_fail
      OR a_retry)
     THEN
-        t_status_code := t_results.get_number('status');
-        INSERT INTO bizmod_api.e_process_log_t(seq,
-                                               processjob,
-                                               info,
-                                               errmsg,
-                                               bktrace,
-                                               packet)
-                 VALUES (
-                            0,
+        INSERT INTO bizmod_api.e_process_log_t pl (pl.seq,
+                                               pl.licensenumber,
+                                               pl.objectid,
+                                               pl.applicationid,
+                                               pl.processjob,
+                                               pl.errid,
+                                               pl.info,
+                                               pl.packet)
+                 VALUES (t_seq,
+                           api.pkg_columnquery.VALUE(a_jobid, 'LICENSENUMBER'),
+                           a_jobid,
+                           t_applicationid,
                             t_process,
+                            t_errid,
                             SUBSTR(
-                                'Application Id: '
-                                || t_applicationid
-                                || CHR(13)
-                                || 'Status: '
+                                'Status: '
                                 || t_status
-                                || CHR(13)
-                                || 'License Number: '
-                                || api.pkg_columnquery.VALUE(a_jobid,
-                                                             'LICENSENUMBER')
-                                || CHR(13)
-                                || 'j_Application: '
-                                || a_jobid
                                 || CHR(13)
                                 || 'Return Code: '
                                 || t_status_code
                                 || CHR(13)
                                 || 'Retried: '
                                 || case t_retry when 'Y' then 'TRUE' else 'FALSE' end
-                                || CHR(13)
-                                || 'Results: '
-                                || CHR(13)
-                                || CHR(9)
-                                || t_results_text,
+                                || chr(13) || t_results_text,
                                 1,
                                 3999),
-                            SUBSTR(t_sqlerrm, 1, 4000),
-                            t_trace,
                             t_body_value);
 
         UPDATE bizmod_api.license_app_t la
@@ -155,7 +153,7 @@ BEGIN
             a_procedure => t_process,
             a_application_id => api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
             a_parameters => bizmod_api.job_prameters_tbl(a_objectid,
-                                                         a_asofdate,
+                                                         SYSTIMESTAMP,
                                                          a_jobid,
                                                          a_status,
                                                          'TRUE'));

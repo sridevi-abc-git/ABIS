@@ -38,6 +38,7 @@ AS
     --  17.0.0  10/31/2025  TJL  BIZ-19526    Added an optional parameter to Createjob process
     --  18.0.0  11/25/2025  TJL  BIZ-19701    Added notify_lsp and removed lsplogin, calllsp
     --  19.0.0  01/28/2026  TJL  BIZ-19069    Removed FUNCTION getHashvalueForApplication
+    --  20.0.0  03/02/2026  TJL  BIZ-20213    Add additional optional parameters to notify_lsp
     -- ****************************************************************************
 
     TYPE gc_apprec_t IS RECORD(applicationtype VARCHAR2(50),
@@ -87,13 +88,15 @@ AS
                                 address CLOB);
 
     gc_request_fail constant  number :=  -29273; -- 503; --
-    g_token         VARCHAR2(1000);
-    g_token_time    TIMESTAMP;
 
-    FUNCTION notify_lsp(a_urlinfo      IN VARCHAR2,
-                        a_method       IN VARCHAR2,
-                        a_content      IN json_element_t DEFAULT json_object_t(), -- 05/02/2025  TJL  BIZ-18056
-                        a_file         IN BLOB DEFAULT NULL)
+    FUNCTION notify_lsp(a_urlinfo       IN VARCHAR2,
+                        a_method        IN VARCHAR2,
+                        a_licensenumber IN VARCHAR2 DEFAULT NULL,
+                        a_objectid      IN NUMBER DEFAULT NULL,
+                        a_applicationid IN NUMBER DEFAULT NULL,
+                        a_process       IN VARCHAR2 DEFAULT 'NOTIFY_LSP',
+                        a_content       IN json_element_t DEFAULT json_object_t(),
+                        a_file          IN BLOB DEFAULT NULL)
         RETURN json_object_t;
 
     FUNCTION statusmatrix(a_status IN VARCHAR2)

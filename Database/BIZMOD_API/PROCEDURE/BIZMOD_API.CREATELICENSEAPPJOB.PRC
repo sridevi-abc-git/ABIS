@@ -36,6 +36,7 @@ IS
     --                                        that support was moved to a different process
     --   9.0.0  09/17/2025  TJL  BIZ-19069  Added getting hash value for the application
     --  10.0.0  01/28/2026  TJL  BIZ-19069  Removed getting hash value and added geting application data
+    --  11.0.0  03/09/2026  TJL  BIZ-20159  Add support for LSP UID's and enhance error logging
     -- ****************************************************************************
 
     TYPE apprec_t IS RECORD(lspapplicationid VARCHAR2(40),
@@ -53,8 +54,10 @@ BEGIN
     DECLARE
         t_apprec       apprec_t;
         t_packet       CLOB;
-        t_sqlerrm      VARCHAR2(4000);
-        t_trace        VARCHAR2(4000);
+        t_errid        NUMBER;
+        t_sqlcode      NUMBER;
+        t_sqlerrm      CLOB;
+        t_trace        CLOB;
         t_jobid        api.pkg_definition.udt_id;
         t_dbanamesobjectid api.pkg_definition.udt_id;
         t_dbaendpointid api.pkg_definition.udt_id;
@@ -66,7 +69,11 @@ BEGIN
         t_person       CLOB;
         t_rel          api.pkg_definition.udt_id;
         t_officeid     api.pkg_definition.udt_id;
+        t_uid          json_array_t := json_array_t();
+        t_uid_entity   json_object_t := json_object_t();
+        t_uid_text     VARCHAR2(4000);
     BEGIN
+        BEGIN
         --*****************
         --Clear any error
         --*****************
@@ -151,16 +158,16 @@ BEGIN
                                       'LSPID',
                                       t_apprec.lspapplicationid);
 
-
         sitespecific.pkg_license.generateappexternalfilenum(t_jobid, SYSDATE);
 
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
 
         -- notify LSP application was created
-        bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
-                                            a_asofdate  => SYSDATE,
-                                            a_jobid     => t_jobid);
+        bizmod_api.pkg_abis.status_notification(a_objectid  => NULL,
+                                                a_asofdate  => SYSDATE,
+                                                a_jobid     => t_jobid,
+                                                a_status    => 'POSTED');
 
         INSERT INTO bizmod_api.license_app_t(lspid,
                                              jobid,
@@ -170,6 +177,13 @@ BEGIN
                      t_jobid,
                      SYSDATE,
                      api.pkg_columnquery.VALUE(t_jobid, 'LicenseNumber'));
+
+        UPDATE bizmod_api.eservices_log_t l
+           SET l.applicationid = t_apprec.lspapplicationid,
+               l.objectid = t_jobid,
+               l.licensenumber = api.pkg_columnquery.VALUE(t_jobid, 'LicenseNumber'),
+               l.process = 'CREATELICENSEAPPJOB'
+         WHERE l.seq = a_seq;
 
         api.pkg_logicaltransactionupdate.endtransaction;
         COMMIT;
@@ -220,7 +234,6 @@ BEGIN
                                       'LicensePurchasePrice',
                                       t_apprec.licensepurchaseprice);
 
-        BEGIN
             IF (t_apprec.dba IS NOT NULL)
             THEN
                 t_dbanamesobjectid :=
@@ -246,18 +259,7 @@ BEGIN
                 api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
             END IF;
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-                t_trace :=
-                    SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-                api.pkg_logicaltransactionupdate.resettransaction;
-                ROLLBACK;
-        END;
-
-        BEGIN
             IF (t_apprec.legal_entities IS NOT NULL)
             THEN
                 SELECT entity, company, person
@@ -272,20 +274,25 @@ BEGIN
                 IF (t_entity IS NOT NULL)
                 THEN
                     pkg_abis.copy_legal_entities(a_objectid  => t_jobid,
-                                                 a_legal_entity => t_entity);
+                                                 a_legal_entity => t_entity,
+                                                 a_uid => t_uid);
                 END IF;
 
                 IF (t_company IS NOT NULL)
                 THEN
                     pkg_abis.add_company(a_entityobjectid => t_jobid,
-                                         a_legal_entity => t_company);
+                                         a_legal_entity => t_company,
+                                         a_uid => t_uid);
                 END IF;
 
                 IF (t_person IS NOT NULL)
                 THEN
                     pkg_abis.add_person(a_entityobjectid => t_jobid,
-                                        a_person    => t_person);
+                                        a_person    => t_person,
+                                        a_uid => t_uid);
                 END IF;
+
+                t_uid_entity.put('legalentities', t_uid);
 
                 -- 04/30/2025  TJL  BIZ-18052
                 -- order legal entities by name after being added to application
@@ -313,18 +320,7 @@ BEGIN
                                                   rec.line);
                 END LOOP;
             END IF;
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-                t_trace :=
-                    SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-                api.pkg_logicaltransactionupdate.resettransaction;
-                ROLLBACK;
-        END;
-
-        BEGIN
             pkg_abis.add_address(a_jobid     => t_jobid,
                                  a_address_type => 'Premises',
                                  a_address   => t_apprec.premiseaddress);
@@ -333,7 +329,6 @@ BEGIN
             IF (api.pkg_columnquery.numericvalue(t_jobid, 'BaseFileOfficeId') =
                 5554)
             THEN
-                BEGIN
                     -- get office for premise address
                     SELECT co.districtofficeid
                       INTO t_officeid
@@ -369,24 +364,8 @@ BEGIN
 
                     api.pkg_logicaltransactionupdate.endtransaction;
                     COMMIT;
-                EXCEPTION
-                    WHEN NO_DATA_FOUND
-                    THEN
-                        NULL;
-                END;
             END IF;
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-                t_trace :=
-                    SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-                api.pkg_logicaltransactionupdate.resettransaction;
-                ROLLBACK;
-        END;
-
-        BEGIN
             pkg_abis.add_address(a_jobid     => t_jobid,
                                  a_address_type => 'MailingAddress',
                                  a_address   => t_apprec.mailingaddress);
@@ -394,35 +373,11 @@ BEGIN
             api.pkg_columnupdate.setvalue(t_jobid,
                                           'IsTemporaryMailingAddress',
                                           t_apprec.istemporarymailingaddress);
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-                t_trace :=
-                    SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-                api.pkg_logicaltransactionupdate.resettransaction;
-                ROLLBACK;
-        END;
-
-        BEGIN
             pkg_abis.add_primary_license_types(
                 a_jobid     => t_jobid,
                 a_primarylicensetypes => t_apprec.primarylicensetypes);
-        EXCEPTION
-            WHEN OTHERS
-            THEN
-                t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-                t_trace :=
-                    SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-                api.pkg_logicaltransactionupdate.resettransaction;
-                ROLLBACK;
-        END;
-
-        IF (t_sqlerrm IS NULL)
-        THEN
-            BEGIN
                 IF (api.pkg_columnquery.VALUE(t_jobid,
                                               'IsPriorityApplication') =
                     'N')
@@ -434,48 +389,60 @@ BEGIN
 
                 api.pkg_logicaltransactionupdate.endtransaction;
                 COMMIT;
-            EXCEPTION
-                WHEN OTHERS
-                THEN
-                    t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-                    t_trace :=
-                        SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
 
-                    api.pkg_logicaltransactionupdate.resettransaction;
-                    ROLLBACK;
-            END;
-        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            t_sqlcode := sqlcode;
+            t_sqlerrm := SQLERRM;
+            t_trace := DBMS_UTILITY.format_error_backtrace;
 
-        INSERT INTO bizmod_api.e_process_log_t(seq,
-                                               processjob,
-                                               info,
-                                               errmsg,
-                                               bktrace)
+            api.pkg_logicaltransactionupdate.resettransaction;
+            ROLLBACK;
+
+        INSERT INTO bizmod_api.e_errors_t e (e.licensenumber,
+                                               e.objectid,
+                                               e.applicationid,
+                                               e.process,
+                                               e.errcode,
+                                               e.errm,
+                                               e.backtrace)
+                 VALUES (api.pkg_columnquery.VALUE(t_jobid,
+                                                         'ExternalFileNum'),
+                            t_jobid,
+                            t_apprec.lspapplicationid,
+                            'CREATELICENSEAPPJOB',
+                            t_sqlcode,
+                            t_sqlerrm,
+                            t_trace)
+              RETURNING errid
+                   INTO t_errid;
+
+            -- notify LSP application has completed with errors
+            bizmod_api.pkg_abis.status_notification(a_objectid  => NULL,
+                                                    a_asofdate  => SYSDATE,
+                                                    a_jobid     => t_jobid,
+                                                    a_status    => 'ERRORED');
+
+        END;
+
+        t_uid_text := substr(t_uid_entity.to_clob, 1, 4000);
+        INSERT INTO bizmod_api.e_process_log_t pl (pl.seq,
+                                               pl.licensenumber,
+                                               pl.objectid,
+                                               pl.applicationid,
+                                               pl.processjob,
+                                               pl.info,
+                                               pl.errid)
                  VALUES (
                             a_seq,
+                            api.pkg_columnquery.VALUE(t_jobid,
+                                                         'LicenseNumber'),
+                            t_jobid,
+                            t_apprec.lspapplicationid,
                             'CREATELICENSEAPPJOB',
-                            'Application Id: '
-                            || t_apprec.lspapplicationid
-                            || CHR(13)
-                            || 'License Number: '
-                            || api.pkg_columnquery.VALUE(t_jobid,
-                                                         'ExternalFileNum')
-                            || CHR(13)
-                            || 'j_Application: '
-                            || t_jobid
-                            || CASE
-                                   WHEN json_value(t_packet, '$.*.SOURCEAPP')
-                                            IS NOT NULL
-                                   THEN
-                                       '  ('
-                                       || json_value(t_packet,
-                                                     '$.*.SOURCEAPP')
-                                       || ')'
-                                   ELSE
-                                       NULL
-                               END,
-                            t_sqlerrm,
-                            t_trace);
+                            t_uid_text,
+                            t_errid);
 
         COMMIT;
 
@@ -485,64 +452,7 @@ BEGIN
                        a_jobid => a.jobid)
          WHERE a.jobid = t_jobid;
 
-        IF (t_sqlerrm IS NOT NULL)
-        THEN
-            -- notify LSP application has completed
-            bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
-                                                a_asofdate  => SYSDATE,
-                                                a_jobid     => t_jobid,
-                                                a_status    => 'ERRORED');
-        END IF;
-
         COMMIT;
-    EXCEPTION
-        WHEN OTHERS
-        THEN
-            t_sqlerrm := SUBSTR(SQLERRM, 1, 3990);
-            t_trace := SUBSTR(DBMS_UTILITY.format_error_backtrace, 1, 3990);
-
-            api.pkg_logicaltransactionupdate.resettransaction;
-            ROLLBACK;
-
-            bizmod_api.pkg_abis.applicationsave(a_objectid  => NULL,
-                                                a_asofdate  => SYSDATE,
-                                                a_jobid     => t_jobid,
-                                                a_status    => 'ERRORED');
-
-            INSERT INTO bizmod_api.e_process_log_t(seq,
-                                                   processjob,
-                                                   info,
-                                                   errmsg,
-                                                   bktrace)
-                     VALUES (
-                                a_seq,
-                                'CREATELICENSEAPPJOB',
-                                'Application Id: '
-                                || t_apprec.lspapplicationid
-                                || CHR(13)
-                                || 'License Number: '
-                                || api.pkg_columnquery.VALUE(
-                                       t_jobid,
-                                       'ExternalFileNum')
-                                || CHR(13)
-                                || 'j_Application: '
-                                || t_jobid
-                                || CASE
-                                       WHEN json_value(t_packet,
-                                                       '$.*.SOURCEAPP')
-                                                IS NOT NULL
-                                       THEN
-                                           '  ('
-                                           || json_value(t_packet,
-                                                         '$.*.SOURCEAPP')
-                                           || ')'
-                                       ELSE
-                                           NULL
-                                   END,
-                                t_sqlerrm,
-                                t_trace);
-
-            COMMIT;
     END;
 END;
 /

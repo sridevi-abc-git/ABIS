@@ -19,6 +19,8 @@ IS
     --    3.0   06/06/2024  BN  BIZ-15641   Fixed Duplicate Catering Auth packets issue
     --    4.0   08/08/2024  TJL BIZ-16000   Change to new createjob procedure
     --    5.0.1 11/03/2025  TJL BIZ-19526   Change how the parameters are passed to createjob
+    --    6.0.0 02/27/2026  TJL BIZ-20264   Change start max date validation from 60 to 90 days
+    --                                        before the event starts
     -- ****************************************************************************
     t_process      VARCHAR2(40);
     t_json_obj     json_object_t := json_object_t();
@@ -34,8 +36,6 @@ IS
     t_msg          VARCHAR2(4000 BYTE);
     t_dupreqcount  NUMBER;
 BEGIN
-    DBMS_OUTPUT.put_line('packaet information: ' || a_packet);
-
     FOR rec
         IN (SELECT *
               FROM JSON_TABLE(
@@ -174,9 +174,6 @@ BEGIN
                rec.applicationid
            AND eg.request = 'CREATECATERINGAPP';
 
-
-        DBMS_OUTPUT.put_line('t_dupReqCount: ' || t_dupreqcount);
-
         IF (t_dupreqcount > 1)
         THEN
             t_json_arr.append('Duplicate Application Request');
@@ -209,8 +206,9 @@ BEGIN
             t_json_arr.append('LSPPAYMENTID');
         END IF;
 
+        -- 02/27/2026 TJL BIZ-20264
         IF (TRUNC(rec.eventstartdate) NOT BETWEEN TRUNC(SYSDATE + 6)
-                                              AND TRUNC(SYSDATE + 60)
+                                              AND TRUNC(SYSDATE + 90)
          OR rec.eventstartdate IS NULL)
         THEN
             t_json_arr.append('EVENTSTARTDATE');

@@ -17,6 +17,8 @@ AS
     --     5.0.0  08/19/2025 TJL  BIZ-19133  Added membership_stock_transfers procedure
     --     5.1.0  09/15/2025 TJL  BIZ-19212  Added fee_notification procedure.
     --     6.0.0  01/27/2026 TJL  BIZ-19069  Added get_license_data function
+    --    13.0.0  03/09/2026 TJL  BIZ-20159  Added aditional parameter to copy_legal_entities,
+    --                                        add_company, and add_person
     -- **************************************************************************
     FUNCTION get_license_data(
         a_jobid         IN api.pkg_definition.udt_id)
@@ -32,6 +34,11 @@ AS
                               a_asofdate     IN DATE,
                               a_jobid        IN api.pkg_definition.udt_id,
                               a_status       IN VARCHAR2 DEFAULT NULL);
+
+    PROCEDURE status_notification(a_objectid     IN api.pkg_definition.udt_id,
+                                  a_asofdate     IN DATE,
+                                  a_jobid        IN api.pkg_definition.udt_id,
+                                  a_status       IN VARCHAR2);
 
     PROCEDURE manualpayment(a_objectid     IN api.pkg_definition.udt_id,
                             a_asofdate     IN DATE,
@@ -57,9 +64,9 @@ AS
                           a_address_type IN VARCHAR2,
                           a_address      IN CLOB);
 
-    PROCEDURE copy_legal_entities(
-        a_objectid     IN api.pkg_definition.udt_id,
-        a_legal_entity IN CLOB);
+    PROCEDURE copy_legal_entities(a_objectid     IN     api.pkg_definition.udt_id,
+                                  a_legal_entity IN     CLOB,
+                                  a_UID          IN OUT json_array_t);
 
     PROCEDURE add_attorney(a_jobid        IN api.pkg_definition.udt_id,
                            a_attorney     IN CLOB);
@@ -76,18 +83,20 @@ AS
         RETURN api.pkg_definition.udt_id;
 
     PROCEDURE add_person(a_entityobjectid IN api.pkg_definition.udt_id,
-                         a_person       IN CLOB);
+                         a_person       IN     CLOB,
+                         a_UID          IN OUT json_array_t);
 
-    PROCEDURE add_company(a_entityobjectid IN api.pkg_definition.udt_id,
-                          a_legal_entity IN CLOB);
+    PROCEDURE add_company(a_entityobjectid IN     api.pkg_definition.udt_id,
+                          a_legal_entity   IN     CLOB,
+                          a_UID            IN OUT json_array_t);
 
-    PROCEDURE membership_stock_transfers(
-        a_jobid        IN api.pkg_definition.udt_id,
-        a_legal_entities IN CLOB);
-
-    PROCEDURE exchange_primary_license_types(
-        a_jobid        IN api.pkg_definition.udt_id,
-        a_primarylicensetypes IN CLOB);
+--    PROCEDURE membership_stock_transfers(
+--        a_jobid        IN api.pkg_definition.udt_id,
+--        a_legal_entities IN CLOB);
+--
+--    PROCEDURE exchange_primary_license_types(
+--        a_jobid        IN api.pkg_definition.udt_id,
+--        a_primarylicensetypes IN CLOB);
 END;
 /
 

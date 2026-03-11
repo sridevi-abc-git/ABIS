@@ -33,131 +33,176 @@ AS
     --  10.2.0   09/22/2025  BN   BIZ-19170  Gallonage value not getting set issue.
     --  11.0.0   11/03/2025  TJL  BIZ-19526  Changed how parameters are passed to create job
     --  12.0.0   01/27/2026  TJL  BIZ-19069  Added get_license_data function
+    --  12.0.1   02/05/2026  TJL  BIZ-20061  in fee_notification procedure add executing schedule
+    --                                          job immediately and added checking history to
+    --                                          if fee notification just went out for lspid
     -- **************************************************************************
 
-    FUNCTION get_license_data(
-        a_jobid         IN api.pkg_definition.udt_id)
-      RETURN CLOB
+    FUNCTION get_license_data(a_jobid IN api.pkg_definition.udt_id)
+        RETURN CLOB
     IS
-        t_license_data  CLOB;
-
+        t_license_data CLOB;
     BEGIN
-    SELECT json_query(
-           json_object(
-               'objectId' VALUE a_jobid,
-               'applicants' VALUE
+        SELECT json_query(
                    json_object(
-                       'newApplicantName' VALUE
-                           api.pkg_columnquery.VALUE(a_jobid,
-                                                     'PrimaryApplicant')),
-               'premises' VALUE
-                   json_object(
-                       'newAddress' VALUE
-                           (SELECT json_object(
-                                       'location' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'addresslocation'),
-                                       'line1' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'ADDRESSLINE1'),
-                                       'line2' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'ADDRESSLINE2'),
-                                       'line3' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'ADDRESSLINE3'),
-                                       'city' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'USACITY'),
-                                       'state' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'USASTATE'),
-                                       'country' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'COUNTRY'),
-                                       'zipcode' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'ZIPCODE'),
-                                       'outsideCityLimits' VALUE
-                                           api.pkg_columnquery.VALUE(
-                                               r.toobjectid,
-                                               'outsidecitylimits')
-                                       ABSENT ON NULL)
+                       'objectId' VALUE a_jobid,
+                       'applicants' VALUE
+                           (SELECT json_arrayagg(
+                                       CASE
+                                           WHEN api.pkg_columnquery.VALUE(
+                                                    r.toobjectid,
+                                                    'IsAPerson') =
+                                                'Y'
+                                           THEN
+                                               json_object(
+                                                   'personApplicants' VALUE
+                                                       json_object(
+                                                           'objectid' VALUE
+                                                               r.toobjectid,
+                                                           'firstName' VALUE
+                                                               api.pkg_columnquery.VALUE(
+                                                                   r.toobjectid,
+                                                                   'FirstName'),
+                                                           'lastName' VALUE
+                                                               api.pkg_columnquery.VALUE(
+                                                                   r.toobjectid,
+                                                                   'LastName'),
+                                                           'middleName' VALUE
+                                                               api.pkg_columnquery.VALUE(
+                                                                   r.toobjectid,
+                                                                   'MiddleName'),
+                                                           'suffix' VALUE
+                                                               api.pkg_columnquery.VALUE(
+                                                                   r.toobjectid,
+                                                                   'Suffix')
+                                                           ABSENT ON NULL))
+                                           ELSE
+                                               json_object(
+                                                   'compamyApplicants' VALUE
+                                                       json_object(
+                                                           'objectid' VALUE
+                                                               r.toobjectid,
+                                                           'companyName' VALUE
+                                                               api.pkg_columnquery.VALUE(
+                                                                   r.toobjectid,
+                                                                   'CompanyName')
+                                                           ABSENT ON NULL))
+                                       END)
+                              FROM api.relationships r
+                             WHERE api.pkg_configquery.endpointidforname(
+                                       'j_Application',
+                                       'Applicant') =
+                                   r.endpointid
+                               AND r.fromobjectid = a_jobid),
+                       'premises' VALUE
+                           json_object(
+                               'newAddress' VALUE
+                                   (SELECT json_object(
+                                               'location' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'addresslocation'),
+                                               'line1' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'ADDRESSLINE1'),
+                                               'line2' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'ADDRESSLINE2'),
+                                               'line3' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'ADDRESSLINE3'),
+                                               'city' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'USACITY'),
+                                               'state' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'USASTATE'),
+                                               'country' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'COUNTRY'),
+                                               'zipcode' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'ZIPCODE'),
+                                               'outsideCityLimits' VALUE
+                                                   api.pkg_columnquery.VALUE(
+                                                       r.toobjectid,
+                                                       'outsidecitylimits')
+                                               ABSENT ON NULL)
+                                      FROM api.relationships r
+                                     WHERE r.endpointid =
+                                           api.pkg_configquery.endpointidforname(
+                                               'j_Application',
+                                               'Premises')
+                                       AND r.fromobjectid = a_jobid),
+                               'newDBAName' VALUE
+                                   api.pkg_columnquery.VALUE(a_jobid, 'DBA')),
+                       'primaryLicenseTypes' VALUE
+                           (SELECT json_arrayagg(
+                                       json_object(
+                                           'licenseTypeCode' VALUE
+                                               api.pkg_columnquery.VALUE(
+                                                   r.toobjectid,
+                                                   'LicenseTypeCode'),
+                                           'primaryCount' VALUE
+                                               api.pkg_columnquery.VALUE(
+                                                   r.toobjectid,
+                                                   'PrimaryLicenseTypeCount'),
+                                           'updatedSecondaryLicenseTypes' VALUE
+                                               (SELECT json_arrayagg(json_object(
+                                                                         'licenseTypeCode' VALUE
+                                                                             api.pkg_columnquery.VALUE(
+                                                                                 r2.toobjectid,
+                                                                                 'LicenseTypeCode'),
+                                                                         'primaryCount' VALUE
+                                                                             api.pkg_columnquery.VALUE(
+                                                                                 r2.relationshipid,
+                                                                                 'LicenseTypeCount'))
+                                                                     ORDER BY
+                                                       api.pkg_columnquery.VALUE(
+                                                           r2.toobjectid,
+                                                           'LicenseTypeCode'))
+                                                  FROM api.relationships r2
+                                                 WHERE r2.endpointid =
+                                                       api.pkg_configquery.endpointidforname(
+                                                           'o_PrimaryLicenseType',
+                                                           'LicTypeCatSecondary')
+                                                   AND r2.fromobjectid =
+                                                       r.toobjectid)
+                                           ABSENT ON NULL))
                               FROM api.relationships r
                              WHERE r.endpointid =
                                    api.pkg_configquery.endpointidforname(
                                        'j_Application',
-                                       'Premises')
-                               AND r.fromobjectid = a_jobid
-                                                             ),
-                       'newDBAName' VALUE
-                           api.pkg_columnquery.VALUE(a_jobid, 'DBA')),
-               'primaryLicenseTypes' VALUE
-                   (SELECT json_arrayagg(
-                               json_object(
-                                   'LicenseTypeCode' VALUE
-                                       api.pkg_columnquery.VALUE(
-                                           r.toobjectid,
-                                           'LicenseTypeCode'),
-                                   'primaryCount' VALUE
-                                       api.pkg_columnquery.VALUE(
-                                           r.toobjectid,
-                                           'PrimaryLicenseTypeCount'),
-                                   'updatedSecondaryLicenseTypes' VALUE
-                                       (SELECT json_arrayagg(json_object(
-                                                                 'LicenseTypeCode' VALUE
-                                                                     api.pkg_columnquery.VALUE(
-                                                                         r2.toobjectid,
-                                                                         'LicenseTypeCode'),
-                                                                 'primaryCount' VALUE
-                                                                     api.pkg_columnquery.VALUE(
-                                                                         r2.relationshipid,
-                                                                         'LicenseTypeCount'))
-                                                             ORDER BY
-                                               api.pkg_columnquery.VALUE(
-                                                   r2.toobjectid,
-                                                   'LicenseTypeCode'))
-                                          FROM api.relationships r2
-                                         WHERE r2.endpointid =
-                                               api.pkg_configquery.endpointidforname(
-                                                   'o_PrimaryLicenseType',
-                                                   'LicTypeCatSecondary')
-                                           AND r2.fromobjectid = r.toobjectid)
-                                   ABSENT ON NULL))
-                      FROM api.relationships r
-                     WHERE r.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'j_Application',
-                               'PrimaryLicenseType')
-                       AND r.fromobjectid = a_jobid)),
-           '$'
-           RETURNING CLOB PRETTY)
-  into t_license_data
-  FROM dual;
+                                       'PrimaryLicenseType')
+                               AND r.fromobjectid = a_jobid)),
+                   '$'
+                   RETURNING CLOB PRETTY)
+          INTO t_license_data
+          FROM DUAL;
 
 
-        return t_license_data;
-    end get_license_data;
+        RETURN t_license_data;
+    END get_license_data;
 
 
     PROCEDURE cateringnotifylsp(a_objectid     api.pkg_definition.udt_id,
                                 a_asofdate     DATE)
     IS
-        t_scheduleddate     TIMESTAMP;
-        t_cnt               NUMBER := 0;
-        t_sqlerrm           VARCHAR2(4000);
-        t_trace             VARCHAR2(4000);
-        t_application_id    NUMBER := api.pkg_columnquery.NUMERICVALUE(a_objectid, 'LSPId');
+        t_scheduleddate TIMESTAMP;
+        t_cnt          NUMBER := 0;
+        t_sqlerrm      VARCHAR2(4000);
+        t_trace        VARCHAR2(4000);
+        t_application_id NUMBER
+            := api.pkg_columnquery.numericvalue(a_objectid, 'LSPId');
     BEGIN
---dbms_output.put_line('app id: ' || t_application_id);
+        --dbms_output.put_line('app id: ' || t_application_id);
 
         -- check if online application
         IF (t_application_id IS NOT NULL)
@@ -168,17 +213,18 @@ AS
                     WHEN 'Approved' THEN SYSDATE + INTERVAL '2' MINUTE
                     ELSE SYSTIMESTAMP + INTERVAL '5' SECOND
                 END;
---dbms_output.put_line('scheduled: ' || t_scheduleddate);
+
+            --dbms_output.put_line('scheduled: ' || t_scheduleddate);
 
             -- check to see if this application has already been secheuled. This process can be called twice
             --  when application is approved
             SELECT COUNT(1)
               INTO t_cnt
               FROM bizmod_api.e_jobs_que_t j
-             where j.procedure_name = 'CATERINGNOTIFYLSPJOB'
-               and j.application_id = t_application_id;
+             WHERE j.procedure_name = 'CATERINGNOTIFYLSPJOB'
+               AND j.application_id = t_application_id;
 
---dbms_output.put_line('cnt: ' || t_cnt);
+            --dbms_output.put_line('cnt: ' || t_cnt);
             IF (t_cnt = 0)
             THEN
                 bizmod_api.utl_licenseinfo.createjob(
@@ -186,8 +232,8 @@ AS
                     a_application_id => t_application_id,
                     a_schedule_time => t_scheduleddate,
                     a_parameters =>
-                            bizmod_api.job_prameters_tbl(a_objectid,
-                            t_scheduleddate));
+                        bizmod_api.job_prameters_tbl(a_objectid,
+                                                     t_scheduleddate));
             END IF;
         END IF;
     EXCEPTION
@@ -195,7 +241,8 @@ AS
         THEN
             t_sqlerrm := SQLERRM;
             t_trace := DBMS_UTILITY.format_error_backtrace;
---dbms_output.put_line('Error: ' || t_sqlerrm);
+
+            --dbms_output.put_line('Error: ' || t_sqlerrm);
             INSERT INTO bizmod_api.e_process_log_t(seq,
                                                    processjob,
                                                    info,
@@ -218,11 +265,23 @@ AS
                          a_jobid     => a_objectid);
     END;
 
-
     PROCEDURE applicationsave(a_objectid     IN api.pkg_definition.udt_id,
                               a_asofdate     IN DATE,
                               a_jobid        IN api.pkg_definition.udt_id,
                               a_status       IN VARCHAR2 DEFAULT NULL)
+    IS
+    BEGIN
+        status_notification(a_objectid => a_objectid,
+                            a_asofdate => a_asofdate,
+                            a_jobid    => a_jobid,
+                            a_status   => a_status);
+    END;
+
+
+    PROCEDURE status_notification(a_objectid     IN api.pkg_definition.udt_id,
+                                  a_asofdate     IN DATE,
+                                  a_jobid        IN api.pkg_definition.udt_id,
+                                  a_status       IN VARCHAR2)
     IS
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
@@ -231,10 +290,13 @@ AS
         THEN
             bizmod_api.utl_licenseinfo.createjob(
                 a_procedure => 'APPLICATIONSAVEJOB',
-                a_application_id => api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
-                a_parameters =>
-                            bizmod_api.job_prameters_tbl(nvl(a_objectid, a_jobid),
-                                systimestamp, a_jobid, a_status));
+                a_application_id =>
+                    api.pkg_columnquery.VALUE(a_jobid, 'LSPId'),
+                a_parameters => bizmod_api.job_prameters_tbl(
+                                   NVL(a_objectid, a_jobid),
+                                   SYSTIMESTAMP,
+                                   a_jobid,
+                                   a_status));
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -265,7 +327,7 @@ AS
     IS
         t_sqlerrm      VARCHAR2(4000);
         t_trace        VARCHAR2(4000);
-        t_schedule_time TIMESTAMP := systimestamp;
+        t_schedule_time TIMESTAMP := SYSTIMESTAMP;
         t_lspid        NUMBER;
         t_count        NUMBER;
     BEGIN
@@ -278,47 +340,48 @@ AS
             -- check if payment made thru LSP
             SELECT COUNT(f.feeid)     cnt
               INTO t_count
-          FROM api.relationships  p
-               JOIN api.paymenttransactions pt
-                   ON (pt.paymentid =
-                       api.pkg_columnquery.numericvalue(p.toobjectid,
-                                                        'PaymentId'))
-               JOIN api.feetransactions f
-                   ON (f.transactionid = pt.transactionid) -- in (10971819,10971820))
-               JOIN api.registeredexternalobjects reo
-                   ON (reo.objectdefid =
-                       api.pkg_configquery.objectdefidforname('o_fee')
-                   AND reo.linkvalue = TO_CHAR(f.feeid))
-         WHERE (p.endpointid =
-                api.pkg_configquery.endpointidforname('p_ReceiptPayments',
-                                                      'Payment')
-            AND p.fromobjectid = a_objectid
-            -- 08/07/2025 TJL  BIZ-19030
-            AND NOT EXISTS
-                    (SELECT p.feeobjid
-                       FROM bizmod_api.e_payments_t p
-                      WHERE p.feeobjid = reo.objectid));
+              FROM api.relationships  p
+                   JOIN api.paymenttransactions pt
+                       ON (pt.paymentid =
+                           api.pkg_columnquery.numericvalue(p.toobjectid,
+                                                            'PaymentId'))
+                   JOIN api.feetransactions f
+                       ON (f.transactionid = pt.transactionid) -- in (10971819,10971820))
+                   JOIN api.registeredexternalobjects reo
+                       ON (reo.objectdefid =
+                           api.pkg_configquery.objectdefidforname('o_fee')
+                       AND reo.linkvalue = TO_CHAR(f.feeid))
+             WHERE (p.endpointid =
+                    api.pkg_configquery.endpointidforname(
+                        'p_ReceiptPayments',
+                        'Payment')
+                AND p.fromobjectid = a_objectid
+                -- 08/07/2025 TJL  BIZ-19030
+                AND NOT EXISTS
+                        (SELECT p.feeobjid
+                           FROM bizmod_api.e_payments_t p
+                          WHERE p.feeobjid = reo.objectid));
 
             IF (t_count > 0)
             THEN
                 -- check to see if there is a fee pending notification
-            SELECT COUNT(1)
-              INTO t_count
-              FROM bizmod_api.e_jobs_que_t j
-             where j.procedure_name = 'MANUALPAYMENTJOB'
-               and j.application_id = t_lspid;
+                SELECT COUNT(1)
+                  INTO t_count
+                  FROM bizmod_api.e_jobs_que_t j
+                 WHERE j.procedure_name = 'MANUALPAYMENTJOB'
+                   AND j.application_id = t_lspid;
 
-            IF (t_count = 0)
-            then
-                bizmod_api.utl_licenseinfo.createjob(
-                    a_procedure => 'MANUALPAYMENTJOB',
-                    a_application_id => t_lspid,
-                    a_parameters =>
+                IF (t_count = 0)
+                THEN
+                    bizmod_api.utl_licenseinfo.createjob(
+                        a_procedure => 'MANUALPAYMENTJOB',
+                        a_application_id => t_lspid,
+                        a_parameters =>
                             bizmod_api.job_prameters_tbl(a_objectid,
-                            t_schedule_time,
-                            a_jobid));
+                                                         t_schedule_time,
+                                                         a_jobid));
+                END IF;
             END IF;
-            end if;
         END IF;
     EXCEPTION
         WHEN OTHERS
@@ -352,7 +415,8 @@ AS
         t_trace        VARCHAR2(4000);
         t_notify_type  VARCHAR2(100);
         t_count        NUMBER;
-        t_lspid        NUMBER := api.pkg_columnquery.numericVALUE(a_jobid, 'LSPId');
+        t_lspid        NUMBER
+            := api.pkg_columnquery.numericvalue(a_jobid, 'LSPId');
     BEGIN
         IF (t_lspid IS NOT NULL)
         THEN
@@ -361,23 +425,31 @@ AS
                 NVL(api.pkg_columnquery.VALUE(a_objectid, 'ModifyType'),
                     'New Fee');
 
-            -- check to see if fee notification job has already been created for this LSP Id
-            SELECT COUNT(1)
+            SELECT COUNT(seq)     cnt
               INTO t_count
-              FROM bizmod_api.e_jobs_que_t j
-             where j.procedure_name = 'FEENOTIFICATIONJOB'
-               and j.application_id = t_lspid;
+              FROM (SELECT seq
+                      FROM bizmod_api.e_jobs_que_t j
+                     WHERE j.procedure_name = 'FEENOTIFICATIONJOB'
+                       AND j.application_id = t_lspid
+                    UNION
+                    SELECT seq
+                      FROM bizmod_api.e_jobs_hist_t j
+                     WHERE j.procedure_name = 'FEENOTIFICATIONJOB'
+                       AND j.application_id = t_lspid
+                       AND j.completed_time >
+                           SYSTIMESTAMP - NUMTODSINTERVAL(35, 'SECOND'));
 
             IF (t_count = 0)
             THEN
+                DBMS_OUTPUT.put_line('schedule job:');
                 bizmod_api.utl_licenseinfo.createjob(
                     a_procedure => 'FEENOTIFICATIONJOB',
                     a_application_id => t_lspid,
-                    a_schedule_time => SYSTIMESTAMP + INTERVAL '10' SECOND,
+                    a_schedule_time => SYSTIMESTAMP,
                     a_parameters =>
-                            bizmod_api.job_prameters_tbl(a_objectid,
-                            SYSTIMESTAMP,
-                            a_jobid));
+                        bizmod_api.job_prameters_tbl(a_objectid,
+                                                     SYSTIMESTAMP,
+                                                     a_jobid));
             END IF;
         END IF;
     EXCEPTION
@@ -995,12 +1067,13 @@ AS
         END LOOP;
     END add_title;
 
-    PROCEDURE copy_legal_entities(
-        a_objectid     IN api.pkg_definition.udt_id,
-        a_legal_entity IN CLOB)
+    PROCEDURE copy_legal_entities(a_objectid     IN     api.pkg_definition.udt_id,
+                                  a_legal_entity IN     CLOB,
+                                  a_UID          IN OUT json_array_t)
     IS
         t_relid        api.pkg_definition.udt_id;
         t_endpointid   api.pkg_definition.udt_id;
+        t_entity_uid   json_object_t;
     BEGIN
         IF (a_legal_entity IS NOT NULL)
         THEN
@@ -1010,10 +1083,16 @@ AS
                                a_legal_entity,
                                '$[*]'
                                COLUMNS(
+                                   entity_uid VARCHAR2(500) PATH '$.entity_uid',
                                    objectid
                                        NUMBER
                                        PATH '$.LEGALENTITYOBJECTID')))
             LOOP
+                -- add entity entity_uid
+                t_entity_uid := json_object_t();
+                t_entity_uid.put('entity_uid', entity.entity_uid);
+                t_entity_uid.put('objectid', entity.objectid);
+
                 IF (api.pkg_columnquery.VALUE(entity.objectid, 'P12Status') =
                     'Y')
                 THEN
@@ -1364,12 +1443,14 @@ AS
     END create_legalentity;
 
 
-    PROCEDURE add_person(a_entityobjectid IN api.pkg_definition.udt_id,
-                         a_person       IN CLOB)
+    PROCEDURE add_person(a_entityobjectid IN   api.pkg_definition.udt_id,
+                         a_person         IN     CLOB,
+                         a_uid            IN OUT json_array_t)
     IS
         t_objectdefid  api.pkg_definition.udt_id;
         t_objectid     api.pkg_definition.udt_id;
         t_newentity    api.pkg_definition.udt_id;
+        t_entity_uid   json_object_t;
     BEGIN
         FOR rec
             IN (SELECT j.*
@@ -1377,6 +1458,7 @@ AS
                            a_person,
                            '$[*]'
                            COLUMNS(
+                               entity_uid VARCHAR2(500) PATH '$.entity_uid',
                                ownertype VARCHAR2(4000) PATH '$.OWNERTYPE',
                                title CLOB FORMAT JSON PATH '$.TITLE',
                                onsalemanager
@@ -1489,10 +1571,18 @@ AS
                         a_ownertype => rec.ownertype,
                         a_title     => rec.title);
 
+                -- add entity entity_uid
+                t_entity_uid := json_object_t();
+                t_entity_uid.put('entity_uid', rec.entity_uid);
+
+                t_entity_uid.put('objectid', t_newentity);
+                a_uid.append(t_entity_uid);
+
                 IF (rec.person IS NOT NULL)
                 THEN
                     add_person(a_entityobjectid => t_newentity,
-                               a_person    => rec.person);
+                               a_person    => rec.person,
+                               a_uid => a_uid);
                 END IF;
             ELSE
                 IF (api.pkg_columnquery.VALUE(a_entityobjectid, 'IsAPerson') =
@@ -1511,10 +1601,18 @@ AS
                             a_ownertype => rec.ownertype,
                             a_title     => rec.title);
 
+                    -- add entity entity_uid
+                    t_entity_uid := json_object_t();
+                    t_entity_uid.put('entity_uid', rec.entity_uid);
+
+                    t_entity_uid.put('objectid', t_newentity);
+                    a_uid.append(t_entity_uid);
+
                     IF (rec.person IS NOT NULL)
                     THEN
                         add_person(a_entityobjectid => t_newentity,
-                                   a_person    => rec.person);
+                                   a_person    => rec.person,
+                                   a_uid => a_uid);
                     END IF;
                 ELSE
                     IF (rec.percentageofownership IS NOT NULL)
@@ -1532,10 +1630,18 @@ AS
                                 a_ownertype => rec.ownertype,
                                 a_title     => NULL); --rec.title);
 
+                        -- add entity entity_uid
+                        t_entity_uid := json_object_t();
+                        t_entity_uid.put('entity_uid', rec.entity_uid);
+
+                        t_entity_uid.put('objectid', t_newentity);
+                        a_uid.append(t_entity_uid);
+
                         IF (rec.person IS NOT NULL)
                         THEN
                             add_person(a_entityobjectid => t_newentity,
-                                       a_person    => rec.person);
+                                       a_person    => rec.person,
+                                       a_uid => a_uid);
                         END IF;
                     END IF;
 
@@ -1553,10 +1659,18 @@ AS
                                 a_ownertype => NULL,
                                 a_title     => rec.title);
 
+                        -- add entity entity_uid
+                        t_entity_uid := json_object_t();
+                        t_entity_uid.put('entity_uid', rec.entity_uid);
+
+                        t_entity_uid.put('objectid', t_newentity);
+                        a_uid.append(t_entity_uid);
+
                         IF (rec.person IS NOT NULL)
                         THEN
                             add_person(a_entityobjectid => t_newentity,
-                                       a_person    => rec.person);
+                                       a_person    => rec.person,
+                                       a_uid => a_uid);
                         END IF;
                     END IF;
                 END IF;
@@ -1567,12 +1681,14 @@ AS
         COMMIT;
     END add_person;
 
-    PROCEDURE add_company(a_entityobjectid IN api.pkg_definition.udt_id,
-                          a_legal_entity IN CLOB)
+    PROCEDURE add_company(a_entityobjectid IN   api.pkg_definition.udt_id,
+                          a_legal_entity IN     CLOB,
+                          a_uid          IN OUT json_array_t)
     IS
         t_objectdefid  api.pkg_definition.udt_id;
         t_objectid     api.pkg_definition.udt_id;
         t_newentity    api.pkg_definition.udt_id;
+        t_entity_uid   json_object_t;
     BEGIN
         FOR rec
             IN (SELECT *
@@ -1580,6 +1696,7 @@ AS
                            a_legal_entity,
                            '$[*]'
                            COLUMNS(
+                               entity_uid VARCHAR2(500) PATH '$.entity_uid',
                                ownertype VARCHAR2(4000) PATH '$.OWNERTYPE',
                                title CLOB FORMAT JSON PATH '$.TITLE',
                                lestructurerel
@@ -1651,16 +1768,25 @@ AS
                         a_ownertype => rec.ownertype,
                         a_title     => rec.title);
 
+                    -- add entity entity_uid
+                    t_entity_uid := json_object_t();
+                    t_entity_uid.put('entity_uid', rec.entity_uid);
+
+                    t_entity_uid.put('objectid', t_newentity);
+                    a_uid.append(t_entity_uid);
+
                 IF (rec.company IS NOT NULL)
                 THEN
                     add_company(a_entityobjectid => t_newentity,
-                                a_legal_entity => rec.company);
+                                a_legal_entity => rec.company,
+                                a_uid => a_uid);
                 END IF;
 
                 IF (rec.person IS NOT NULL)
                 THEN
                     add_person(a_entityobjectid => t_newentity,
-                               a_person    => rec.person);
+                               a_person    => rec.person,
+                               a_uid => a_uid);
                 END IF;
             ELSE
                 IF (rec.percentageofownership IS NOT NULL)
@@ -1678,16 +1804,25 @@ AS
                             a_ownertype => rec.ownertype,
                             a_title     => NULL);
 
+                    -- add entity entity_uid
+                    t_entity_uid := json_object_t();
+                    t_entity_uid.put('entity_uid', rec.entity_uid);
+
+                    t_entity_uid.put('objectid', t_newentity);
+                    a_uid.append(t_entity_uid);
+
                     IF (rec.company IS NOT NULL)
                     THEN
                         add_company(a_entityobjectid => t_newentity,
-                                    a_legal_entity => rec.company);
+                                    a_legal_entity => rec.company,
+                                    a_uid => a_uid);
                     END IF;
 
                     IF (rec.person IS NOT NULL)
                     THEN
                         add_person(a_entityobjectid => t_newentity,
-                                   a_person    => rec.person);
+                                   a_person    => rec.person,
+                                   a_uid => a_uid);
                     END IF;
                 END IF;
 
@@ -1705,16 +1840,25 @@ AS
                             a_ownertype => NULL,
                             a_title     => rec.title);
 
+                    -- add entity entity_uid
+                    t_entity_uid := json_object_t();
+                    t_entity_uid.put('entity_uid', rec.entity_uid);
+
+                    t_entity_uid.put('objectid', t_newentity);
+                    a_uid.append(t_entity_uid);
+
                     IF (rec.company IS NOT NULL)
                     THEN
                         add_company(a_entityobjectid => t_newentity,
-                                    a_legal_entity => rec.company);
+                                    a_legal_entity => rec.company,
+                                    a_uid => a_uid);
                     END IF;
 
                     IF (rec.person IS NOT NULL)
                     THEN
                         add_person(a_entityobjectid => t_newentity,
-                                   a_person    => rec.person);
+                                   a_person    => rec.person,
+                                   a_uid => a_uid);
                     END IF;
                 END IF;
             END IF;
@@ -1910,374 +2054,376 @@ AS
         COMMIT;
     END;
 
-    PROCEDURE membership_stock_transfers(
-        a_jobid        IN api.pkg_definition.udt_id,
-        a_legal_entities IN CLOB)
-    IS
-        t_item         api.pkg_definition.udt_id;
-        t_entity       CLOB;
-        t_company      CLOB;
-        t_person       CLOB;
-        t_parent       api.pkg_definition.udt_id;
-    BEGIN
-        SELECT entity, company, person
-          INTO t_entity, t_company, t_person
-          FROM JSON_TABLE(
-                   a_legal_entities,
-                   '$'
-                   COLUMNS(entity CLOB FORMAT JSON PATH '$.ENTITY',
-                           company CLOB FORMAT JSON PATH '$.COMPANY',
-                           person CLOB FORMAT JSON PATH '$.PERSON'));
+--    PROCEDURE membership_stock_transfers(
+--        a_jobid        IN api.pkg_definition.udt_id,
+--        a_legal_entities IN CLOB)
+--    IS
+--        t_item         api.pkg_definition.udt_id;
+--        t_entity       CLOB;
+--        t_company      CLOB;
+--        t_person       CLOB;
+--        t_parent       api.pkg_definition.udt_id;
+--    BEGIN
+--        SELECT entity, company, person
+--          INTO t_entity, t_company, t_person
+--          FROM JSON_TABLE(
+--                   a_legal_entities,
+--                   '$'
+--                   COLUMNS(entity CLOB FORMAT JSON PATH '$.ENTITY',
+--                           company CLOB FORMAT JSON PATH '$.COMPANY',
+--                           person CLOB FORMAT JSON PATH '$.PERSON'));
+--
+--        SELECT r.toobjectid
+--          INTO t_item
+--          FROM api.relationships r
+--         WHERE r.endpointid IN
+--                   (api.pkg_configquery.endpointidforname('o_legalEntity',
+--                                                          'Company'),
+--                    api.pkg_configquery.endpointidforname('o_legalEntity',
+--                                                          'Person'))
+--           AND r.fromobjectid =
+--               (SELECT MIN(tbl.removelegalentityobjectid)    removelegalentityobjectid
+--                  FROM JSON_TABLE(
+--                           t_entity,
+--                           '$[*]'
+--                           COLUMNS(
+--                               objectid NUMBER PATH '$.LEGALENTITYOBJECTID',
+--                               removelegalentityobjectid
+--                                   NUMBER
+--                                   PATH '$.REMOVELEGALENTITYOBJECTID')) tbl
+--                 WHERE tbl.removelegalentityobjectid IS NOT NULL);
+--
+--        SELECT DISTINCT (SELECT r2.toobjectid
+--                           FROM api.relationships r2
+--                          WHERE (r2.endpointid =
+--                                 api.pkg_configquery.endpointidforname(
+--                                     'o_legalEntity',
+--                                     'OfficerParentEntity')
+--                              OR r2.endpointid =
+--                                 api.pkg_configquery.endpointidforname(
+--                                     'o_legalEntity',
+--                                     'StockholderParentEntity'))
+--                            AND r2.fromobjectid = r.toobjectid)    legalentityparentobjectid
+--          INTO t_parent
+--          FROM api.relationships r
+--         WHERE r.fromobjectid = t_item
+--           AND api.pkg_columnquery.VALUE(r.toobjectid, 'ApplicationJobId') =
+--               a_jobid
+--           AND api.pkg_columnquery.VALUE(r.toobjectid, 'LEStructureRel') IN
+--                   ('Stockholder', 'Officer');
+--
+--        IF (t_company IS NOT NULL)
+--        THEN
+--            pkg_abis.add_company(a_entityobjectid => t_parent,
+--                                 a_legal_entity => t_company,
+--                                 a_uid => a_uid);
+--        END IF;
+--
+--        IF (t_person IS NOT NULL)
+--        THEN
+--            pkg_abis.add_person(a_entityobjectid => t_parent,
+--                                a_person    => t_person,
+--                                a_uid => a_uid);
+--        END IF;
+--
+--        IF (t_entity IS NOT NULL)
+--        THEN
+--            FOR entity
+--                IN (SELECT *
+--                      FROM JSON_TABLE(
+--                               t_entity,
+--                               '$[*]'
+--                               COLUMNS(
+--                                   objectid
+--                                       NUMBER
+--                                       PATH '$.LEGALENTITYOBJECTID',
+--                                   removelegalentityobjectid
+--                                       NUMBER
+--                                       PATH '$.REMOVELEGALENTITYOBJECTID')))
+--            LOOP
+--                IF (entity.objectid IS NOT NULL)
+--                THEN
+--                    copy_legal_entities(
+--                        a_objectid  => a_jobid,
+--                        a_legalentityobjectid => entity.objectid);
+--                END IF;
+--
+--                IF (entity.removelegalentityobjectid IS NOT NULL)
+--                THEN
+--                    make_former_legalentity(
+--                        a_applicationobjectid => a_jobid,
+--                        a_personcompanyobjectid =>
+--                            entity.removelegalentityobjectid);
+--                END IF;
+--            END LOOP;
+--        END IF;
+--
+--        -- "ApplicationCreatedDate" must be set last before save
+--        api.pkg_columnupdate.setvalue(a_jobid,
+--                                      'ApplicationCreatedDate',
+--                                      SYSDATE);
+--
+--        api.pkg_logicaltransactionupdate.endtransaction;
+--        COMMIT;
+--    END;
 
-        SELECT r.toobjectid
-          INTO t_item
-          FROM api.relationships r
-         WHERE r.endpointid IN
-                   (api.pkg_configquery.endpointidforname('o_legalEntity',
-                                                          'Company'),
-                    api.pkg_configquery.endpointidforname('o_legalEntity',
-                                                          'Person'))
-           AND r.fromobjectid =
-               (SELECT MIN(tbl.removelegalentityobjectid)    removelegalentityobjectid
-                  FROM JSON_TABLE(
-                           t_entity,
-                           '$[*]'
-                           COLUMNS(
-                               objectid NUMBER PATH '$.LEGALENTITYOBJECTID',
-                               removelegalentityobjectid
-                                   NUMBER
-                                   PATH '$.REMOVELEGALENTITYOBJECTID')) tbl
-                 WHERE tbl.removelegalentityobjectid IS NOT NULL);
-
-        SELECT DISTINCT (SELECT r2.toobjectid
-                           FROM api.relationships r2
-                          WHERE (r2.endpointid =
-                                 api.pkg_configquery.endpointidforname(
-                                     'o_legalEntity',
-                                     'OfficerParentEntity')
-                              OR r2.endpointid =
-                                 api.pkg_configquery.endpointidforname(
-                                     'o_legalEntity',
-                                     'StockholderParentEntity'))
-                            AND r2.fromobjectid = r.toobjectid)    legalentityparentobjectid
-          INTO t_parent
-          FROM api.relationships r
-         WHERE r.fromobjectid = t_item
-           AND api.pkg_columnquery.VALUE(r.toobjectid, 'ApplicationJobId') =
-               a_jobid
-           AND api.pkg_columnquery.VALUE(r.toobjectid, 'LEStructureRel') IN
-                   ('Stockholder', 'Officer');
-
-        IF (t_company IS NOT NULL)
-        THEN
-            pkg_abis.add_company(a_entityobjectid => t_parent,
-                                 a_legal_entity => t_company);
-        END IF;
-
-        IF (t_person IS NOT NULL)
-        THEN
-            pkg_abis.add_person(a_entityobjectid => t_parent,
-                                a_person    => t_person);
-        END IF;
-
-        IF (t_entity IS NOT NULL)
-        THEN
-            FOR entity
-                IN (SELECT *
-                      FROM JSON_TABLE(
-                               t_entity,
-                               '$[*]'
-                               COLUMNS(
-                                   objectid
-                                       NUMBER
-                                       PATH '$.LEGALENTITYOBJECTID',
-                                   removelegalentityobjectid
-                                       NUMBER
-                                       PATH '$.REMOVELEGALENTITYOBJECTID')))
-            LOOP
-                IF (entity.objectid IS NOT NULL)
-                THEN
-                    copy_legal_entities(
-                        a_objectid  => a_jobid,
-                        a_legalentityobjectid => entity.objectid);
-                END IF;
-
-                IF (entity.removelegalentityobjectid IS NOT NULL)
-                THEN
-                    make_former_legalentity(
-                        a_applicationobjectid => a_jobid,
-                        a_personcompanyobjectid =>
-                            entity.removelegalentityobjectid);
-                END IF;
-            END LOOP;
-        END IF;
-
-        -- "ApplicationCreatedDate" must be set last before save
-        api.pkg_columnupdate.setvalue(a_jobid,
-                                      'ApplicationCreatedDate',
-                                      SYSDATE);
-
-        api.pkg_logicaltransactionupdate.endtransaction;
-        COMMIT;
-    END;
-
-    PROCEDURE exchange_primary_license_types(
-        a_jobid        IN api.pkg_definition.udt_id,
-        a_primarylicensetypes IN CLOB)
-    IS
-        t_endpointid   api.pkg_definition.udt_id;
-        t_relid        api.pkg_definition.udt_id;
-        t_relid_sec    api.pkg_definition.udt_id;
-        t_licensetypedefid api.pkg_definition.udt_id;
-        t_licensetypecodeobjectid api.pkg_definition.udt_id;
-        t_licensetypeobjectid api.pkg_definition.udt_id;
-        t_primarylicensetype api.pkg_definition.udt_id;
-        t_populationapplies VARCHAR2(1);
-        t_secondarytypeobjectid api.pkg_definition.udt_id;
-        t_feeid        NUMBER;
-        t_amount       NUMBER;
-        t_description  VARCHAR2(100);
-        t_glaccountid  NUMBER;
-        t_feeobjid     NUMBER;
-        t_feeschedule  api.pkg_definition.udt_id;
-        t_secondaries  VARCHAR2(4000);
-    BEGIN
-        FOR rec
-            IN (SELECT *
-                  FROM JSON_TABLE(
-                           a_primarylicensetypes,
-                           '$[*]'
-                           COLUMNS(
-                               licensetypecode
-                                   VARCHAR2(3)
-                                   PATH '$.LICENSETYPECODE',
-                               exchangelicensetypecode
-                                   VARCHAR2(3)
-                                   PATH '$.EXCHANGELICENSETYPECODE',
-                               gallonage NUMBER PATH '$.GALLONAGE',
-                               numberofmonthslicensed
-                                   NUMBER
-                                   PATH '$.NUMBEROFMONTHSLICENSED',
-                               seasonstartmonth
-                                   VARCHAR2(100)
-                                   PATH '$.SEASON_START_MONTH',
-                               primarycount NUMBER PATH '$.PRIMARYCOUNT',
-                               isbranch VARCHAR2(1) PATH '$.ISBRANCH',
-                               secondarylicensetypes
-                                   VARCHAR2(4000)
-                                   FORMAT JSON
-                                   PATH '$.SECONDARYLICENSETYPES')))
-        LOOP
-            SELECT ltc.objectid,
-                   ltc.secondarylicensetypecodes,
-                   ltc.populationapplies
-              INTO t_licensetypecodeobjectid,
-                   t_secondaries,
-                   t_populationapplies
-              FROM query.o_licensetypecategory ltc
-             WHERE ltc.licensetypecode = rec.licensetypecode;
-
-            -- create primary licene type
-            t_licensetypedefid :=
-                api.pkg_configquery.objectdefidforname(
-                    'o_PrimaryLicenseType');
-            t_licensetypeobjectid :=
-                api.pkg_objectupdate.new(t_licensetypedefid);
-
-            -- create relationship from primary license type to license type catagory
-            t_endpointid :=
-                api.pkg_configquery.endpointidforname('o_PrimaryLicenseType',
-                                                      'LicTypeCatPrimary');
-            t_relid :=
-                api.pkg_relationshipupdate.new(t_endpointid,
-                                               t_licensetypeobjectid,
-                                               t_licensetypecodeobjectid);
-
-            -- get relationship between application and license type being exchanged
-            SELECT r.relationshipid, r.toobjectid
-              INTO t_relid, t_primarylicensetype
-              FROM api.relationships r
-             WHERE r.fromobjectid = a_jobid
-               AND r.endpointid =
-                   api.pkg_configquery.endpointidforname(
-                       'j_Application',
-                       'PrimaryLicenseType')
-               AND api.pkg_columnquery.VALUE(r.toobjectid, 'LicenseTypeCode') =
-                   rec.exchangelicensetypecode;
-
-            -- check if primary has secondary license types
-            FOR sec
-                IN (SELECT r.*
-                      FROM api.relationships r
-                     WHERE r.fromobjectid = t_primarylicensetype
-                       AND r.endpointid =
-                           api.pkg_configquery.endpointidforname(
-                               'o_PrimaryLicenseType',
-                               'LicTypeCatSecondary'))
-            LOOP
-                -- move secondary to new secondary
-                t_endpointid :=
-                    api.pkg_configquery.endpointidforname(
-                        'o_PrimaryLicenseType',
-                        'LicTypeCatSecondary');
-                t_relid_sec :=
-                    api.pkg_relationshipupdate.new(t_endpointid,
-                                                   t_licensetypeobjectid,
-                                                   sec.toobjectid);
-                api.pkg_columnupdate.setvalue(
-                    t_relid_sec,
-                    'NewCount',
-                    api.pkg_columnquery.numericvalue(sec.relationshipid,
-                                                     'NewCount'));
-
-                api.pkg_relationshipupdate.remove(sec.relationshipid);
-            END LOOP;
-
-            -- check to see if adding secondary license not moving.
-            FOR sec
-                IN (SELECT *
-                      FROM JSON_TABLE(
-                               rec.secondarylicensetypes,
-                               '$[*]'
-                               COLUMNS(
-                                   licensetypecode
-                                       VARCHAR2(3)
-                                       PATH '$.LICENSETYPECODE',
-                                   primarycount NUMBER PATH '$.PRIMARYCOUNT'))
-                           j
-                     WHERE NOT EXISTS
-                               (SELECT r.toobjectid
-                                  FROM api.relationships r
-                                 WHERE r.fromobjectid = t_primarylicensetype
-                                   AND r.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'o_PrimaryLicenseType',
-                                           'LicTypeCatSecondary')
-                                   AND api.pkg_columnquery.VALUE(
-                                           r.toobjectid,
-                                           'LicenseTypeCode') =
-                                       j.licensetypecode))
-            LOOP
-                SELECT c.objectid
-                  INTO t_secondarytypeobjectid
-                  FROM query.o_licensetypecategory c
-                 WHERE c.licensetypecode = sec.licensetypecode;
-
-                -- check if valid secondary for license type
-                IF (INSTR(t_secondaries, sec.licensetypecode) > 0)
-                THEN
-                    -- create releationship between primary license type and license type catagory
-                    t_endpointid :=
-                        api.pkg_configquery.endpointidforname(
-                            'o_PrimaryLicenseType',
-                            'LicTypeCatSecondary');
-                    t_relid_sec :=
-                        api.pkg_relationshipupdate.new(
-                            t_endpointid,
-                            t_licensetypeobjectid,
-                            t_secondarytypeobjectid);
-
-                    api.pkg_columnupdate.setvalue(t_relid_sec,
-                                                  'NewCount',
-                                                  NVL(sec.primarycount, 1));
-
-                    -- create manual fee
-                    SELECT DISTINCT
-                           fs.description,
-                           (  fs.secondaryamount
-                            * NVL(sec.primarycount, 1))
-                               secondaryamount,
-                           (SELECT g.glaccountid
-                              FROM api.glaccounts g
-                             WHERE g.glaccount = fs.feeactivity)
-                               glaccountid,
-                           fs.objectid
-                      INTO t_description,
-                           t_amount,
-                           t_glaccountid,
-                           t_feeschedule
-                      FROM sitespecific.feeschedule_t  fs
-                           JOIN sitespecific.feeschedule_t fs2
-                               ON (NVL(fs.licensetypecode, 'x') =
-                                   NVL(fs2.licensetypecode, 'x')
-                               AND NVL(fs.otherfeecode, 'x') =
-                                   NVL(fs2.otherfeecode, 'x')
-                               AND NVL(fs.gallonagerange, 'x') =
-                                   NVL(fs2.gallonagerange, 'x')
-                               AND NVL(fs.populationrange, 'x') =
-                                   NVL(fs2.populationrange, 'x')
-                               AND NVL(fs.numberofmonthslicensed, 'x') =
-                                   NVL(fs2.numberofmonthslicensed, 'x')
-                               AND NVL(fs.feetier, 'x') =
-                                   NVL(fs2.feetier, 'x'))
-                     WHERE fs.feeactivity = 'DOR'
-                       AND fs.licensetypecode = sec.licensetypecode
-                       AND NVL(fs.populationrange, 'x') =
-                           NVL(
-                               (SELECT api.pkg_columnquery.VALUE(
-                                           r.toobjectid,
-                                           'PopulationRange')
-                                  FROM api.relationships r
-                                 WHERE r.fromobjectid = a_jobid
-                                   AND r.endpointid =
-                                       api.pkg_configquery.endpointidforname(
-                                           'j_Application',
-                                           'Premises')
-                                   AND t_populationapplies = 'Y'),
-                               'x')
-                       AND fs.effectivedate =
-                           (SELECT MAX(fs2.effectivedate)
-                              FROM sitespecific.feeschedule_t fs2
-                             WHERE NVL(fs2.licensetypecode, '0') =
-                                   NVL(fs.licensetypecode, '0')
-                               AND fs2.feeactivity = fs.feeactivity
-                               AND NVL(fs2.gallonagerange, 'x') =
-                                   NVL(fs.gallonagerange, 'x')
-                               AND NVL(fs2.populationrange, 'x') =
-                                   NVL(fs.populationrange, 'x')
-                               AND NVL(fs2.numberofmonthslicensed, 'x') =
-                                   NVL(fs.numberofmonthslicensed, 'x')
-                               AND NVL(fs2.feetier, 'x') =
-                                   NVL(fs.feetier, 'x')
-                               AND NVL(fs2.otherfeecode, 'x') =
-                                   NVL(fs.otherfeecode, 'x')
-                               AND fs2.effectivedate <= TRUNC(SYSDATE));
-
-
-                    sitespecific.pkg_fees.newfee(
-                        a_feeid     => t_feeid,
-                        a_amount    => t_amount,
-                        a_description => t_description,
-                        a_glaccountid => t_glaccountid,
-                        a_jobid     => a_jobid,
-                        a_taxrateid => NULL,
-                        a_feeobjid  => t_feeobjid);
-
-                    t_relid_sec :=
-                        api.pkg_relationshipupdate.new(
-                            api.pkg_configquery.endpointidforname(
-                                'o_Fee',
-                                'LicenseFeeSchedule'),
-                            t_feeobjid,
-                            t_feeschedule);
-                END IF;
-            END LOOP;
-
-            -- remove current primary license type
-            api.pkg_relationshipupdate.remove(t_relid);
-
-            -- create relationship from primary license type to application
-            t_endpointid :=
-                api.pkg_configquery.endpointidforname('j_application',
-                                                      'PrimaryLicenseType');
-            t_relid :=
-                api.pkg_relationshipupdate.new(t_endpointid,
-                                               a_jobid,
-                                               t_licensetypeobjectid);
-        END LOOP;
-
-        api.pkg_logicaltransactionupdate.endtransaction;
-        COMMIT;
-    END exchange_primary_license_types;
+--    PROCEDURE exchange_primary_license_types(
+--        a_jobid        IN api.pkg_definition.udt_id,
+--        a_primarylicensetypes IN CLOB)
+--    IS
+--        t_endpointid   api.pkg_definition.udt_id;
+--        t_relid        api.pkg_definition.udt_id;
+--        t_relid_sec    api.pkg_definition.udt_id;
+--        t_licensetypedefid api.pkg_definition.udt_id;
+--        t_licensetypecodeobjectid api.pkg_definition.udt_id;
+--        t_licensetypeobjectid api.pkg_definition.udt_id;
+--        t_primarylicensetype api.pkg_definition.udt_id;
+--        t_populationapplies VARCHAR2(1);
+--        t_secondarytypeobjectid api.pkg_definition.udt_id;
+--        t_feeid        NUMBER;
+--        t_amount       NUMBER;
+--        t_description  VARCHAR2(100);
+--        t_glaccountid  NUMBER;
+--        t_feeobjid     NUMBER;
+--        t_feeschedule  api.pkg_definition.udt_id;
+--        t_secondaries  VARCHAR2(4000);
+--    BEGIN
+--        FOR rec
+--            IN (SELECT *
+--                  FROM JSON_TABLE(
+--                           a_primarylicensetypes,
+--                           '$[*]'
+--                           COLUMNS(
+--                               licensetypecode
+--                                   VARCHAR2(3)
+--                                   PATH '$.LICENSETYPECODE',
+--                               exchangelicensetypecode
+--                                   VARCHAR2(3)
+--                                   PATH '$.EXCHANGELICENSETYPECODE',
+--                               gallonage NUMBER PATH '$.GALLONAGE',
+--                               numberofmonthslicensed
+--                                   NUMBER
+--                                   PATH '$.NUMBEROFMONTHSLICENSED',
+--                               seasonstartmonth
+--                                   VARCHAR2(100)
+--                                   PATH '$.SEASON_START_MONTH',
+--                               primarycount NUMBER PATH '$.PRIMARYCOUNT',
+--                               isbranch VARCHAR2(1) PATH '$.ISBRANCH',
+--                               secondarylicensetypes
+--                                   VARCHAR2(4000)
+--                                   FORMAT JSON
+--                                   PATH '$.SECONDARYLICENSETYPES')))
+--        LOOP
+--            SELECT ltc.objectid,
+--                   ltc.secondarylicensetypecodes,
+--                   ltc.populationapplies
+--              INTO t_licensetypecodeobjectid,
+--                   t_secondaries,
+--                   t_populationapplies
+--              FROM query.o_licensetypecategory ltc
+--             WHERE ltc.licensetypecode = rec.licensetypecode;
+--
+--            -- create primary licene type
+--            t_licensetypedefid :=
+--                api.pkg_configquery.objectdefidforname(
+--                    'o_PrimaryLicenseType');
+--            t_licensetypeobjectid :=
+--                api.pkg_objectupdate.new(t_licensetypedefid);
+--
+--            -- create relationship from primary license type to license type catagory
+--            t_endpointid :=
+--                api.pkg_configquery.endpointidforname('o_PrimaryLicenseType',
+--                                                      'LicTypeCatPrimary');
+--            t_relid :=
+--                api.pkg_relationshipupdate.new(t_endpointid,
+--                                               t_licensetypeobjectid,
+--                                               t_licensetypecodeobjectid);
+--
+--            -- get relationship between application and license type being exchanged
+--            SELECT r.relationshipid, r.toobjectid
+--              INTO t_relid, t_primarylicensetype
+--              FROM api.relationships r
+--             WHERE r.fromobjectid = a_jobid
+--               AND r.endpointid =
+--                   api.pkg_configquery.endpointidforname(
+--                       'j_Application',
+--                       'PrimaryLicenseType')
+--               AND api.pkg_columnquery.VALUE(r.toobjectid, 'LicenseTypeCode') =
+--                   rec.exchangelicensetypecode;
+--
+--            -- check if primary has secondary license types
+--            FOR sec
+--                IN (SELECT r.*
+--                      FROM api.relationships r
+--                     WHERE r.fromobjectid = t_primarylicensetype
+--                       AND r.endpointid =
+--                           api.pkg_configquery.endpointidforname(
+--                               'o_PrimaryLicenseType',
+--                               'LicTypeCatSecondary'))
+--            LOOP
+--                -- move secondary to new secondary
+--                t_endpointid :=
+--                    api.pkg_configquery.endpointidforname(
+--                        'o_PrimaryLicenseType',
+--                        'LicTypeCatSecondary');
+--                t_relid_sec :=
+--                    api.pkg_relationshipupdate.new(t_endpointid,
+--                                                   t_licensetypeobjectid,
+--                                                   sec.toobjectid);
+--                api.pkg_columnupdate.setvalue(
+--                    t_relid_sec,
+--                    'NewCount',
+--                    api.pkg_columnquery.numericvalue(sec.relationshipid,
+--                                                     'NewCount'));
+--
+--                api.pkg_relationshipupdate.remove(sec.relationshipid);
+--            END LOOP;
+--
+--            -- check to see if adding secondary license not moving.
+--            FOR sec
+--                IN (SELECT *
+--                      FROM JSON_TABLE(
+--                               rec.secondarylicensetypes,
+--                               '$[*]'
+--                               COLUMNS(
+--                                   licensetypecode
+--                                       VARCHAR2(3)
+--                                       PATH '$.LICENSETYPECODE',
+--                                   primarycount NUMBER PATH '$.PRIMARYCOUNT'))
+--                           j
+--                     WHERE NOT EXISTS
+--                               (SELECT r.toobjectid
+--                                  FROM api.relationships r
+--                                 WHERE r.fromobjectid = t_primarylicensetype
+--                                   AND r.endpointid =
+--                                       api.pkg_configquery.endpointidforname(
+--                                           'o_PrimaryLicenseType',
+--                                           'LicTypeCatSecondary')
+--                                   AND api.pkg_columnquery.VALUE(
+--                                           r.toobjectid,
+--                                           'LicenseTypeCode') =
+--                                       j.licensetypecode))
+--            LOOP
+--                SELECT c.objectid
+--                  INTO t_secondarytypeobjectid
+--                  FROM query.o_licensetypecategory c
+--                 WHERE c.licensetypecode = sec.licensetypecode;
+--
+--                -- check if valid secondary for license type
+--                IF (INSTR(t_secondaries, sec.licensetypecode) > 0)
+--                THEN
+--                    -- create releationship between primary license type and license type catagory
+--                    t_endpointid :=
+--                        api.pkg_configquery.endpointidforname(
+--                            'o_PrimaryLicenseType',
+--                            'LicTypeCatSecondary');
+--                    t_relid_sec :=
+--                        api.pkg_relationshipupdate.new(
+--                            t_endpointid,
+--                            t_licensetypeobjectid,
+--                            t_secondarytypeobjectid);
+--
+--                    api.pkg_columnupdate.setvalue(t_relid_sec,
+--                                                  'NewCount',
+--                                                  NVL(sec.primarycount, 1));
+--
+--                    -- create manual fee
+--                    SELECT DISTINCT
+--                           fs.description,
+--                           (  fs.secondaryamount
+--                            * NVL(sec.primarycount, 1))
+--                               secondaryamount,
+--                           (SELECT g.glaccountid
+--                              FROM api.glaccounts g
+--                             WHERE g.glaccount = fs.feeactivity)
+--                               glaccountid,
+--                           fs.objectid
+--                      INTO t_description,
+--                           t_amount,
+--                           t_glaccountid,
+--                           t_feeschedule
+--                      FROM sitespecific.feeschedule_t  fs
+--                           JOIN sitespecific.feeschedule_t fs2
+--                               ON (NVL(fs.licensetypecode, 'x') =
+--                                   NVL(fs2.licensetypecode, 'x')
+--                               AND NVL(fs.otherfeecode, 'x') =
+--                                   NVL(fs2.otherfeecode, 'x')
+--                               AND NVL(fs.gallonagerange, 'x') =
+--                                   NVL(fs2.gallonagerange, 'x')
+--                               AND NVL(fs.populationrange, 'x') =
+--                                   NVL(fs2.populationrange, 'x')
+--                               AND NVL(fs.numberofmonthslicensed, 'x') =
+--                                   NVL(fs2.numberofmonthslicensed, 'x')
+--                               AND NVL(fs.feetier, 'x') =
+--                                   NVL(fs2.feetier, 'x'))
+--                     WHERE fs.feeactivity = 'DOR'
+--                       AND fs.licensetypecode = sec.licensetypecode
+--                       AND NVL(fs.populationrange, 'x') =
+--                           NVL(
+--                               (SELECT api.pkg_columnquery.VALUE(
+--                                           r.toobjectid,
+--                                           'PopulationRange')
+--                                  FROM api.relationships r
+--                                 WHERE r.fromobjectid = a_jobid
+--                                   AND r.endpointid =
+--                                       api.pkg_configquery.endpointidforname(
+--                                           'j_Application',
+--                                           'Premises')
+--                                   AND t_populationapplies = 'Y'),
+--                               'x')
+--                       AND fs.effectivedate =
+--                           (SELECT MAX(fs2.effectivedate)
+--                              FROM sitespecific.feeschedule_t fs2
+--                             WHERE NVL(fs2.licensetypecode, '0') =
+--                                   NVL(fs.licensetypecode, '0')
+--                               AND fs2.feeactivity = fs.feeactivity
+--                               AND NVL(fs2.gallonagerange, 'x') =
+--                                   NVL(fs.gallonagerange, 'x')
+--                               AND NVL(fs2.populationrange, 'x') =
+--                                   NVL(fs.populationrange, 'x')
+--                               AND NVL(fs2.numberofmonthslicensed, 'x') =
+--                                   NVL(fs.numberofmonthslicensed, 'x')
+--                               AND NVL(fs2.feetier, 'x') =
+--                                   NVL(fs.feetier, 'x')
+--                               AND NVL(fs2.otherfeecode, 'x') =
+--                                   NVL(fs.otherfeecode, 'x')
+--                               AND fs2.effectivedate <= TRUNC(SYSDATE));
+--
+--
+--                    sitespecific.pkg_fees.newfee(
+--                        a_feeid     => t_feeid,
+--                        a_amount    => t_amount,
+--                        a_description => t_description,
+--                        a_glaccountid => t_glaccountid,
+--                        a_jobid     => a_jobid,
+--                        a_taxrateid => NULL,
+--                        a_feeobjid  => t_feeobjid);
+--
+--                    t_relid_sec :=
+--                        api.pkg_relationshipupdate.new(
+--                            api.pkg_configquery.endpointidforname(
+--                                'o_Fee',
+--                                'LicenseFeeSchedule'),
+--                            t_feeobjid,
+--                            t_feeschedule);
+--                END IF;
+--            END LOOP;
+--
+--            -- remove current primary license type
+--            api.pkg_relationshipupdate.remove(t_relid);
+--
+--            -- create relationship from primary license type to application
+--            t_endpointid :=
+--                api.pkg_configquery.endpointidforname('j_application',
+--                                                      'PrimaryLicenseType');
+--            t_relid :=
+--                api.pkg_relationshipupdate.new(t_endpointid,
+--                                               a_jobid,
+--                                               t_licensetypeobjectid);
+--        END LOOP;
+--
+--        api.pkg_logicaltransactionupdate.endtransaction;
+--        COMMIT;
+--    END exchange_primary_license_types;
 END;
 /
