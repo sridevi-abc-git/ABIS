@@ -56,7 +56,7 @@ IS
     --  20.0.1  09/16/2025  TJL  BIZ-19262  Removed code that referenced E_FEES_T table
     --  20.0.2  11/03/2025  TJL  BIZ-19526   Changed how parameters are passed to create job
     --  21.0.1  12/24/2025  TJL  BIZ-19829  Corrected bug in updating e_payments_t table with AWF Information
-    --  22.0.0  01/28/2026  TJL  BIZ-19069  Added scheduling the LICENCEAPPUPDATJOB.
+    --  22.0.1  01/28/2026  TJL  BIZ-19069  Added scheduling the LICENSEAPPUPDATEJOB.
     -- ************************************************************************************************
 
     FUNCTION get_awfreninfo(a_fiscalstart  IN DATE,
@@ -1337,8 +1337,3 @@ BEGIN
     END;
 END nightlyprocessjob;
 /
-
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO ABC;
-
-GRANT EXECUTE ON BIZMOD_API.NIGHTLYPROCESSJOB TO POSSEEXTENSIONS;
