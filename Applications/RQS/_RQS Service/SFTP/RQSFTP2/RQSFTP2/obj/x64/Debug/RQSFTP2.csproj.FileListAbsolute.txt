@@ -1,9 +1,0 @@
-C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\x64\Debug\RQSFTP2.exe.config
-C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\x64\Debug\RQSFTP2.exe
-C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\x64\Debug\RQSFTP2.pdb
-C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\x64\Debug\ABCRQSUtils.dll
-C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\x64\Debug\ABCRQSUtils.pdb
-C:\Development\SFTP\RQSFTP2\RQSFTP2\obj\x64\Debug\RQSFTP2.csprojResolveAssemblyReference.cache
-C:\Development\SFTP\RQSFTP2\RQSFTP2\obj\x64\Debug\RQSFTP2.exe
-C:\Development\SFTP\RQSFTP2\RQSFTP2\obj\x64\Debug\RQSFTP2.pdb
-C:\Development\SFTP\RQSFTP2\RQSFTP2\bin\x64\Debug\ftp.config

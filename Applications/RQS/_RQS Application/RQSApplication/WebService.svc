@@ -1,2 +1,0 @@
-﻿<%@ ServiceHost Language="C#" Debug="true" Service="RQS.WebService" CodeBehind="WebService.svc.cs"
-	Factory="System.ServiceModel.Activation.WebScriptServiceHostFactory" %>
