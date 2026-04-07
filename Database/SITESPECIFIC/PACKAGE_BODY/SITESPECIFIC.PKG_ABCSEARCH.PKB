@@ -1337,7 +1337,7 @@ IS
 
         IF a_companyname IS NOT NULL
         OR a_addressline1 IS NOT NULL
-  --    OR a_addressline2 IS NOT NULL                            ----added by sri
+        OR a_addressline2 IS NOT NULL                            ----added by sri
         OR a_keywords IS NOT NULL THEN
             extension.pkg_cxproceduralsearch.searchbykeywords(   a_companyname
                                                               || '%');
