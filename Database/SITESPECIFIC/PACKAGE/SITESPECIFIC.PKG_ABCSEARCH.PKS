@@ -28,7 +28,7 @@ IS
     -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
     -- 03/23/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindLicenseandApplication
     -- 03/24/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindPerson
-    -- 03/26/2026  Sri   1037    ABISCompany Search - Adding Address Line 2 tp Procedure FindCompany
+    -- 03/26/2026  Sri  1037    ABISCompany Search - Adding Address Line 2 tp Procedure FindCompany
 
     
     -- **************************************************************************
