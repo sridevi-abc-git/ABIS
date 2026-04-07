@@ -29,9 +29,13 @@ IS
     --                            was returned 100% server charge. Kept old version for reference
     --                            not used any more.
     --8/18/2021   PK   WO 25997 Add secondary type 58 to master type 75 undoing the changes done by Tim for WO 20483 for only type 58.
-    -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransactions so it can be used by the new StaffUI system.\
+    -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransactions so it can be used by the new StaffUI system.
     -- 04/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
-    -- 10/10/2025 PK   6681    Changes social secutiry to varchar to fix SSN Person Search in le search
+    -- 09/26/2025  PK   6681    Changes social secutiry to varchar to fix SSN Person Search in le search
+    -- 03/23/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindLicenseandApplication
+    -- 03/24/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindPerson
+    -- 03/26/2026  Sridevi   1037    ABIS Company Search - Adding Address Line 2 tp Procedure FindCompany
+
  
     -- **************************************************************************
 
@@ -1311,6 +1315,7 @@ IS
         **************************************************************************************************/
     PROCEDURE findcompany(a_companyname                VARCHAR2,
                           a_addressline1               VARCHAR2,
+                          a_addressline2               VARCHAR2,      ----added by sri
                           a_uscity                     VARCHAR2,
                           a_usstate                    VARCHAR2,
                           a_zipcode                    VARCHAR2,
@@ -1332,6 +1337,7 @@ IS
 
         IF a_companyname IS NOT NULL
         OR a_addressline1 IS NOT NULL
+  --    OR a_addressline2 IS NOT NULL                            ----added by sri
         OR a_keywords IS NOT NULL THEN
             extension.pkg_cxproceduralsearch.searchbykeywords(   a_companyname
                                                               || '%');
@@ -1340,6 +1346,12 @@ IS
                                                                   a_addressline1,
                                                                   NULL,
                                                                   TRUE);
+                                                                  
+            extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',     ----added by sri
+                                                                  'AddressLine2',
+                                                                  a_addressline2,
+                                                                  NULL,
+                                                                  TRUE);                                                   
             extension.pkg_cxproceduralsearch.filterobjects('USCity',
                                                            a_uscity,
                                                            a_uscity,
@@ -2482,7 +2494,7 @@ IS
                               a_zipcode                    NUMBER,
                               a_relatedjoblicno            VARCHAR2,
                               a_hierarchylevel             VARCHAR2,
-                              a_socialsecurityno           VARCHAR2,
+                              a_socialsecurityno           VARCHAR2, --NUMBER,
                               a_objects         OUT NOCOPY api.udt_objectlist)
     IS
         t_unfilteredobjects      api.udt_objectlist;
@@ -2834,6 +2846,7 @@ IS
                                         a_regnumber                  VARCHAR2,
                                         a_licenseenames              VARCHAR2,
                                         a_premaddressline1           VARCHAR2,
+                                        a_premaddressline2           VARCHAR2,
                                         a_premuscity                 VARCHAR2,
                                         a_premzipcode                VARCHAR2,
                                         a_dup_dbas                   VARCHAR2,
@@ -2868,6 +2881,7 @@ IS
         AND a_regnumber IS NULL
         AND a_licenseenames IS NULL
         AND a_premaddressline1 IS NULL
+        AND a_premaddressline2 IS NULL
         AND a_premuscity IS NULL
         AND a_premzipcode IS NULL
         AND a_dup_dbas IS NULL
@@ -2950,6 +2964,15 @@ IS
                                                                       NULL,
                                                                       TRUE);
             END IF;
+            
+              IF a_premaddressline2 IS NOT NULL THEN
+                extension.pkg_cxproceduralsearch.searchbyrelatedindex('Premises',
+                                                                      'AddressLine2',
+                                                                      a_premaddressline2,
+                                                                      NULL,
+                                                                      TRUE);
+            END IF;
+
 
             IF a_premuscity IS NOT NULL THEN
                 extension.pkg_cxproceduralsearch.searchbyrelatedindex('Premises',
@@ -2973,6 +2996,7 @@ IS
                 a_externalfilenum IS NOT NULL
              OR a_regnumber IS NOT NULL
              OR a_premaddressline1 IS NOT NULL
+             OR a_premaddressline2 IS NOT NULL
              OR a_premuscity IS NOT NULL
              OR a_premzipcode IS NOT NULL
              OR a_createddate IS NOT NULL
@@ -3095,6 +3119,15 @@ IS
                                                                       NULL,
                                                                       TRUE);
             END IF;
+            
+            
+            IF a_premaddressline2 IS NOT NULL THEN
+                extension.pkg_cxproceduralsearch.searchbyrelatedindex('Premises',
+                                                                      'AddressLine2',
+                                                                      a_premaddressline2,
+                                                                      NULL,
+                                                                      TRUE);
+            END IF;
 
             IF a_premuscity IS NOT NULL THEN
                 extension.pkg_cxproceduralsearch.searchbyrelatedindex('Premises',
@@ -3117,6 +3150,7 @@ IS
             t_searchperformed     :=
                 a_externalfilenum IS NOT NULL
              OR a_premaddressline1 IS NOT NULL
+             OR a_premaddressline2 IS NOT NULL
              OR a_premuscity IS NOT NULL
              OR a_premzipcode IS NOT NULL
              OR a_createddate IS NOT NULL
@@ -5061,6 +5095,7 @@ IS
                          a_birthdate                  DATE,
                          a_socialsecuritynumber       VARCHAR2,  -- W0 15584
                          a_addressline1               VARCHAR2,
+                         a_addressline2               VARCHAR2,
                          a_uscity                     VARCHAR2,
                          a_usstate                    VARCHAR2,
                          a_zipcode                    VARCHAR2,
@@ -5089,6 +5124,10 @@ IS
         extension.pkg_cxproceduralsearch.filterobjects('AddressLine1',
                                                        a_addressline1,
                                                        a_addressline1,
+                                                       TRUE);
+        extension.pkg_cxproceduralsearch.filterobjects('AddressLine2',
+                                                       a_addressline2,
+                                                       a_addressline2,
                                                        TRUE);
         extension.pkg_cxproceduralsearch.filterobjects('USCity',
                                                        a_uscity,
@@ -6325,6 +6364,7 @@ IS
                                   NULL,
                                   NULL,
                                   NULL,
+                                  NULL,
                                   'Y',
                                   t_unfilteredobjects);
         t_searchjobs          := t_unfilteredobjects;
@@ -6392,6 +6432,7 @@ IS
                                   NULL,
                                   NULL,
                                   a_eventlocationaddressline1,
+                                  NULL,
                                   a_eventlocationcity,
                                   a_eventlocationzip,
                                   NULL,
@@ -6617,6 +6658,3 @@ IS
     END staffuifindpaymenttransunearn;
 END pkg_abcsearch;
 /
-
-
-GRANT EXECUTE ON SITESPECIFIC.PKG_ABCSEARCH TO POSSEEXTENSIONS;
