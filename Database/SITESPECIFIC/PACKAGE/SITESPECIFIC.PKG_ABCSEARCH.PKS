@@ -29,6 +29,7 @@ IS
     -- 03/23/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindLicenseandApplication
     -- 03/24/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindPerson
     -- 03/26/2026  Sri  1037    ABISCompany Search - Adding Address Line 2 tp Procedure FindCompany
+    -- 03/26/2026  Sri  1037    ABISAttorney Search - Adding Address Line 2 tp Procedure FindAttorney
 
     
     -- **************************************************************************
@@ -115,6 +116,7 @@ IS
                            a_firstname                  VARCHAR2,
                            a_firmname                   VARCHAR2,
                            a_addressline1               VARCHAR2,
+                           a_addressline2               VARCHAR2,
                            a_city                       VARCHAR2,
                            a_state                      VARCHAR2,
                            a_zipcode                    VARCHAR2,
