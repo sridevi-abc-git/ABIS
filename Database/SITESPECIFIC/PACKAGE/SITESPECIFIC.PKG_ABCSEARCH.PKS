@@ -358,7 +358,7 @@ IS
         a_dup_licenseexternalfilenum VARCHAR2,
         a_dup_licenseenames          VARCHAR2,
         a_dup_licenseaddressline1    VARCHAR2,
-        a_dup_licenseaddressline2    VARCHAR2,
+ --     a_dup_licenseaddressline2    VARCHAR2,
         a_dup_licenseuscity          VARCHAR2,
         a_dup_licensezipcode         VARCHAR2,
         a_dup_licensedbas            VARCHAR2,
