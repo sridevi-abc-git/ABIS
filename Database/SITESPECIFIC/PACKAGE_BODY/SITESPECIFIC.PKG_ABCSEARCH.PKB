@@ -3321,6 +3321,7 @@ IS
                               a_dup_licenseexternalfilenum VARCHAR2,
                               a_dup_licenseenames          VARCHAR2,
                               a_dup_licenseaddressline1    VARCHAR2,
+                              a_dup_licenseaddressline2    VARCHAR2,
                               a_dup_licenseuscity          VARCHAR2,
                               a_dup_licensezipcode         VARCHAR2,
                               a_dup_licensedbas            VARCHAR2,
@@ -3398,6 +3399,11 @@ IS
                                                               NULL,
                                                               TRUE);
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
+                                                              'AddressLine2',
+                                                              a_dup_licenseaddressline2,
+                                                              NULL,
+                                                              TRUE);
+        extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
                                                               a_dup_licenseuscity,
                                                               NULL,
@@ -3442,6 +3448,11 @@ IS
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'AddressLine1',
                                                               a_dup_licenseaddressline1,
+                                                              NULL,
+                                                              TRUE);
+        extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
+                                                              'AddressLine2',
+                                                              a_dup_licenseaddressline2,
                                                               NULL,
                                                               TRUE);
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
@@ -3535,6 +3546,7 @@ IS
          OR a_dup_licenseexternalfilenum IS NOT NULL
          OR a_dup_licenseenames IS NOT NULL
          OR a_dup_licenseaddressline1 IS NOT NULL
+         OR a_dup_licenseaddressline2 IS NOT NULL
          OR a_dup_licenseuscity IS NOT NULL
          OR a_dup_licensezipcode IS NOT NULL
          OR a_createddate IS NOT NULL
