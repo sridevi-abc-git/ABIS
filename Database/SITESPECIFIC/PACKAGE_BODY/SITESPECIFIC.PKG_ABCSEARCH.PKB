@@ -3371,6 +3371,7 @@ IS
         extension.pkg_cxproceduralsearch.searchbyjob(NULL,
                                                      NULL,
                                                      NULL,
+                                                     NULL,   --- added by sri 04/16/26
                                                      t_status,
                                                      a_createddate,
                                                      a_createddateupper,
@@ -3400,13 +3401,13 @@ IS
                                                               a_dup_licenseaddressline1,
                                                               NULL,
                                                               TRUE);
-                                                        IF a_dup_licenseaddressline2 IS NOT NULL THEN
+                                                    --    IF a_dup_licenseaddressline2 IS NOT NULL THEN
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'AddressLine2',
                                                               a_dup_licenseaddressline2,
                                                               NULL,
                                                               TRUE); 
-                                                         END IF;                                                          
+                                                     --    END IF;                                                          
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
                                                               a_dup_licenseuscity,
@@ -3426,6 +3427,7 @@ IS
                                                      NULL,
                                                      NULL,
                                                      NULL,
+                                                     NULL,   -- added OBJECTCREATEDBYUSER sri 04/16/26
                                                      a_createddate,
                                                      a_createddateupper,
                                                      NULL,
@@ -3454,13 +3456,13 @@ IS
                                                               a_dup_licenseaddressline1,
                                                               NULL,
                                                               TRUE);
-                                                    IF a_dup_licenseaddressline2 IS NOT NULL THEN          
+                                                 ---   IF a_dup_licenseaddressline2 IS NOT NULL THEN          
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'AddressLine2',
                                                               a_dup_licenseaddressline2,
                                                               NULL,
                                                               TRUE); 
-                                                    END IF;                                                                  
+                                                  --  END IF;                                                                  
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
                                                               a_dup_licenseuscity,
