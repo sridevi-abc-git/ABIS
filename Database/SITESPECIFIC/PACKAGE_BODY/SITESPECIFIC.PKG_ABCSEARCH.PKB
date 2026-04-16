@@ -3400,11 +3400,13 @@ IS
                                                               a_dup_licenseaddressline1,
                                                               NULL,
                                                               TRUE);
+                                                        IF a_dup_licenseaddressline2 IS NOT NULL THEN
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'AddressLine2',
                                                               a_dup_licenseaddressline2,
                                                               NULL,
-                                                              TRUE);                                                      
+                                                              TRUE); 
+                                                         END IF;                                                          
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
                                                               a_dup_licenseuscity,
@@ -3452,11 +3454,13 @@ IS
                                                               a_dup_licenseaddressline1,
                                                               NULL,
                                                               TRUE);
+                                                    IF a_dup_licenseaddressline2 IS NOT NULL THEN          
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'AddressLine2',
                                                               a_dup_licenseaddressline2,
                                                               NULL,
-                                                              TRUE);                                                         
+                                                              TRUE); 
+                                                    END IF;                                                                  
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
                                                               a_dup_licenseuscity,
