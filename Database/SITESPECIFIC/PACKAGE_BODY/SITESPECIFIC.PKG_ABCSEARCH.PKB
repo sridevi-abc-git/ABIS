@@ -37,6 +37,8 @@ IS
     -- 03/26/2026  Sridevi   1037    ABIS Company Search - Adding Address Line 2 tp Procedure FindCompany
     -- 04/08/2026  Sridevi   1037    ABIS Attorney Search - Adding Address Line 2 tp Procedure FindAttorney
     -- 04/13/2026  Sridevi   1037    ABIS LicenseType Search - Adding Address Line 2 tp Procedure FindLienseType
+    -- 04/17/2026  Sridevi   1037    ABIS OneDayLicenseSearch - Adding Address Line 2 tp Procedure FindOneDayLiense
+
 
 
  
@@ -3371,7 +3373,6 @@ IS
         extension.pkg_cxproceduralsearch.searchbyjob(NULL,
                                                      NULL,
                                                      NULL,
-                                       --              NULL,   --- added by sri 04/16/26
                                                      t_status,
                                                      a_createddate,
                                                      a_createddateupper,
@@ -3400,14 +3401,12 @@ IS
                                                               'AddressLine1',
                                                               a_dup_licenseaddressline1,
                                                               NULL,
-                                                              TRUE);
-                                                    --    IF a_dup_licenseaddressline2 IS NOT NULL THEN
+                                                              TRUE);                                                   
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'AddressLine2',
                                                               a_dup_licenseaddressline2,
                                                               NULL,
-                                                              TRUE); 
-                                                     --    END IF;                                                          
+                                                              TRUE);                                                                                                              
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
                                                               a_dup_licenseuscity,
@@ -3427,7 +3426,6 @@ IS
                                                      NULL,
                                                      NULL,
                                                      NULL,
-                                               --      NULL,   -- added OBJECTCREATEDBYUSER sri 04/16/26
                                                      a_createddate,
                                                      a_createddateupper,
                                                      NULL,
@@ -3455,14 +3453,12 @@ IS
                                                               'AddressLine1',
                                                               a_dup_licenseaddressline1,
                                                               NULL,
-                                                              TRUE);
-                                                 ---   IF a_dup_licenseaddressline2 IS NOT NULL THEN          
+                                                              TRUE);                                                        
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                              'AddressLine2',
                                                               a_dup_licenseaddressline2,
                                                               NULL,
-                                                              TRUE); 
-                                                  --  END IF;                                                                  
+                                                              TRUE);                                                                                                                  
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
                                                               a_dup_licenseuscity,
@@ -4642,6 +4638,7 @@ IS
     PROCEDURE findonedaylicense(a_externalfilenum            VARCHAR2,
                                 a_organizationname           VARCHAR2,
                                 a_eventlocaddressline1       VARCHAR2,
+                                a_eventlocaddressline2       VARCHAR2,
                                 a_eventlocuscity             VARCHAR2,
                                 a_eventloczipcode            VARCHAR2,
                                 a_eventyear                  NUMBER,
@@ -4699,6 +4696,11 @@ IS
                                                               NULL,
                                                               TRUE);
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('EventLocation',
+                                                              'AddressLine2',
+                                                              a_eventlocaddressline2,
+                                                              NULL,
+                                                              TRUE);
+        extension.pkg_cxproceduralsearch.searchbyrelatedindex('EventLocation',
                                                               'USACity',
                                                               a_eventlocuscity,
                                                               NULL,
@@ -4720,6 +4722,7 @@ IS
         t_searchperformed     :=
             a_externalfilenum IS NOT NULL
          OR a_eventlocaddressline1 IS NOT NULL
+         OR a_eventlocaddressline2 IS NOT NULL
          OR a_eventlocuscity IS NOT NULL
          OR a_eventloczipcode IS NOT NULL
          OR a_eventyear IS NOT NULL
