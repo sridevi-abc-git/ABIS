@@ -31,6 +31,8 @@ IS
     -- 03/26/2026  Sri  1037    ABISCompany Search - Adding Address Line 2 tp Procedure FindCompany
     -- 04/08/2026  Sri  1037    ABISAttorney Search - Adding Address Line 2 tp Procedure FindAttorney
     -- 04/13/2026  Sri  1037    ABISLicenseType Search - Adding Address Line 2 tp Procedure FindLicenseType
+    -- 04/17/2026  Sri  1037    ABISOneDay LicenseSearch - Adding Address Line 2 tp Procedure FindOneDayLicense
+
 
 
     
@@ -440,6 +442,7 @@ IS
         a_externalfilenum            VARCHAR2,
         a_organizationname           VARCHAR2,
         a_eventlocaddressline1       VARCHAR2,
+        a_eventlocaddressline2       VARCHAR2,
         a_eventlocuscity             VARCHAR2,
         a_eventloczipcode            VARCHAR2,
         a_eventyear                  NUMBER,
