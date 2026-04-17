@@ -3457,11 +3457,11 @@ IS
                                                               NULL,
                                                               TRUE);
                                                  ---   IF a_dup_licenseaddressline2 IS NOT NULL THEN          
-      --  extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
-      --                                                        'AddressLine2',
-      --                                                        a_dup_licenseaddressline2,
-      ------                                                        NULL,
-      --                                                        TRUE); 
+        extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
+                                                             'AddressLine2',
+                                                              a_dup_licenseaddressline2,
+                                                              NULL,
+                                                              TRUE); 
                                                   --  END IF;                                                                  
         extension.pkg_cxproceduralsearch.searchbyrelatedindex('PremisesAddress',
                                                               'USACity',
@@ -6401,6 +6401,7 @@ IS
                         NULL,
                         a_licensenumber,
                         a_licenseenames,
+                        NULL,
                         NULL,
                         NULL,
                         NULL,
