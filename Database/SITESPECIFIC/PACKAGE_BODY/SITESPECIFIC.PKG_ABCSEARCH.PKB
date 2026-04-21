@@ -38,6 +38,8 @@ IS
     -- 04/08/2026  Sridevi   1037    ABIS Attorney Search - Adding Address Line 2 tp Procedure FindAttorney
     -- 04/13/2026  Sridevi   1037    ABIS LicenseType Search - Adding Address Line 2 tp Procedure FindLienseType
     -- 04/17/2026  Sridevi   1037    ABIS OneDayLicenseSearch - Adding Address Line 2 tp Procedure FindOneDayLiense
+    -- 04/20/2026  Sridevi   1037    ABIS Caterer/EventAuth - Adding Address Line 2 tp Procedure findcaterereventauths
+
 
 
 
@@ -6370,6 +6372,7 @@ IS
                                     a_dateofeventfrom            DATE,
                                     a_dateofeventto              DATE,
                                     a_eventlocationaddressline1  VARCHAR2,
+                                    a_eventlocationaddressline2  VARCHAR2,
                                     a_eventlocationcity          VARCHAR2,
                                     a_eventlocationzip           VARCHAR2,
                                     a_conditionalonly            VARCHAR2,
@@ -6463,6 +6466,7 @@ IS
                                   NULL,
                                   NULL,
                                   a_eventlocationaddressline1,
+                                  a_eventlocationaddressline2,
                                   NULL,
                                   a_eventlocationcity,
                                   a_eventlocationzip,
@@ -6493,6 +6497,13 @@ IS
                                                                   a_eventlocationaddressline1,
                                                                   NULL,
                                                                   TRUE);
+         END IF;
+        IF a_eventlocationaddressline2 IS NOT NULL THEN
+            extension.pkg_cxproceduralsearch.searchbyrelatedindex('EventLocation',
+                                                                  'AddressLine2',
+                                                                  a_eventlocationaddressline2,
+                                                                  NULL,
+                                                                  TRUE);                                                          
         END IF;
 
         IF a_eventlocationcity IS NOT NULL THEN
@@ -6523,10 +6534,12 @@ IS
          OR a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL)
        AND (a_eventlocationaddressline1 IS NOT NULL
+         OR a_eventlocationaddressline2 IS NOT NULL
          OR a_eventlocationcity IS NOT NULL
          OR a_eventlocationzip IS NOT NULL) THEN
             extension.pkg_collectionutils.join(a_objects, t_caterereventauths);
         ELSIF (a_eventlocationaddressline1 IS NOT NULL
+            OR a_eventlocationaddressline2 IS NOT NULL
             OR a_eventlocationcity IS NOT NULL
             OR a_eventlocationzip IS NOT NULL) THEN
             a_objects   := t_caterereventauths;
