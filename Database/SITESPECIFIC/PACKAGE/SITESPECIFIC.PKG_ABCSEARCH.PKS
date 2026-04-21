@@ -32,6 +32,8 @@ IS
     -- 04/08/2026  Sri  1037    ABISAttorney Search - Adding Address Line 2 tp Procedure FindAttorney
     -- 04/13/2026  Sri  1037    ABISLicenseType Search - Adding Address Line 2 tp Procedure FindLicenseType
     -- 04/17/2026  Sri  1037    ABISOneDay LicenseSearch - Adding Address Line 2 tp Procedure FindOneDayLicense
+    -- 04/20/2026  Sri  1037    ABIScaterer/Event AuthSearch - Adding Address Line 2 tp Procedure findcaterereventauths
+
 
 
 
@@ -653,7 +655,8 @@ IS
         a_lspid                      VARCHAR2,
         a_dateofeventfrom            DATE,
         a_dateofeventto              DATE,
-        a_eventlocationaddressline1  VARCHAR2,
+        a_eventlocationaddressline1  VARCHAR2,        
+        a_eventlocationaddressline2  VARCHAR2,
         a_eventlocationcity          VARCHAR2,
         a_eventlocationzip           VARCHAR2,
         a_conditionalonly            VARCHAR2,
