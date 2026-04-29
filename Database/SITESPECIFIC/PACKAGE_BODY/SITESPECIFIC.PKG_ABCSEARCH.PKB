@@ -5125,9 +5125,9 @@ IS
         **************************************************************************************************/
     PROCEDURE findperson(a_name                       VARCHAR2,
                          a_birthdate                  DATE,
+                         a_addressline2               VARCHAR2,  --added by sri
                          a_socialsecuritynumber       VARCHAR2,  -- W0 15584
-                         a_addressline1               VARCHAR2,
-                         a_addressline2               VARCHAR2,
+                         a_addressline1               VARCHAR2,                       
                          a_uscity                     VARCHAR2,
                          a_usstate                    VARCHAR2,
                          a_zipcode                    VARCHAR2,
@@ -5148,6 +5148,10 @@ IS
         extension.pkg_cxproceduralsearch.initializesearch('o_Person');
         extension.pkg_cxproceduralsearch.searchbykeywords(   a_name
                                                           || '%');
+                extension.pkg_cxproceduralsearch.filterobjects('AddressLine2',  ---added by sri, order changed
+                                                       a_addressline2,
+                                                       a_addressline2,
+                                                       TRUE);                                          
         extension.pkg_cxproceduralsearch.searchbyindex('SocialSecurityNumber',
                                                        a_socialsecuritynumber,
                                                        NULL,
@@ -5157,10 +5161,7 @@ IS
                                                        a_addressline1,
                                                        a_addressline1,
                                                        TRUE);
-        extension.pkg_cxproceduralsearch.filterobjects('AddressLine2',
-                                                       a_addressline2,
-                                                       a_addressline2,
-                                                       TRUE);
+        
         extension.pkg_cxproceduralsearch.filterobjects('USCity',
                                                        a_uscity,
                                                        a_uscity,
