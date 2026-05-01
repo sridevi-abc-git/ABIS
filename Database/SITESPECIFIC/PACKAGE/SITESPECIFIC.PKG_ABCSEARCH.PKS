@@ -474,11 +474,10 @@ IS
      * Change a_socialsecuritynumber back to VARCHAR2, NUMERIC truncates leading zero of 4 digit SSN
      **************************************************************************************************/
     PROCEDURE findperson(a_name                       VARCHAR2,
-                         a_birthdate                  DATE,
-                         a_addressline2               VARCHAR2,   -- added by sri
+                         a_birthdate                  DATE,                         
                          a_socialsecuritynumber       VARCHAR2,          -- WO 15584 Original declared as NUMERIC
                          a_addressline1               VARCHAR2,
-                        
+                         a_addressline2               VARCHAR2,   -- added by sri
                          a_uscity                     VARCHAR2,
                          a_usstate                    VARCHAR2,
                          a_zipcode                    VARCHAR2,
