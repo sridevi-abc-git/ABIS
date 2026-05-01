@@ -5148,13 +5148,16 @@ IS
 
         extension.pkg_cxproceduralsearch.initializesearch('o_Person');
         
-          IF         
-         a_addressline1 IS NOT NULL
+        IF  
+           a_name   IS NOT NULL  
+        OR a_socialsecuritynumber IS NOT NULL 
+        OR a_birthdate    IS NOT NULL    
+        OR a_addressline1 IS NOT NULL
         OR a_addressline2 IS NOT NULL                            ----added by sri
         OR a_keywords     IS NOT NULL 
         
     THEN
-        extension.pkg_cxproceduralsearch.searchbykeywords(  a_name
+        extension.pkg_cxproceduralsearch.searchbykeywords(a_name
                                                           || '%');                                                         
         extension.pkg_cxproceduralsearch.searchbyindex('SocialSecurityNumber',
                                                        a_socialsecuritynumber,
