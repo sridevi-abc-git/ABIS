@@ -5124,10 +5124,10 @@ IS
         *   Search for Person Objects
         **************************************************************************************************/
     PROCEDURE findperson(a_name                       VARCHAR2,
-                         a_birthdate                  DATE,
-                         a_addressline2               VARCHAR2,  --added by sri
+                         a_birthdate                  DATE,                        
                          a_socialsecuritynumber       VARCHAR2,  -- W0 15584
-                         a_addressline1               VARCHAR2,                       
+                         a_addressline1               VARCHAR2,  
+                         a_addressline2               VARCHAR2,                       
                          a_uscity                     VARCHAR2,
                          a_usstate                    VARCHAR2,
                          a_zipcode                    VARCHAR2,
@@ -5143,37 +5143,104 @@ IS
         t_overridesearchlimit   := NVL(a_overridesearchlimit, 'N');
         a_objects               := api.udt_objectlist();
         t_unfilteredobjects     := api.udt_objectlist();
-        t_findperson            := api.pkg_constantquery.VALUE('FINDPERSON');
+        t_findperson            := api.pkg_constantquery.VALUE('FINDPERSON');        
+      
 
         extension.pkg_cxproceduralsearch.initializesearch('o_Person');
-        extension.pkg_cxproceduralsearch.searchbykeywords(   a_name
-                                                          || '%');
-                extension.pkg_cxproceduralsearch.filterobjects('AddressLine2',  ---added by sri, order changed
-                                                       a_addressline2,
-                                                       a_addressline2,
-                                                       TRUE);                                          
+        
+          IF         
+         a_addressline1 IS NOT NULL
+        OR a_addressline2 IS NOT NULL                            ----added by sri
+        OR a_keywords     IS NOT NULL 
+        
+    THEN
+        extension.pkg_cxproceduralsearch.searchbykeywords(  a_name
+                                                          || '%');                                                         
         extension.pkg_cxproceduralsearch.searchbyindex('SocialSecurityNumber',
                                                        a_socialsecuritynumber,
                                                        NULL,
                                                        TRUE);
         extension.pkg_cxproceduralsearch.searchbyindex('BirthDate', a_birthdate, a_birthdate);
-        extension.pkg_cxproceduralsearch.filterobjects('AddressLine1',
-                                                       a_addressline1,
-                                                       a_addressline1,
-                                                       TRUE);
+         extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',     ----added by sri
+                                                                  'AddressLine1',
+                                                                  a_addressline1,
+                                                                  NULL,
+                                                                  TRUE);
+        extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',     ----added by sri
+                                                                  'AddressLine2',
+                                                                  a_addressline2,
+                                                                  NULL,
+                                                                  TRUE); 
+                      extension.pkg_cxproceduralsearch.filterobjects('USCity',
+                                                           a_uscity,
+                                                           a_uscity,
+                                                           TRUE);
+            extension.pkg_cxproceduralsearch.filterobjects('USState',
+                                                           a_usstate,
+                                                           a_usstate,
+                                                           FALSE);
+            extension.pkg_cxproceduralsearch.filterobjects('ZipCode',
+                                                           a_zipcode,
+                                                           a_zipcode,
+                                                           TRUE);
+            extension.pkg_cxproceduralsearch.searchbykeywords(a_keywords);
+        ELSE
+            extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',
+                                                                  'USACity',
+                                                                  a_uscity,
+                                                                  NULL,
+                                                                  TRUE);
+            extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',
+                                                                  'USAState',
+                                                                  a_usstate,
+                                                                  NULL,
+                                                                  FALSE);
+            extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',
+                                                                  'ZipCode',
+                                                                  a_zipcode,
+                                                                  NULL,
+                                                                  TRUE);
+        END IF;                                                       
+                                                                  
+                                                                  
+    --    extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',     ----added by sri 04/30/26 7.21pm
+--                                                                  'USCity',
+--                                                                  a_uscity,
+--                                                                  NULL,
+--                                                                  TRUE); 
+--        extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',     ----added by sri
+--                                                                  'USState',
+--                                                                  a_usstate,
+--                                                                  NULL,
+--                                                                  TRUE);
+--        extension.pkg_cxproceduralsearch.searchbyrelatedindex('Address',     ----added by sri
+--                                                                  'ZipCode',
+--                                                                  a_zipcode,
+--                                                                  NULL,
+--                                                                  TRUE);  
+--                                                                                                                                                                                        
+--        
+       -- extension.pkg_cxproceduralsearch.filterobjects('AddressLine1',
+        --                                               a_addressline1,
+       --                                                a_addressline1,
+        --                                               TRUE);
+--        extension.pkg_cxproceduralsearch.filterobjects('AddressLine2',  ---added by sri, order changed
+--                                                       a_addressline2,
+--                                                       a_addressline2,
+--                                                       TRUE);                                               
         
-        extension.pkg_cxproceduralsearch.filterobjects('USCity',
-                                                       a_uscity,
-                                                       a_uscity,
-                                                       TRUE);
-        extension.pkg_cxproceduralsearch.filterobjects('USState',
-                                                       a_usstate,
-                                                       a_usstate,
-                                                       FALSE);
-        extension.pkg_cxproceduralsearch.filterobjects('ZipCode',
-                                                       a_zipcode,
-                                                       a_zipcode,
-                                                       TRUE);
+ --       extension.pkg_cxproceduralsearch.filterobjects('USCity',
+--                                                       a_uscity,
+--                                                       a_uscity,
+--                                                       TRUE);
+--        extension.pkg_cxproceduralsearch.filterobjects('USState',
+--                                                       a_usstate,
+--                                                       a_usstate,
+--                                                       FALSE);
+--        extension.pkg_cxproceduralsearch.filterobjects('ZipCode',
+--                                                       a_zipcode,
+--                                                       a_zipcode,
+--                                                       TRUE);
         extension.pkg_cxproceduralsearch.searchbykeywords(a_keywords);
 
         extension.pkg_cxproceduralsearch.performsearch(t_unfilteredobjects, 'and', 'none');
