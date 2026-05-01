@@ -26,6 +26,7 @@ IS
 	-- 07/24/2019 TJL  WO 17980 Added new search procedure findpaymenttransunearned
     -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransunearned so it can be used by the new StaffUI system.
     -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
+    -- 09/26/2025  PK   6681    Changes social secutiry to varchar to fix SSN Person Search in le search
     -- 03/23/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindLicenseandApplication
     -- 03/24/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindPerson
     -- 03/26/2026  Sri  1037    ABISCompany Search - Adding Address Line 2 tp Procedure FindCompany
@@ -35,9 +36,6 @@ IS
     -- 04/20/2026  Sri  1037    ABIScaterer/Event AuthSearch - Adding Address Line 2 tp Procedure findcaterereventauths
 
 
-
-
-    
     -- **************************************************************************
 
     /*------------------------------------------------------------------------*
@@ -364,7 +362,7 @@ IS
         a_dup_licenseexternalfilenum VARCHAR2,
         a_dup_licenseenames          VARCHAR2,
         a_dup_licenseaddressline1    VARCHAR2,
-        a_dup_licenseaddressline2    VARCHAR2,
+        a_dup_licenseaddressline2    VARCHAR2,  --Added by sri
         a_dup_licenseuscity          VARCHAR2,
         a_dup_licensezipcode         VARCHAR2,
         a_dup_licensedbas            VARCHAR2,
@@ -444,7 +442,7 @@ IS
         a_externalfilenum            VARCHAR2,
         a_organizationname           VARCHAR2,
         a_eventlocaddressline1       VARCHAR2,
-        a_eventlocaddressline2       VARCHAR2,
+        a_eventlocaddressline2       VARCHAR2,   -- Added by sri
         a_eventlocuscity             VARCHAR2,
         a_eventloczipcode            VARCHAR2,
         a_eventyear                  NUMBER,
@@ -474,10 +472,10 @@ IS
      * Change a_socialsecuritynumber back to VARCHAR2, NUMERIC truncates leading zero of 4 digit SSN
      **************************************************************************************************/
     PROCEDURE findperson(a_name                       VARCHAR2,
-                         a_birthdate                  DATE,                         
+                         a_birthdate                  DATE,
                          a_socialsecuritynumber       VARCHAR2,          -- WO 15584 Original declared as NUMERIC
                          a_addressline1               VARCHAR2,
-                         a_addressline2               VARCHAR2,   -- added by sri
+                         a_addressline2               VARCHAR2,
                          a_uscity                     VARCHAR2,
                          a_usstate                    VARCHAR2,
                          a_zipcode                    VARCHAR2,
@@ -655,7 +653,7 @@ IS
         a_lspid                      VARCHAR2,
         a_dateofeventfrom            DATE,
         a_dateofeventto              DATE,
-        a_eventlocationaddressline1  VARCHAR2,        
+        a_eventlocationaddressline1  VARCHAR2,
         a_eventlocationaddressline2  VARCHAR2,
         a_eventlocationcity          VARCHAR2,
         a_eventlocationzip           VARCHAR2,
