@@ -26,16 +26,6 @@ IS
 	-- 07/24/2019 TJL  WO 17980 Added new search procedure findpaymenttransunearned
     -- 12/09/2021 SF(CX)        Added wrapper procedure for findpaymenttransunearned so it can be used by the new StaffUI system.
     -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
-    -- 09/26/2025  PK   6681    Changes social secutiry to varchar to fix SSN Person Search in le search
-    -- 03/23/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindLicenseandApplication
-    -- 03/24/2026  PK   1037    ABIS Search - Adding Address Line 2 tp Procedure FindPerson
-    -- 03/26/2026  Sri  1037    ABISCompany Search - Adding Address Line 2 tp Procedure FindCompany
-    -- 04/08/2026  Sri  1037    ABISAttorney Search - Adding Address Line 2 tp Procedure FindAttorney
-    -- 04/13/2026  Sri  1037    ABISLicenseType Search - Adding Address Line 2 tp Procedure FindLicenseType
-    -- 04/17/2026  Sri  1037    ABISOneDay LicenseSearch - Adding Address Line 2 tp Procedure FindOneDayLicense
-    -- 04/20/2026  Sri  1037    ABIScaterer/Event AuthSearch - Adding Address Line 2 tp Procedure findcaterereventauths
-
-
     -- **************************************************************************
 
     /*------------------------------------------------------------------------*
@@ -120,7 +110,6 @@ IS
                            a_firstname                  VARCHAR2,
                            a_firmname                   VARCHAR2,
                            a_addressline1               VARCHAR2,
-                           a_addressline2               VARCHAR2,
                            a_city                       VARCHAR2,
                            a_state                      VARCHAR2,
                            a_zipcode                    VARCHAR2,
@@ -159,7 +148,6 @@ IS
      **************************************************************************************************/
     PROCEDURE findcompany(a_companyname                VARCHAR2,
                           a_addressline1               VARCHAR2,
-                          a_addressline2               VARCHAR2,     --Added by sri
                           a_uscity                     VARCHAR2,
                           a_usstate                    VARCHAR2,
                           a_zipcode                    VARCHAR2,
@@ -290,7 +278,7 @@ IS
         a_zipcode                    NUMBER,
         a_relatedjoblicno            VARCHAR2,
         a_hierarchylevel             VARCHAR2,
-        a_socialsecurityno           VARCHAR2, --NUMBER,
+        a_socialsecurityno           VARCHAR2,
         a_objects         OUT NOCOPY api.udt_objectlist);
 
     /**************************************************************************************************
@@ -334,14 +322,12 @@ IS
      *   Used by Outrider to Search for Licenses and Application (under label License)
      *   User needs to select Status Description, but SearchByJob procedure only takes StatusName.
      * Updated 10/23/2015 by Ryan Lutz for performance
-     * Updated address line 2 by Pawan on 3/23/2028
      **************************************************************************************************/
     PROCEDURE findlicenseandapplication(
         a_externalfilenum            VARCHAR2,
         a_regnumber                  VARCHAR2,
         a_licenseenames              VARCHAR2,
         a_premaddressline1           VARCHAR2,
-        a_premaddressline2           VARCHAR2,
         a_premuscity                 VARCHAR2,
         a_premzipcode                VARCHAR2,
         a_dup_dbas                   VARCHAR2,
@@ -362,7 +348,6 @@ IS
         a_dup_licenseexternalfilenum VARCHAR2,
         a_dup_licenseenames          VARCHAR2,
         a_dup_licenseaddressline1    VARCHAR2,
-        a_dup_licenseaddressline2    VARCHAR2,  --Added by sri
         a_dup_licenseuscity          VARCHAR2,
         a_dup_licensezipcode         VARCHAR2,
         a_dup_licensedbas            VARCHAR2,
@@ -442,7 +427,6 @@ IS
         a_externalfilenum            VARCHAR2,
         a_organizationname           VARCHAR2,
         a_eventlocaddressline1       VARCHAR2,
-        a_eventlocaddressline2       VARCHAR2,   -- Added by sri
         a_eventlocuscity             VARCHAR2,
         a_eventloczipcode            VARCHAR2,
         a_eventyear                  NUMBER,
@@ -475,7 +459,6 @@ IS
                          a_birthdate                  DATE,
                          a_socialsecuritynumber       VARCHAR2,          -- WO 15584 Original declared as NUMERIC
                          a_addressline1               VARCHAR2,
-                         a_addressline2               VARCHAR2,
                          a_uscity                     VARCHAR2,
                          a_usstate                    VARCHAR2,
                          a_zipcode                    VARCHAR2,
@@ -654,7 +637,6 @@ IS
         a_dateofeventfrom            DATE,
         a_dateofeventto              DATE,
         a_eventlocationaddressline1  VARCHAR2,
-        a_eventlocationaddressline2  VARCHAR2,
         a_eventlocationcity          VARCHAR2,
         a_eventlocationzip           VARCHAR2,
         a_conditionalonly            VARCHAR2,
