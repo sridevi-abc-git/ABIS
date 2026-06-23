@@ -648,11 +648,13 @@ IS
      * FindCatererEventAuths() -- PUBLIC
      *   This procedure finds all the Caterer/Event Permit Auth Processes based on the specified criteria
      * Updated 10/23/2015 by Ryan Lutz for performance
+     * Added 06/22/2026 new field SubmittedDate by Sridevi 
      **************************************************************************************************/
     PROCEDURE findcaterereventauths(
         a_licensenumber              VARCHAR2,
         a_licenseenames              VARCHAR2,
         a_lspid                      VARCHAR2,
+        a_submitteddate              DATE,
         a_dateofeventfrom            DATE,
         a_dateofeventto              DATE,
         a_eventlocationaddressline1  VARCHAR2,        
