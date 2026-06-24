@@ -6438,10 +6438,9 @@ IS
         -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
         --06/22/2026  Sridevi   Added Submitted Date for search screen Caterer/Event Auth Search
         **************************************************************************************************/
-    PROCEDURE findcaterereventauths(a_licensenumber              VARCHAR2,
+   PROCEDURE findcaterereventauths(a_licensenumber              VARCHAR2,
                                     a_licenseenames              VARCHAR2,
                                     a_lspid                      VARCHAR2,
-                                 --   a_submitteddate              DATE,    -- Added by sri
                                     a_dateofeventfrom            DATE,
                                     a_dateofeventto              DATE,
                                     a_eventlocationaddressline1  VARCHAR2,
@@ -6512,13 +6511,6 @@ IS
            -- extension.pkg_cxproceduralsearch.initializesearch('p_IssueCatererEventAuth');
             extension.pkg_cxproceduralsearch.searchbyindex('LSPId', a_lspid, NULL, TRUE);
         END IF;
-        
-        --Added by sri
-        --Find catererauth search based on submitted date
---         IF a_submitteddate IS NOT NULL THEN
---         extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate', a_submitteddate);
---         END IF;
-
             
         -- Find all Issue Caterer/Event Auths by date of event
 
@@ -6610,7 +6602,6 @@ IS
         IF (a_licensenumber IS NOT NULL
          OR a_licenseenames IS NOT NULL
          OR a_lspid IS NOT NULL
-         OR a_submitteddate IS NOT NULL   --Added by sri 06/22/2026
          OR a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL)
        AND (a_eventlocationaddressline1 IS NOT NULL
