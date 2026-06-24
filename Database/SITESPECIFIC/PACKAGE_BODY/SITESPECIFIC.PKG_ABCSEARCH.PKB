@@ -6543,7 +6543,7 @@ IS
         findlicenseandapplication(NULL,
                                   NULL,
                                   NULL,
-                                  NULL,                --Added OBJECTCREATEDBYUSER sri for Submitted date
+                                --  NULL,                --Added OBJECTCREATEDBYUSER sri for Submitted date
                                   a_eventlocationaddressline1,
                                   a_eventlocationaddressline2,                                  
                                   a_eventlocationcity,
@@ -6609,7 +6609,7 @@ IS
         IF (a_licensenumber IS NOT NULL
          OR a_licenseenames IS NOT NULL
          OR a_lspid IS NOT NULL
-         OR a_submitteddate IS NOT NULL        --Added  sri submitted date
+     --    OR a_submitteddate IS NOT NULL        --Added  sri submitted date
          OR a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL)
        AND (a_eventlocationaddressline1 IS NOT NULL
