@@ -6441,6 +6441,7 @@ IS
    PROCEDURE findcaterereventauths(a_licensenumber              VARCHAR2,
                                     a_licenseenames              VARCHAR2,
                                     a_lspid                      VARCHAR2,
+                                    a_submitteddate              DATE,
                                     a_dateofeventfrom            DATE,
                                     a_dateofeventto              DATE,
                                     a_eventlocationaddressline1  VARCHAR2,
@@ -6512,6 +6513,12 @@ IS
             extension.pkg_cxproceduralsearch.searchbyindex('LSPId', a_lspid, NULL, TRUE);
         END IF;
             
+        --Find based on Submitted Date 
+         IF a_ IS NOT NULL THEN 
+           -- extension.pkg_cxproceduralsearch.initializesearch('p_IssueCatererEventAuth');
+            extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate', a_submitteddate, NULL, TRUE);
+        END IF;
+        
         -- Find all Issue Caterer/Event Auths by date of event
 
         IF (a_dateofeventfrom IS NOT NULL
@@ -6537,6 +6544,7 @@ IS
         findlicenseandapplication(NULL,
                                   NULL,
                                   NULL,
+                                  NULL,                --Added OBJECTCREATEDBYUSER sri for Submitted date
                                   a_eventlocationaddressline1,
                                   a_eventlocationaddressline2,                                  
                                   a_eventlocationcity,
@@ -6602,6 +6610,7 @@ IS
         IF (a_licensenumber IS NOT NULL
          OR a_licenseenames IS NOT NULL
          OR a_lspid IS NOT NULL
+         OR a_submitteddate IS NOT NULL        --Added  sri submitted date
          OR a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL)
        AND (a_eventlocationaddressline1 IS NOT NULL
