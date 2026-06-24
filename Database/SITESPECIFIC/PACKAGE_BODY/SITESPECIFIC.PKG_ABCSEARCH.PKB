@@ -6543,7 +6543,7 @@ IS
         findlicenseandapplication(NULL,
                                   NULL,
                                   NULL,
-                                --  NULL,                --Added OBJECTCREATEDBYUSER sri for Submitted date
+                                --  NULL,                  --Added OBJECTCREATEDBYUSER sri for Submitted date
                                   a_eventlocationaddressline1,
                                   a_eventlocationaddressline2,                                  
                                   a_eventlocationcity,
