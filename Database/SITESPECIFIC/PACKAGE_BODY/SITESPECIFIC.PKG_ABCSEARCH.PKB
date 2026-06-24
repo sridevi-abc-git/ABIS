@@ -6441,7 +6441,7 @@ IS
    PROCEDURE findcaterereventauths(a_licensenumber              VARCHAR2,
                                     a_licenseenames              VARCHAR2,
                                     a_lspid                      VARCHAR2,
-                                    a_submitteddate              DATE,
+                                    a_submitteddate              DATE,   --added by sri
                                     a_dateofeventfrom            DATE,
                                     a_dateofeventto              DATE,
                                     a_eventlocationaddressline1  VARCHAR2,
@@ -6514,10 +6514,9 @@ IS
         END IF;
             
         --Find based on Submitted Date 
-         IF a_ IS NOT NULL THEN 
-           -- extension.pkg_cxproceduralsearch.initializesearch('p_IssueCatererEventAuth');
-            extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate', a_submitteddate, NULL, TRUE);
-        END IF;
+       --  IF a_ IS NOT NULL THEN 
+         --   extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate', a_submitteddate, NULL, TRUE);
+      --  END IF;
         
         -- Find all Issue Caterer/Event Auths by date of event
 
