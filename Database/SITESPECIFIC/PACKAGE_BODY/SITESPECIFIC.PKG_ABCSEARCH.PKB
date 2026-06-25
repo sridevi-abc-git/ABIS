@@ -6514,9 +6514,9 @@ IS
         END IF;
             
         --Find based on Submitted Date 
-       --  IF a_ IS NOT NULL THEN 
-         --   extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate', a_submitteddate, NULL, TRUE);
-      --  END IF;
+        IF a_submitteddate IS NOT NULL THEN 
+           extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate',a_submitteddate, NULL);
+        END IF;
         
         -- Find all Issue Caterer/Event Auths by date of event
 
@@ -6609,7 +6609,7 @@ IS
         IF (a_licensenumber IS NOT NULL
          OR a_licenseenames IS NOT NULL
          OR a_lspid IS NOT NULL
-     --    OR a_submitteddate IS NOT NULL        --Added  sri submitted date
+         OR a_submitteddate IS NOT NULL        --Added  sri submitted date
          OR a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL)
        AND (a_eventlocationaddressline1 IS NOT NULL
