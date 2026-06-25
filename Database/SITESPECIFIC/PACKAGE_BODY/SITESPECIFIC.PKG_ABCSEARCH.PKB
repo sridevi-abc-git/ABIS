@@ -6513,9 +6513,9 @@ IS
             extension.pkg_cxproceduralsearch.searchbyindex('LSPId', a_lspid, NULL, TRUE);
         END IF;
             
-        --Find based on Submitted Date 
+        ---- 06/22/2026 -Sri  -Find all Issue Caterer/Event Auths by Submitted Date 
         IF a_submitteddate IS NOT NULL THEN 
-           extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate',a_submitteddate, NULL);
+           extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate',a_submitteddate, a_submitteddate);
         END IF;
         
         -- Find all Issue Caterer/Event Auths by date of event
