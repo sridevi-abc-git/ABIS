@@ -651,6 +651,7 @@ IS
         a_licensenumber              VARCHAR2,
         a_licenseenames              VARCHAR2,
         a_lspid                      VARCHAR2,
+        a_submitteddate              DATE,
         a_dateofeventfrom            DATE,
         a_dateofeventto              DATE,
         a_eventlocationaddressline1  VARCHAR2,
