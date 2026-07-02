@@ -6382,17 +6382,15 @@ IS
         t_unfilteredobjects.delete;
     END finddishonoredpayment;
 
-     /**************************************************************************************************
+    /**************************************************************************************************
         * FindCatererEventAuths() -- PUBLIC
         *   This procedure finds all the Caterer/Event Permit Auth Processes based on the specified criteria
         * Updated 10/23/2015 by Ryan Lutz for performance
         -- 05/01/2024 PK   WO35704  Added LSPID to search screen Caterer/Event Auth Search
-        --06/22/2026  Sridevi   Added Submitted Date for search screen Caterer/Event Auth Search
         **************************************************************************************************/
-   PROCEDURE findcaterereventauths(a_licensenumber              VARCHAR2,
+    PROCEDURE findcaterereventauths(a_licensenumber              VARCHAR2,
                                     a_licenseenames              VARCHAR2,
                                     a_lspid                      VARCHAR2,
-                                    a_submitteddate              DATE,   --added by sri
                                     a_dateofeventfrom            DATE,
                                     a_dateofeventto              DATE,
                                     a_eventlocationaddressline1  VARCHAR2,
@@ -6464,11 +6462,6 @@ IS
             extension.pkg_cxproceduralsearch.searchbyindex('LSPId', a_lspid, NULL, TRUE);
         END IF;
             
-        ---- 06/22/2026 -Sri  -Find all Issue Caterer/Event Auths by Submitted Date 
-        IF a_submitteddate IS NOT NULL THEN 
-           extension.pkg_cxproceduralsearch.searchbyindex('SubmittedDate',a_submitteddate, a_submitteddate);
-        END IF;
-        
         -- Find all Issue Caterer/Event Auths by date of event
 
         IF (a_dateofeventfrom IS NOT NULL
@@ -6494,9 +6487,8 @@ IS
         findlicenseandapplication(NULL,
                                   NULL,
                                   NULL,
-                                --  NULL,                  --Added OBJECTCREATEDBYUSER sri for Submitted date
                                   a_eventlocationaddressline1,
-                                  a_eventlocationaddressline2,                                  
+                                  a_eventlocationaddressline2, 
                                   a_eventlocationcity,
                                   a_eventlocationzip,
                                   NULL,
@@ -6526,7 +6518,7 @@ IS
                                                                   a_eventlocationaddressline1,
                                                                   NULL,
                                                                   TRUE);
-         END IF;
+        END IF;
         IF a_eventlocationaddressline2 IS NOT NULL THEN
             extension.pkg_cxproceduralsearch.searchbyrelatedindex('EventLocation',
                                                                   'AddressLine2',
@@ -6560,11 +6552,10 @@ IS
         IF (a_licensenumber IS NOT NULL
          OR a_licenseenames IS NOT NULL
          OR a_lspid IS NOT NULL
-         OR a_submitteddate IS NOT NULL        --Added  sri submitted date
          OR a_dateofeventfrom IS NOT NULL
          OR a_dateofeventto IS NOT NULL)
        AND (a_eventlocationaddressline1 IS NOT NULL
-         OR a_eventlocationaddressline2 IS NOT NULL
+        OR a_eventlocationaddressline2 IS NOT NULL
          OR a_eventlocationcity IS NOT NULL
          OR a_eventlocationzip IS NOT NULL) THEN
             extension.pkg_collectionutils.join(a_objects, t_caterereventauths);
