@@ -144,7 +144,7 @@ EXCEPTION
         rqs_utils.LOG(p_log_type  => 'E',
                       p_job_id    => p_parms.get_value('JOB_ID'),
                       p_seq       => p_parms.get_value('SEQ'),
-                      p_source    => 'LicenseStatusChange',
+                      p_source    => 'LaserficheRetentionStatuses',
                       p_msg       => SQLERRM,
                       p_additional_data => NULL,
                       p_error_trace => DBMS_UTILITY.format_error_backtrace);
