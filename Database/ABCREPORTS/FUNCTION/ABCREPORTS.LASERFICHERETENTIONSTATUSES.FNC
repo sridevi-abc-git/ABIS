@@ -1,6 +1,7 @@
 CREATE OR REPLACE FUNCTION ABCREPORTS.LaserficheRetentionStatuses(p_parms IN OUT t_parameters, p_status_ind IN OUT VARCHAR2)
     RETURN BLOB
 IS
+
 --CREATE OR REPLACE FUNCTION LaserficheRetentionStatuses RETURN NUMBER IS
 --tmpVar NUMBER;
 /******************************************************************************
@@ -17,7 +18,7 @@ IS
    Automatically available Auto Replace Keywords:
       Object Name:     LaserficheRetentionStatuses
       Sysdate:         9/28/2026
-      Date and Time:   9/28/2026, 10:59:09 AM, and 9/28/2026 10:59:09 AM
+      Date and Time:   9/28/2026, 2:12:42 PM, and 9/28/2026 2:12:42 PM
       Username:        SSoundararajan (set in TOAD Options, Procedure Editor)
       Table Name:       (set in the "New PL/SQL Object" dialog)
 
