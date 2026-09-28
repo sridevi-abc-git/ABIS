@@ -1,4 +1,7 @@
-CREATE OR REPLACE FUNCTION ABCREPORTS.LaserficheRetentionStatuses RETURN NUMBER IS
+CREATE OR REPLACE FUNCTION ABCREPORTS.LaserficheRetentionStatuses(p_parms IN OUT t_parameters, p_status_ind IN OUT VARCHAR2)
+    RETURN BLOB
+IS
+--CREATE OR REPLACE FUNCTION LaserficheRetentionStatuses RETURN NUMBER IS
 --tmpVar NUMBER;
 /******************************************************************************
    NAME:       LaserficheRetentionStatuses
